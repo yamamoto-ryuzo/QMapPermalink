@@ -11,6 +11,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **B**: UI changes, new plugin features, or moderate functionality additions
 - **C**: Profile/plugin fixes, minor bug fixes, and small improvements
 
+## [V1.1.1] - 2025-10-05
+
+### Changed
+- プラグインのツールバー／メニューアイコンを新しいデザインに差し替え
+
+## [V1.1.0] - 2025-10-05
+
+### Added
+- Google Maps連携: HTTPレスポンス内にクリック可能なGoogle Mapsリンクを自動生成
+- パーマリンクJSONへ中心座標・ズーム情報を格納し、外部共有や他アプリ連携を強化
+
+### Changed
+- ズームレベル計算をWeb Mercator解像度ベースに刷新し、Google Mapsと精度を揃えました
+- クリップボードコピー処理を安定化し、環境依存で空白になる問題を解消
+
+### Fixed
+- locationパラメータ使用時の座標解釈を改善し、Googleリンク生成失敗を防止
+
 ## [V1.0.0] - 2025-10-05
 
 ### Added

@@ -22,8 +22,8 @@
  ***************************************************************************/
 """
 from qgis.PyQt.QtCore import QSettings, QTranslator, QCoreApplication, Qt, QUrl, QThread, pyqtSignal, QObject
-from qgis.PyQt.QtGui import QIcon, QDesktopServices
-from qgis.PyQt.QtWidgets import QAction, QMessageBox
+from qgis.PyQt.QtGui import QIcon, QDesktopServices, QClipboard
+from qgis.PyQt.QtWidgets import QAction, QMessageBox, QApplication
 from qgis.core import QgsProject, QgsCoordinateReferenceSystem, QgsCoordinateTransform, QgsPointXY, QgsRectangle
 from qgis.gui import QgsMapCanvas
 
@@ -32,6 +32,8 @@ import json
 import urllib.parse
 import threading
 import socket
+import math
+import html
 
 from .qmap_permalink_dialog import QMapPermalinkDialog
 
@@ -323,34 +325,148 @@ class QMapPermalink:
             # メインスレッドでナビゲーションを実行
             self.navigation_signals.navigate_requested.emit(navigation_data)
 
-            body = (
-                "<!DOCTYPE html>"
-                "<html lang=\"ja\">"
-                "<head><meta charset=\"utf-8\"><title>QMap Permalink</title></head>"
-                "<body><p>地図の移動を受け付けました。</p></body>"
-                "</html>"
-            )
-            self._send_http_response(conn, 200, "OK", body, "text/html; charset=utf-8")
+            google_url = self._build_google_maps_url(navigation_data)
+            if google_url:
+                escaped_url = html.escape(google_url)
+                body = (
+                    "<!DOCTYPE html>"
+                    "<html lang=\"ja\">"
+                    "<head>"
+                    "<meta charset=\"utf-8\">"
+                    "<title>QMap Permalink</title>"
+                    "</head>"
+                    "<body>"
+                    "<p>地図の移動を受け付けました。Google Mapsでも同じ地点を開けます:</p>"
+                    "<p><a href=\"" + escaped_url + "\" target=\"_blank\" rel=\"noopener noreferrer\">" + escaped_url + "</a></p>"
+                    "</body>"
+                    "</html>"
+                )
+                self._send_http_response(conn, 200, "OK", body, "text/html; charset=utf-8")
+            else:
+                body = (
+                    "<!DOCTYPE html>"
+                    "<html lang=\"ja\">"
+                    "<head><meta charset=\"utf-8\"><title>QMap Permalink</title></head>"
+                    "<body><p>地図の移動を受け付けました。</p></body>"
+                    "</html>"
+                )
+                self._send_http_response(conn, 200, "OK", body, "text/html; charset=utf-8")
         
     def _build_navigation_data_from_params(self, params):
         """HTTPクエリパラメータからナビゲーション用データを生成"""
         if 'location' in params:
-            return {
+            raw_location = params['location'][0]
+            navigation_data = {
                 'type': 'location',
-                'location': params['location'][0],
+                'location': raw_location,
+            }
+            try:
+                decoded = urllib.parse.unquote(raw_location)
+                data = json.loads(decoded)
+                lat = data.get('center_wgs84_lat')
+                lon = data.get('center_wgs84_lon')
+                if lat is not None and lon is not None:
+                    navigation_data['lat'] = float(lat)
+                    navigation_data['lon'] = float(lon)
+                if 'zoom_level' in data:
+                    navigation_data['zoom'] = float(data['zoom_level'])
+                navigation_data['crs'] = data.get('crs', 'EPSG:4326')
+                navigation_data['center_x'] = data.get('center_x')
+                navigation_data['center_y'] = data.get('center_y')
+                navigation_data['scale'] = data.get('scale')
+                navigation_data['map_units_per_pixel'] = data.get('map_units_per_pixel')
+            except Exception:
+                pass
+            return navigation_data
+
+        crs = params.get('crs', ['EPSG:4326'])[0]
+        zoom_value = self._extract_zoom(params)
+
+        if 'll' in params:
+            lat, lon = self._parse_latlon(params['ll'][0])
+            return {
+                'type': 'coordinates',
+                'x': lon,
+                'y': lat,
+                'zoom': zoom_value,
+                'crs': crs,
+                'lat': lat,
+                'lon': lon,
             }
 
-        if all(key in params for key in ('x', 'y', 'zoom')):
+        if 'q' in params:
+            lat, lon = self._parse_latlon(params['q'][0])
+            return {
+                'type': 'coordinates',
+                'x': lon,
+                'y': lat,
+                'zoom': zoom_value,
+                'crs': crs,
+                'lat': lat,
+                'lon': lon,
+            }
+
+        if 'center' in params:
+            lat, lon = self._parse_latlon(params['center'][0])
+            return {
+                'type': 'coordinates',
+                'x': lon,
+                'y': lat,
+                'zoom': zoom_value,
+                'crs': crs,
+                'lat': lat,
+                'lon': lon,
+            }
+
+        if all(key in params for key in ('lat', 'lon')):
             try:
-                return {
-                    'type': 'coordinates',
-                    'x': float(params['x'][0]),
-                    'y': float(params['y'][0]),
-                    'zoom': float(params['zoom'][0]),
-                    'crs': params.get('crs', ['EPSG:4326'])[0],
-                }
+                lat = float(params['lat'][0])
+                lon = float(params['lon'][0])
+            except (TypeError, ValueError):
+                raise ValueError("Invalid lat/lon parameters.")
+            return {
+                'type': 'coordinates',
+                'x': lon,
+                'y': lat,
+                'zoom': zoom_value,
+                'crs': crs,
+                'lat': lat,
+                'lon': lon,
+            }
+
+        if all(key in params for key in ('lat', 'lng')):
+            try:
+                lat = float(params['lat'][0])
+                lon = float(params['lng'][0])
+            except (TypeError, ValueError):
+                raise ValueError("Invalid lat/lng parameters.")
+            return {
+                'type': 'coordinates',
+                'x': lon,
+                'y': lat,
+                'zoom': zoom_value,
+                'crs': crs,
+                'lat': lat,
+                'lon': lon,
+            }
+
+        if all(key in params for key in ('x', 'y')):
+            try:
+                x_value = float(params['x'][0])
+                y_value = float(params['y'][0])
             except (TypeError, ValueError):
                 raise ValueError("Invalid coordinate parameters.")
+            data = {
+                'type': 'coordinates',
+                'x': x_value,
+                'y': y_value,
+                'zoom': zoom_value,
+                'crs': crs,
+            }
+            if crs.upper() == 'EPSG:4326':
+                data['lat'] = y_value
+                data['lon'] = x_value
+            return data
 
         raise ValueError("Missing required parameters.")
 
@@ -397,7 +513,157 @@ class QMapPermalink:
             conn.sendall(header_bytes + body_bytes)
         except OSError:
             pass
+
+    def _extract_zoom(self, params):
+        """クエリパラメータからズームレベルを取得"""
+        for key in ('z', 'zoom', 'level'):
+            if key in params:
+                try:
+                    return float(params[key][0])
+                except (TypeError, ValueError):
+                    raise ValueError(f"Invalid {key} parameter.")
+        return 16.0
+
+    def _parse_latlon(self, value):
+        """文字列から緯度経度を抽出"""
+        parts = [part.strip() for part in value.split(',')]
+        if len(parts) != 2:
+            raise ValueError("Invalid coordinate string. Expected 'lat,lon'.")
+        try:
+            lat = float(parts[0])
+            lon = float(parts[1])
+        except (TypeError, ValueError):
+            raise ValueError("Invalid coordinate values.")
+        return lat, lon
+
+    def _build_google_maps_url(self, navigation_data):
+        """ナビゲーションデータからGoogle Maps用URLを生成"""
+        try:
+            if navigation_data.get('type') == 'coordinates':
+                lat, lon = self._resolve_coordinates(navigation_data)
+                if lat is None or lon is None:
+                    return None
+                zoom_value = navigation_data.get('zoom', 16.0)
+                zoom_int = max(0, int(round(float(zoom_value))))
+                return f"https://www.google.co.jp/maps/@{lat:.6f},{lon:.6f},{zoom_int}z"
+
+            if navigation_data.get('type') == 'location':
+                lat = navigation_data.get('lat')
+                lon = navigation_data.get('lon')
+                zoom_value = navigation_data.get('zoom')
+
+                if lat is None or lon is None:
+                    try:
+                        decoded = urllib.parse.unquote(navigation_data['location'])
+                        data = json.loads(decoded)
+                    except Exception:
+                        data = {}
+
+                    if data:
+                        center_lat = data.get('center_wgs84_lat')
+                        center_lon = data.get('center_wgs84_lon')
+                        if center_lat is not None and center_lon is not None:
+                            lat = float(center_lat)
+                            lon = float(center_lon)
+                        else:
+                            center_x = data.get('center_x')
+                            center_y = data.get('center_y')
+                            crs_authid = data.get('center_crs') or data.get('crs')
+                            if center_x is not None and center_y is not None and crs_authid:
+                                lat, lon = self._convert_to_wgs84(center_x, center_y, crs_authid)
+                        if zoom_value is None:
+                            zoom_value = self._estimate_zoom_from_scale(data.get('scale'))
+
+                if (lat is None or lon is None) and navigation_data.get('center_x') is not None:
+                    crs_authid = navigation_data.get('crs')
+                    lat, lon = self._convert_to_wgs84(
+                        navigation_data.get('center_x'),
+                        navigation_data.get('center_y'),
+                        crs_authid,
+                    )
+
+                if lat is None or lon is None:
+                    return None
+
+                if zoom_value is None:
+                    zoom_value = 16.0
+
+                zoom_int = max(0, int(round(float(zoom_value))))
+                return f"https://www.google.co.jp/maps/@{lat:.6f},{lon:.6f},{zoom_int}z"
+
+        except Exception:
+            return None
+
+        return None
+
+    def _resolve_coordinates(self, navigation_data):
+        """ナビゲーションデータからWGS84座標を求める"""
+        lat = navigation_data.get('lat')
+        lon = navigation_data.get('lon')
+        if lat is not None and lon is not None:
+            return float(lat), float(lon)
+
+        x = navigation_data.get('x')
+        y = navigation_data.get('y')
+        crs_authid = navigation_data.get('crs')
+        if x is None or y is None or crs_authid is None:
+            return None, None
+
+        return self._convert_to_wgs84(x, y, crs_authid)
+
+    def _calculate_zoom_level(self, canvas, center_point, crs):
+        """現在のキャンバス情報からWeb地図相当のズームレベルを概算"""
+        try:
+            map_units_per_pixel = canvas.mapUnitsPerPixel()
+        except Exception:
+            map_units_per_pixel = None
+
+        if not map_units_per_pixel or map_units_per_pixel <= 0:
+            return None
+
+        web_mercator = QgsCoordinateReferenceSystem("EPSG:3857")
+        try:
+            if crs != web_mercator:
+                transform = QgsCoordinateTransform(crs, web_mercator, QgsProject.instance())
+                merc_center = transform.transform(center_point)
+                merc_right = transform.transform(QgsPointXY(center_point.x() + map_units_per_pixel, center_point.y()))
+            else:
+                merc_center = QgsPointXY(center_point)
+                merc_right = QgsPointXY(center_point.x() + map_units_per_pixel, center_point.y())
+
+            resolution = abs(merc_right.x() - merc_center.x())
+            if resolution <= 0:
+                raise ValueError("invalid resolution")
+
+            zoom = math.log2(156543.03392804097 / resolution)
+            return max(0.0, min(21.0, round(zoom)))
+
+        except Exception:
+            return None
     
+    def _estimate_zoom_from_scale(self, scale):
+        """スケール値から概算のズームレベルを推定"""
+        if not scale or scale <= 0:
+            return 16.0
+        try:
+            zoom = 20 - math.log(float(scale), 2)
+        except (ValueError, TypeError):
+            return 16.0
+        return max(0.0, min(21.0, round(zoom)))
+
+    def _convert_to_wgs84(self, x, y, source_crs_authid):
+        """任意座標をWGS84へ変換"""
+        try:
+            source_crs = QgsCoordinateReferenceSystem(str(source_crs_authid))
+            if not source_crs.isValid():
+                return None, None
+            target_crs = QgsCoordinateReferenceSystem("EPSG:4326")
+            transform = QgsCoordinateTransform(source_crs, target_crs, QgsProject.instance())
+            point = transform.transform(QgsPointXY(float(x), float(y)))
+            return float(point.y()), float(point.x())
+        except Exception:
+            return None, None
+
     def find_available_port(self, start_port, end_port):
         """使用可能なポートを探す
         
@@ -428,7 +694,33 @@ class QMapPermalink:
         extent = canvas.extent()
         crs = canvas.mapSettings().destinationCrs()
         scale = canvas.scale()
+        map_units_per_pixel = canvas.mapUnitsPerPixel()
+        center_point = QgsPointXY(
+            (extent.xMinimum() + extent.xMaximum()) / 2.0,
+            (extent.yMinimum() + extent.yMaximum()) / 2.0,
+        )
+
+        center_wgs84_lat = None
+        center_wgs84_lon = None
+        target_crs = QgsCoordinateReferenceSystem("EPSG:4326")
+
+        try:
+            if crs != target_crs:
+                transform = QgsCoordinateTransform(crs, target_crs, QgsProject.instance())
+                transformed_point = transform.transform(center_point)
+            else:
+                transformed_point = center_point
+
+            center_wgs84_lon = float(transformed_point.x())
+            center_wgs84_lat = float(transformed_point.y())
+        except Exception:
+            center_wgs84_lat = None
+            center_wgs84_lon = None
         
+        zoom_level = self._calculate_zoom_level(canvas, center_point, crs)
+        if zoom_level is None:
+            zoom_level = self._estimate_zoom_from_scale(scale)
+
         # パーマリンク情報を辞書形式で作成
         permalink_data = {
             'x_min': extent.xMinimum(),
@@ -436,7 +728,14 @@ class QMapPermalink:
             'x_max': extent.xMaximum(),
             'y_max': extent.yMaximum(),
             'crs': crs.authid(),
-            'scale': scale
+            'scale': scale,
+            'map_units_per_pixel': map_units_per_pixel,
+            'center_x': center_point.x(),
+            'center_y': center_point.y(),
+            'center_crs': crs.authid(),
+            'center_wgs84_lat': center_wgs84_lat,
+            'center_wgs84_lon': center_wgs84_lon,
+            'zoom_level': zoom_level,
         }
         
         # JSONエンコードしてURLエンコード
@@ -670,10 +969,28 @@ class QMapPermalink:
             )
             return
             
-        clipboard = QCoreApplication.instance().clipboard()
-        clipboard.setText(permalink_url)
-        self.iface.messageBar().pushMessage(
-            "QMap Permalink", 
-            "パーマリンクをクリップボードにコピーしました。", 
-            duration=3
-        )
+        clipboard = QApplication.clipboard()
+        success = False
+
+        for _ in range(3):
+            clipboard.setText(permalink_url, mode=QClipboard.Clipboard)
+            QApplication.processEvents()
+            if clipboard.text(mode=QClipboard.Clipboard) == permalink_url:
+                if clipboard.supportsSelection():
+                    clipboard.setText(permalink_url, mode=QClipboard.Selection)
+                success = True
+                break
+            QThread.msleep(50)
+
+        if success:
+            self.iface.messageBar().pushMessage(
+                "QMap Permalink",
+                "パーマリンクをクリップボードにコピーしました。",
+                duration=3
+            )
+        else:
+            QMessageBox.warning(
+                self.iface.mainWindow(),
+                "QMap Permalink",
+                "クリップボードへのコピーに失敗しました。再試行するか手動でコピーしてください。"
+            )
