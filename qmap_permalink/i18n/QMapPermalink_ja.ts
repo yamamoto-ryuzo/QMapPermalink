@@ -71,5 +71,15 @@
         <source>Navigate</source>
         <translation>移動</translation>
     </message>
+    <message>
+        <location filename="../qmap_permalink_dialog_base.ui" line="22"/>
+        <source>HTTP Server Status</source>
+        <translation>HTTPサーバー状態</translation>
+    </message>
+    <message>
+        <location filename="../qmap_permalink_dialog_base.ui" line="92"/>
+        <source>HTTP-based permalink URL - works with any browser and application</source>
+        <translation>HTTPベースのパーマリンクURL - あらゆるブラウザとアプリケーションで動作します</translation>
+    </message>
 </context>
 </TS>

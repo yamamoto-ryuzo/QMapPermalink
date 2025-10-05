@@ -21,7 +21,7 @@
  *                                                                         *
  ***************************************************************************/
 """
-from qgis.PyQt.QtCore import QSettings, QTranslator, QCoreApplication, Qt, QUrl
+from qgis.PyQt.QtCore import QSettings, QTranslator, QCoreApplication, Qt, QUrl, QThread, pyqtSignal, QObject
 from qgis.PyQt.QtGui import QIcon, QDesktopServices
 from qgis.PyQt.QtWidgets import QAction, QMessageBox
 from qgis.core import QgsProject, QgsCoordinateReferenceSystem, QgsCoordinateTransform, QgsPointXY, QgsRectangle
@@ -32,8 +32,153 @@ import sys
 import json
 import urllib.parse
 import subprocess
+import threading
+import socket
+from http.server import HTTPServer, BaseHTTPRequestHandler
+from socketserver import ThreadingMixIn
 
 from .qmap_permalink_dialog import QMapPermalinkDialog
+
+
+class NavigationSignals(QObject):
+    """QGIS APIへの安全なアクセスのためのシグナル"""
+    navigate_requested = pyqtSignal(dict)  # 地図ナビゲーション要求
+
+
+class QMapPermalinkHTTPHandler(BaseHTTPRequestHandler):
+    """QMapPermalink用のHTTPリクエストハンドラー"""
+    
+    # クラス変数としてプラグインインスタンスを保持
+    qmap_plugin = None
+    
+    def __init__(self, *args, **kwargs):
+        """コンストラクタ"""
+        try:
+            super().__init__(*args, **kwargs)
+        except Exception as e:
+            # エラーをログに出力してサイレントに処理
+            print(f"HTTPハンドラー初期化エラー: {e}")
+    
+    def log_error(self, format, *args):
+        """エラーログを抑制"""
+        pass
+    
+    def log_message(self, format, *args):
+        """通常のログメッセージも抑制"""
+        pass
+    
+    def do_GET(self):
+        """GETリクエストの処理"""
+        try:
+            # URLを解析
+            parsed_url = urllib.parse.urlparse(self.path)
+            params = urllib.parse.parse_qs(parsed_url.query)
+            
+            # 地図移動のリクエストを処理
+            if parsed_url.path.startswith('/qgis-map'):
+                self.handle_map_navigation(params)
+            elif parsed_url.path == '/status':
+                self.handle_status_check()
+            else:
+                self.send_error(404, "Not Found")
+                return
+                
+        except Exception as e:
+            self.send_error(500, f"Internal Server Error: {str(e)}")
+    
+    def handle_map_navigation(self, params):
+        """地図ナビゲーションのリクエストを処理
+        
+        Args:
+            params: URLパラメータの辞書
+        """
+        try:
+            navigation_data = {}
+            
+            if 'location' in params:
+                # JSON形式のlocationパラメータを処理
+                navigation_data['location'] = params['location'][0]
+                navigation_data['type'] = 'location'
+            elif all(key in params for key in ['x', 'y', 'zoom']):
+                # 個別パラメータを処理
+                navigation_data['x'] = float(params['x'][0])
+                navigation_data['y'] = float(params['y'][0])
+                navigation_data['zoom'] = float(params['zoom'][0])
+                navigation_data['crs'] = params.get('crs', ['EPSG:4326'])[0]
+                navigation_data['type'] = 'coordinates'
+            else:
+                self.send_error(400, "Missing required parameters")
+                return
+            
+            # メインスレッドでの処理をシグナル経由で要求
+            if self.qmap_plugin and hasattr(self.qmap_plugin, 'navigation_signals'):
+                self.qmap_plugin.navigation_signals.navigate_requested.emit(navigation_data)
+            else:
+                self.send_error(500, "Plugin not available")
+                return
+            
+            # 成功レスポンス
+            response = """
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>QMap Permalink - Success</title>
+                <meta charset="utf-8">
+            </head>
+            <body>
+                <h1>✅ Map Navigation Completed</h1>
+                <p>QGISの地図が指定の位置に移動しました。</p>
+                <p><a href="javascript:window.close()">このウィンドウを閉じる</a></p>
+                <script>setTimeout(function(){ window.close(); }, 2000);</script>
+            </body>
+            </html>
+            """
+            
+            self.send_response(200)
+            self.send_header('Content-type', 'text/html; charset=utf-8')
+            self.end_headers()
+            self.wfile.write(response.encode('utf-8'))
+            
+        except Exception as e:
+            self.send_error(500, f"Map navigation failed: {str(e)}")
+    
+    def handle_status_check(self):
+        """サーバーステータスチェック"""
+        response = {
+            "status": "running",
+            "plugin": "QMap Permalink",
+            "version": "1.0.1",
+            "endpoints": [
+                "/qgis-map?location=<encoded_data>",
+                "/qgis-map?x=<lon>&y=<lat>&zoom=<level>&crs=<epsg>",
+                "/status"
+            ]
+        }
+        
+        self.send_response(200)
+        self.send_header('Content-type', 'application/json')
+        self.end_headers()
+        self.wfile.write(json.dumps(response, indent=2).encode('utf-8'))
+    
+    def log_message(self, format, *args):
+        """ログメッセージの処理（静音化）"""
+        # HTTPサーバーのログを抑制
+        pass
+
+
+class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
+    """マルチスレッド対応のHTTPサーバー"""
+    daemon_threads = True
+    allow_reuse_address = True
+    timeout = 1.0
+    
+    def handle_error(self, request, client_address):
+        """エラーハンドリング - サイレントに処理"""
+        try:
+            super().handle_error(request, client_address)
+        except Exception:
+            # エラーを無視してサーバーを継続
+            pass
 
 
 class QMapPermalink:
@@ -66,6 +211,15 @@ class QMapPermalink:
 
         # ダイアログ
         self.dlg = None
+
+        # HTTPサーバー関連
+        self.http_server = None
+        self.server_thread = None
+        self.server_port = 8089  # デフォルトポート
+        
+        # ナビゲーション用シグナル
+        self.navigation_signals = NavigationSignals()
+        self.navigation_signals.navigate_requested.connect(self.handle_navigation_request)
 
         # ツールバーの確認（初回実行時にツールバーが存在するかチェック）
         self.first_start = None
@@ -141,22 +295,126 @@ class QMapPermalink:
             callback=self.run,
             parent=self.iface.mainWindow())
 
+        # HTTPサーバーを起動
+        self.start_http_server()
+
         # 初回起動フラグ
         self.first_start = True
 
     def unload(self):
         """プラグインのアンロード時の処理"""
+        # HTTPサーバーを停止
+        self.stop_http_server()
+        
+        # シグナルを切断
+        if hasattr(self, 'navigation_signals'):
+            self.navigation_signals.navigate_requested.disconnect()
+        
         for action in self.actions:
             self.iface.removePluginMenu(
                 self.tr(u'&QMap Permalink'),
                 action)
             self.iface.removeToolBarIcon(action)
 
+    def start_http_server(self):
+        """HTTPサーバーを起動"""
+        try:
+            # 使用可能なポートを探す
+            self.server_port = self.find_available_port(8089, 8099)
+            
+            # クラス変数にプラグインインスタンスを設定
+            QMapPermalinkHTTPHandler.qmap_plugin = self
+            
+            # HTTPサーバーを作成（シンプルなハンドラークラスを直接使用）
+            self.http_server = ThreadedHTTPServer(('localhost', self.server_port), QMapPermalinkHTTPHandler)
+            
+            # サーバーのタイムアウト設定
+            self.http_server.timeout = 1.0
+            
+            # 別スレッドでサーバーを起動
+            self.server_thread = threading.Thread(target=self.run_server)
+            self.server_thread.daemon = True
+            self.server_thread.start()
+            
+            print(f"QMap Permalink HTTPサーバーが起動しました: http://localhost:{self.server_port}")
+            self.iface.messageBar().pushMessage(
+                "QMap Permalink", 
+                f"HTTPサーバーが起動しました (ポート: {self.server_port})", 
+                duration=3
+            )
+            
+        except Exception as e:
+            print(f"HTTPサーバーの起動に失敗しました: {e}")
+            self.iface.messageBar().pushMessage(
+                "QMap Permalink エラー", 
+                f"HTTPサーバーの起動に失敗しました: {str(e)}", 
+                duration=5
+            )
+    
+    def run_server(self):
+        """サーバーを安全に実行"""
+        try:
+            self.http_server.serve_forever()
+        except Exception as e:
+            print(f"HTTPサーバー実行中にエラーが発生しました: {e}")
+        finally:
+            print("HTTPサーバーが停止しました")
+    
+    def stop_http_server(self):
+        """HTTPサーバーを停止"""
+        try:
+            # まずサーバーを停止
+            if self.http_server:
+                try:
+                    self.http_server.shutdown()
+                except Exception:
+                    pass
+                try:
+                    self.http_server.server_close()
+                except Exception:
+                    pass
+                self.http_server = None
+                
+            # スレッドの終了を待つ
+            if self.server_thread and self.server_thread.is_alive():
+                try:
+                    self.server_thread.join(timeout=3.0)
+                except Exception:
+                    pass
+                self.server_thread = None
+                
+            # クラス変数をクリア
+            QMapPermalinkHTTPHandler.qmap_plugin = None
+                
+            print("QMap Permalink HTTPサーバーが停止しました")
+            
+        except Exception as e:
+            print(f"HTTPサーバーの停止中にエラーが発生しました: {e}")
+    
+    def find_available_port(self, start_port, end_port):
+        """使用可能なポートを探す
+        
+        Args:
+            start_port: 開始ポート番号
+            end_port: 終了ポート番号
+            
+        Returns:
+            使用可能なポート番号
+        """
+        for port in range(start_port, end_port + 1):
+            try:
+                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                    s.bind(('localhost', port))
+                    return port
+            except OSError:
+                continue
+        raise RuntimeError(f"ポート範囲 {start_port}-{end_port} で使用可能なポートが見つかりません")
+    
     def generate_permalink(self):
         """現在の地図ビューからパーマリンクを生成
         
         Returns:
-            パーマリンクURL文字列
+            パーマリンクURL文字列（HTTP形式）
         """
         # 現在のマップキャンバス情報を取得
         canvas = self.iface.mapCanvas()
@@ -178,8 +436,8 @@ class QMapPermalink:
         json_data = json.dumps(permalink_data)
         encoded_data = urllib.parse.quote(json_data)
         
-        # カスタムプロトコルでパーマリンクURLを作成
-        permalink_url = f"qgis-permalink://{encoded_data}"
+        # HTTPサーバー形式でパーマリンクURLを作成
+        permalink_url = f"http://localhost:{self.server_port}/qgis-map?location={encoded_data}"
         
         return permalink_url
 
@@ -190,8 +448,20 @@ class QMapPermalink:
             permalink_url: パーマリンクURL
         """
         try:
-            # URLからデータ部分を抽出
-            if permalink_url.startswith('qgis-permalink://'):
+            # HTTP形式のURLを処理
+            if permalink_url.startswith('http://localhost:') and '/qgis-map' in permalink_url:
+                # HTTP URLから直接実行（ブラウザを経由しない）
+                parsed_url = urllib.parse.urlparse(permalink_url)
+                params = urllib.parse.parse_qs(parsed_url.query)
+                
+                if 'location' in params:
+                    location_data = params['location'][0]
+                    self.navigate_from_http(location_data)
+                else:
+                    raise ValueError("HTTP URLにlocationパラメータがありません。")
+                    
+            # 従来のカスタムプロトコル形式も維持
+            elif permalink_url.startswith('qgis-permalink://'):
                 encoded_data = permalink_url[17:]  # "qgis-permalink://"を除去
                 json_data = urllib.parse.unquote(encoded_data)
                 permalink_data = json.loads(json_data)
@@ -218,7 +488,7 @@ class QMapPermalink:
                 )
                 
             else:
-                raise ValueError("無効なパーマリンクURLです。")
+                raise ValueError("サポートされていないパーマリンクURL形式です。")
                 
         except Exception as e:
             QMessageBox.warning(
@@ -226,6 +496,83 @@ class QMapPermalink:
                 "QMap Permalink エラー",
                 f"パーマリンクの処理中にエラーが発生しました：\n{str(e)}"
             )
+    
+    def navigate_from_http(self, location_data):
+        """HTTP経由でのナビゲーション処理
+        
+        Args:
+            location_data: エンコードされた位置データ
+        """
+        try:
+            # URLデコードしてJSONパース
+            json_data = urllib.parse.unquote(location_data)
+            permalink_data = json.loads(json_data)
+            
+            # 座標系とextentを復元
+            crs = QgsCoordinateReferenceSystem(permalink_data['crs'])
+            extent = QgsRectangle(
+                permalink_data['x_min'],
+                permalink_data['y_min'],
+                permalink_data['x_max'],
+                permalink_data['y_max']
+            )
+            
+            # マップキャンバスに適用
+            canvas = self.iface.mapCanvas()
+            canvas.setDestinationCrs(crs)
+            canvas.setExtent(extent)
+            canvas.refresh()
+            
+            self.iface.messageBar().pushMessage(
+                "QMap Permalink", 
+                "HTTP経由で地図ビューに移動しました。", 
+                duration=3
+            )
+            
+        except Exception as e:
+            raise Exception(f"HTTP地図移動の処理中にエラーが発生しました: {str(e)}")
+    
+    def navigate_to_coordinates(self, x, y, zoom, crs_auth_id):
+        """座標指定でのナビゲーション処理
+        
+        Args:
+            x: 経度またはX座標
+            y: 緯度またはY座標  
+            zoom: ズームレベル
+            crs_auth_id: 座標系ID (例: "EPSG:4326")
+        """
+        try:
+            # 座標系を設定
+            crs = QgsCoordinateReferenceSystem(crs_auth_id)
+            
+            # ズームレベルからおおよその範囲を計算
+            # ズームレベルが高いほど小さな範囲
+            scale_factor = 1000 / (2 ** (zoom - 10))  # おおよその計算
+            half_width = scale_factor / 2
+            half_height = scale_factor / 2
+            
+            # 範囲を作成
+            extent = QgsRectangle(
+                x - half_width,
+                y - half_height, 
+                x + half_width,
+                y + half_height
+            )
+            
+            # マップキャンバスに適用
+            canvas = self.iface.mapCanvas()
+            canvas.setDestinationCrs(crs)
+            canvas.setExtent(extent)
+            canvas.refresh()
+            
+            self.iface.messageBar().pushMessage(
+                "QMap Permalink", 
+                f"座標 ({x:.6f}, {y:.6f}) に移動しました。", 
+                duration=3
+            )
+            
+        except Exception as e:
+            raise Exception(f"座標移動の処理中にエラーが発生しました: {str(e)}")
 
     def run(self):
         """プラグインのメイン実行処理"""
@@ -237,6 +584,10 @@ class QMapPermalink:
         self.dlg.pushButton_generate.clicked.connect(self.on_generate_clicked)
         self.dlg.pushButton_navigate.clicked.connect(self.on_navigate_clicked)
         self.dlg.pushButton_copy.clicked.connect(self.on_copy_clicked)
+
+        # HTTPサーバーの状態を更新
+        server_running = self.http_server is not None
+        self.dlg.update_server_status(self.server_port, server_running)
 
         # ダイアログを表示
         self.dlg.show()
@@ -259,6 +610,35 @@ class QMapPermalink:
                 f"パーマリンク生成中にエラーが発生しました：\n{str(e)}"
             )
 
+    def handle_navigation_request(self, navigation_data):
+        """HTTPリクエストからのナビゲーション要求を安全に処理（メインスレッドで実行）
+        
+        Args:
+            navigation_data: ナビゲーション情報を含む辞書
+        """
+        try:
+            if navigation_data['type'] == 'location':
+                # JSON形式のlocationデータを処理
+                location_data = navigation_data['location']
+                self.navigate_from_http(location_data)
+            elif navigation_data['type'] == 'coordinates':
+                # 個別座標パラメータを処理
+                x = navigation_data['x']
+                y = navigation_data['y']
+                zoom = navigation_data['zoom']
+                crs = navigation_data['crs']
+                self.navigate_to_coordinates(x, y, zoom, crs)
+                
+            print(f"ナビゲーション完了: {navigation_data['type']}")
+            
+        except Exception as e:
+            print(f"ナビゲーション処理エラー: {e}")
+            self.iface.messageBar().pushMessage(
+                "QMap Permalink エラー", 
+                f"ナビゲーション処理中にエラーが発生しました: {str(e)}", 
+                duration=5
+            )
+    
     def on_navigate_clicked(self):
         """ナビゲートボタンがクリックされた時の処理"""
         permalink_url = self.dlg.lineEdit_permalink.text().strip()

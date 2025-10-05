@@ -47,3 +47,20 @@ class QMapPermalinkDialog(QDialog, FORM_CLASS):
         super(QMapPermalinkDialog, self).__init__(parent)
         # UIを設定
         self.setupUi(self)
+        
+    def update_server_status(self, port, is_running=True):
+        """HTTPサーバーの状態を更新
+        
+        Args:
+            port: サーバーのポート番号
+            is_running: サーバーが動作中かどうか
+        """
+        if is_running:
+            status_text = f"HTTP Server: Running on http://localhost:{port}"
+            style = "color: green; font-weight: bold;"
+        else:
+            status_text = "HTTP Server: Stopped"
+            style = "color: red; font-weight: bold;"
+            
+        self.label_server_status.setText(status_text)
+        self.label_server_status.setStyleSheet(style)

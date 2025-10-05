@@ -15,6 +15,25 @@
   </property>
   <layout class="QVBoxLayout" name="verticalLayout">
    <item>
+    <widget class="QGroupBox" name="groupBox_server">
+     <property name="title">
+      <string>HTTP Server Status</string>
+     </property>
+     <layout class="QVBoxLayout" name="verticalLayout_server">
+      <item>
+       <widget class="QLabel" name="label_server_status">
+        <property name="text">
+         <string>HTTP Server: Running on http://localhost:8089</string>
+        </property>
+        <property name="styleSheet">
+         <string>color: green; font-weight: bold;</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
     <widget class="QGroupBox" name="groupBox_generate">
      <property name="title">
       <string>Generate Permalink</string>
@@ -85,7 +104,7 @@
       <item>
        <widget class="QLabel" name="label_permalink_info">
         <property name="text">
-         <string>Copy this URL to embed in external documents (Excel, PDF, etc.) or use it to navigate</string>
+         <string>HTTP-based permalink URL - works with any browser and application</string>
         </property>
         <property name="wordWrap">
          <bool>true</bool>
