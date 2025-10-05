@@ -49,10 +49,12 @@ class QMapPermalinkZipCreator:
         """
         if not self.metadata_file.exists():
             raise FileNotFoundError(f"metadata.txt が見つかりません: {self.metadata_file}")
-            
+
+        # Preserve original case of option names (ConfigParser lowercases by default)
         config = configparser.ConfigParser()
+        config.optionxform = str
         config.read(self.metadata_file, encoding='utf-8')
-        
+
         if 'general' not in config:
             raise ValueError("metadata.txtに[general]セクションが見つかりません")
             

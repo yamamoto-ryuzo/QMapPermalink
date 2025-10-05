@@ -1,20 +1,20 @@
 [general]
-name = QMap Permalink
-qgisminimumversion = 3.44
-qgismaximumversion = 3.999
-required_qt_version = 5
+name = qmap_permalink
+qgisMinimumVersion = 3.0
+qgisMaximumVersion = 3.999
+requiredQtVersion = 5
 description = Navigate QGIS map views through external permalink system
 version = 1.1.2
 author = yamamoto-ryuzo
-email = 
+email = ryu@yamakun.net
 about = QMapPermalink enables creation and navigation of map view permalinks in QGIS. Generate fixed links for specific map positions, zoom levels, and layer states, then navigate directly from external documents (Excel, PDF) to precise map locations with a single click. This plugin bridges the gap between documentation and map visualization, making spatial information sharing more efficient and intuitive.
-tracker = https://github.com/yamamoto-ryuzo/QMapPermalink/issues
-repository = https://github.com/yamamoto-ryuzo/QMapPermalink
-homepage = https://github.com/yamamoto-ryuzo/QMapPermalink
+tracker = https://github.com/yamamoto-ryuzo
+repository = https://github.com/yamamoto-ryuzo
+homepage = https://github.com/yamamoto-ryuzo
 tags = permalink,navigation,map,view,link,external,document,excel,pdf
 category = Plugins
 icon = icon.png
-experimental = False
-deprecated = False
-hasprocessingprovider = no
+experimental = false
+deprecated = false
+hasProcessingProvider = false
 
