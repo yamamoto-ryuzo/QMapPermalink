@@ -38,6 +38,7 @@ class QMapPermalinkZipCreator:
             "qmap_permalink_dialog_base.ui",
             "metadata.txt",
             "icon.png",
+            "LICENSE",
             "i18n/"  # ディレクトリ全体
         ]
         
