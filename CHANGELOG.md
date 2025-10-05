@@ -11,6 +11,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **B**: UI changes, new plugin features, or moderate functionality additions
 - **C**: Profile/plugin fixes, minor bug fixes, and small improvements
 
+## [V1.2.0] - 2025-10-05
+
+### Added
+- パーマリンクに回転 (rotation) パラメータを追加し、QGIS のキャンバスに回転を反映できるようにしました。
+- 短いクエリパラメータ形式（x, y, scale, crs, rotation）でのパーマリンク生成と解析を導入しました。
+
+### Changed
+- パーマリンクの基準を「スケール (scale)」に統一しました（ズームは主に Google Maps 互換の補助情報として扱います）。
+- Google Maps へのリンク生成時のズーム推定ロジックを改善しました（ユーザー提供のズーム⇄スケール表に基づくスナップ／外挿を実装）。
+- パッケージ作成スクリプトを修正して、`metadata.txt` のメタデータキーの大文字小文字を保持するようにし、配布に `LICENSE` を含めるようにしました。
+- README を更新し、スケールを標準とする旨と回転パラメータの使用例を追加しました。
+
+### Fixed
+- QGIS が `qgisMinimumVersion` を認識しない原因となっていたメタデータキーの取り扱いを修正しました。
+
 ## [V1.1.1] - 2025-10-05
 
 ### Changed

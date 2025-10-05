@@ -353,7 +353,11 @@ class QMapPermalink:
                 self._send_http_response(conn, 200, "OK", body, "text/html; charset=utf-8")
         
     def _build_navigation_data_from_params(self, params):
-        """HTTPクエリパラメータからナビゲーション用データを生成"""
+        """HTTPクエリパラメータからナビゲーション用データを生成
+
+        scale を受け取り、ナビゲーションデータに含める。
+        zoom は明示的に指定されている場合のみ navigation_data に含まれる。
+        """
         if 'location' in params:
             raw_location = params['location'][0]
             navigation_data = {
@@ -373,6 +377,7 @@ class QMapPermalink:
                 navigation_data['crs'] = data.get('crs', 'EPSG:4326')
                 navigation_data['center_x'] = data.get('center_x')
                 navigation_data['center_y'] = data.get('center_y')
+                # scale は数値のまま渡す
                 navigation_data['scale'] = data.get('scale')
                 navigation_data['map_units_per_pixel'] = data.get('map_units_per_pixel')
             except Exception:
@@ -381,6 +386,20 @@ class QMapPermalink:
 
         crs = params.get('crs', ['EPSG:4326'])[0]
         zoom_value = self._extract_zoom(params)
+        # scale パラメータがあればナビゲーションデータに含める
+        scale_value = None
+        # rotation パラメータがあれば含める
+        rotation_value = None
+        if 'scale' in params:
+            try:
+                scale_value = float(params['scale'][0])
+            except Exception:
+                raise ValueError("scale パラメータは数値で指定してください")
+        if 'rotation' in params:
+            try:
+                rotation_value = float(params['rotation'][0])
+            except Exception:
+                raise ValueError("rotation パラメータは数値で指定してください")
 
         if 'll' in params:
             lat, lon = self._parse_latlon(params['ll'][0])
@@ -392,6 +411,8 @@ class QMapPermalink:
                 'crs': crs,
                 'lat': lat,
                 'lon': lon,
+                'scale': scale_value,
+                'rotation': rotation_value,
             }
 
         if 'q' in params:
@@ -404,6 +425,8 @@ class QMapPermalink:
                 'crs': crs,
                 'lat': lat,
                 'lon': lon,
+                'scale': scale_value,
+                'rotation': rotation_value,
             }
 
         if 'center' in params:
@@ -416,6 +439,34 @@ class QMapPermalink:
                 'crs': crs,
                 'lat': lat,
                 'lon': lon,
+                'scale': scale_value,
+            }
+
+    # 新仕様: シンプルな x/y/scale パラメータをサポート（標準は scale）
+    # 例（緯度経度）: /qgis-map?x=139&y=35&scale=1000.0&crs=EPSG:4326 (デフォルト crs=EPSG:4326)
+    # 例（直角座標、例として EPSG:6677）: /qgis-map?x=667700.0&y=4321987.0&scale=1000.0&crs=EPSG:6677
+        if 'x' in params and 'y' in params:
+            try:
+                x_val = float(params['x'][0])
+                y_val = float(params['y'][0])
+            except Exception:
+                raise ValueError("x/y パラメータは数値で指定してください")
+            # 緯度経度として扱う場合（デフォルト CRS が EPSG:4326）には lat/lon を設定
+            lat_val = None
+            lon_val = None
+            if crs.upper().startswith('EPSG:4326'):
+                lat_val = float(y_val)
+                lon_val = float(x_val)
+            return {
+                'type': 'coordinates',
+                'x': x_val,
+                'y': y_val,
+                'zoom': zoom_value,
+                'crs': crs,
+                'lat': lat_val,
+                'lon': lon_val,
+                'scale': scale_value,
+                'rotation': rotation_value,
             }
 
         if all(key in params for key in ('lat', 'lon')):
@@ -432,6 +483,8 @@ class QMapPermalink:
                 'crs': crs,
                 'lat': lat,
                 'lon': lon,
+                'scale': scale_value,
+                'rotation': rotation_value,
             }
 
         if all(key in params for key in ('lat', 'lng')):
@@ -448,6 +501,7 @@ class QMapPermalink:
                 'crs': crs,
                 'lat': lat,
                 'lon': lon,
+                'scale': scale_value,
             }
 
         if all(key in params for key in ('x', 'y')):
@@ -466,6 +520,8 @@ class QMapPermalink:
             if crs.upper() == 'EPSG:4326':
                 data['lat'] = y_value
                 data['lon'] = x_value
+            data['scale'] = scale_value
+            data['rotation'] = rotation_value
             return data
 
         raise ValueError("Missing required parameters.")
@@ -515,35 +571,35 @@ class QMapPermalink:
             pass
 
     def _extract_zoom(self, params):
-        """クエリパラメータからズームレベルを取得"""
+        """クエリパラメータからズームレベルを取得
+
+        明示的なズーム指定がなければ None を返す（Google 用に scale から推定する）
+        """
         for key in ('z', 'zoom', 'level'):
             if key in params:
                 try:
                     return float(params[key][0])
                 except (TypeError, ValueError):
                     raise ValueError(f"Invalid {key} parameter.")
-        return 16.0
-
-    def _parse_latlon(self, value):
-        """文字列から緯度経度を抽出"""
-        parts = [part.strip() for part in value.split(',')]
-        if len(parts) != 2:
-            raise ValueError("Invalid coordinate string. Expected 'lat,lon'.")
-        try:
-            lat = float(parts[0])
-            lon = float(parts[1])
-        except (TypeError, ValueError):
-            raise ValueError("Invalid coordinate values.")
-        return lat, lon
+        return None
 
     def _build_google_maps_url(self, navigation_data):
-        """ナビゲーションデータからGoogle Maps用URLを生成"""
+        """ナビゲーションデータからGoogle Maps用URLを生成
+
+        Google Maps用は zoom が必要。zoom が与えられなければ scale から推定する。
+        最終フォールバックは zoom=16 とする。
+        """
         try:
             if navigation_data.get('type') == 'coordinates':
                 lat, lon = self._resolve_coordinates(navigation_data)
                 if lat is None or lon is None:
                     return None
-                zoom_value = navigation_data.get('zoom', 16.0)
+                # zoom が無ければ scale から推定し、無ければデフォルト16を使う
+                zoom_value = navigation_data.get('zoom')
+                if zoom_value is None:
+                    zoom_value = self._estimate_zoom_from_scale(navigation_data.get('scale'))
+                if zoom_value is None:
+                    zoom_value = 16.0
                 zoom_int = max(0, int(round(float(zoom_value))))
                 return f"https://www.google.co.jp/maps/@{lat:.6f},{lon:.6f},{zoom_int}z"
 
@@ -643,13 +699,68 @@ class QMapPermalink:
     
     def _estimate_zoom_from_scale(self, scale):
         """スケール値から概算のズームレベルを推定"""
-        if not scale or scale <= 0:
+        # 与えられたズームレベル表に基づき、スケールに最も近いズームを返す
+        # 参照表 (Zoom -> Scale) を元にスナップする方式に変更する。
+        # 表は以下を想定（ユーザー提供）:
+        # 0:1:400,000,000, 1:1:200,000,000, 2:1:100,000,000, 3:1:60,000,000, 4:1:30,000,000,
+        # 5:1:15,000,000, 6:1:8,000,000, 7:1:4,000,000, 8:1:2,000,000, 9:1:1,000,000,
+        # 10:1:400,000, 11:1:200,000, 12:1:100,000, 13:1:40,000, 14:1:20,000,
+        # 15:1:10,000, 16:1:5,000, 17:1:2,500, 18:1:1,250, 19:1:600,
+        # 20:1:300, 21:1:150, 22:1:75, 23:1:40
+        # 24-30 は更に拡大して 1:1 に近づく（ここでは 23 以降は半分ずつ小さくなると仮定して外挿）
+        if not scale:
             return 16.0
         try:
-            zoom = 20 - math.log(float(scale), 2)
-        except (ValueError, TypeError):
+            s = float(scale)
+            if s <= 0:
+                return 16.0
+
+            # 参照スケール表を作成
+            scale_table = {
+                0: 400_000_000.0,
+                1: 200_000_000.0,
+                2: 100_000_000.0,
+                3: 60_000_000.0,
+                4: 30_000_000.0,
+                5: 15_000_000.0,
+                6: 8_000_000.0,
+                7: 4_000_000.0,
+                8: 2_000_000.0,
+                9: 1_000_000.0,
+                10: 400_000.0,
+                11: 200_000.0,
+                12: 100_000.0,
+                13: 40_000.0,
+                14: 20_000.0,
+                15: 10_000.0,
+                16: 5_000.0,
+                17: 2_500.0,
+                18: 1_250.0,
+                19: 600.0,
+                20: 300.0,
+                21: 150.0,
+                22: 75.0,
+                23: 40.0,
+            }
+
+            # 外挿: 24-30 は 23 の値を半分ずつ外挿
+            for z in range(24, 31):
+                scale_table[z] = scale_table[23] / (2 ** (z - 23))
+
+            # 比較は対数空間（スケールの比率差）で行う方が自然
+            target_log = math.log(s)
+            best_zoom = 16
+            best_diff = None
+            for z, zscale in scale_table.items():
+                diff = abs(math.log(zscale) - target_log)
+                if best_diff is None or diff < best_diff:
+                    best_diff = diff
+                    best_zoom = z
+
+            # clamp 0..30
+            return max(0, min(30, int(best_zoom)))
+        except (ValueError, TypeError, OverflowError):
             return 16.0
-        return max(0.0, min(21.0, round(zoom)))
 
     def _convert_to_wgs84(self, x, y, source_crs_authid):
         """任意座標をWGS84へ変換"""
@@ -694,57 +805,34 @@ class QMapPermalink:
         extent = canvas.extent()
         crs = canvas.mapSettings().destinationCrs()
         scale = canvas.scale()
+        # 回転角度（度）
+        rotation = canvas.rotation() if hasattr(canvas, 'rotation') else 0.0
         map_units_per_pixel = canvas.mapUnitsPerPixel()
         center_point = QgsPointXY(
             (extent.xMinimum() + extent.xMaximum()) / 2.0,
             (extent.yMinimum() + extent.yMaximum()) / 2.0,
         )
 
-        center_wgs84_lat = None
-        center_wgs84_lon = None
-        target_crs = QgsCoordinateReferenceSystem("EPSG:4326")
-
-        try:
-            if crs != target_crs:
-                transform = QgsCoordinateTransform(crs, target_crs, QgsProject.instance())
-                transformed_point = transform.transform(center_point)
-            else:
-                transformed_point = center_point
-
-            center_wgs84_lon = float(transformed_point.x())
-            center_wgs84_lat = float(transformed_point.y())
-        except Exception:
-            center_wgs84_lat = None
-            center_wgs84_lon = None
-        
+        # ズームレベルを算出（失敗したらスケールから推定）
         zoom_level = self._calculate_zoom_level(canvas, center_point, crs)
         if zoom_level is None:
             zoom_level = self._estimate_zoom_from_scale(scale)
 
-        # パーマリンク情報を辞書形式で作成
-        permalink_data = {
-            'x_min': extent.xMinimum(),
-            'y_min': extent.yMinimum(),
-            'x_max': extent.xMaximum(),
-            'y_max': extent.yMaximum(),
-            'crs': crs.authid(),
-            'scale': scale,
-            'map_units_per_pixel': map_units_per_pixel,
-            'center_x': center_point.x(),
-            'center_y': center_point.y(),
-            'center_crs': crs.authid(),
-            'center_wgs84_lat': center_wgs84_lat,
-            'center_wgs84_lon': center_wgs84_lon,
-            'zoom_level': zoom_level,
-        }
-        
-        # JSONエンコードしてURLエンコード
-        json_data = json.dumps(permalink_data)
-        encoded_data = urllib.parse.quote(json_data)
-        
-        # HTTPサーバー形式でパーマリンクURLを作成
-        permalink_url = f"http://localhost:{self.server_port}/qgis-map?location={encoded_data}"
-        
+        # 出力は現在のキャンバスCRSとキャンバス座標をそのまま使用し、標準では scale を含める
+        # 例: http://localhost:8089/qgis-map?x=123456.7890&y=4321987.1234&scale=1000.0&crs=EPSG:3857
+        x_val = f"{center_point.x():.6f}"
+        y_val = f"{center_point.y():.6f}"
+        crs_id = crs.authid()  # e.g. 'EPSG:3857' or 'EPSG:4326'
+        # scale はキャンバスの scale() を使う
+        scale_val = float(scale) if scale is not None else None
+        if scale_val is None:
+            # 万が一 scale が取得できなければ、ズームレベルから推定して scale を算出（逆算は簡易）
+            # ここでは推定値として 1000 を入れておく
+            scale_val = 1000.0
+        permalink_url = (
+            f"http://localhost:{self.server_port}/qgis-map?x={x_val}&y={y_val}"
+            f"&scale={scale_val:.1f}&crs={crs_id}&rotation={rotation:.2f}"
+        )
         return permalink_url
 
     def navigate_to_permalink(self, permalink_url):
@@ -759,12 +847,27 @@ class QMapPermalink:
                 # HTTP URLから直接実行（ブラウザを経由しない）
                 parsed_url = urllib.parse.urlparse(permalink_url)
                 params = urllib.parse.parse_qs(parsed_url.query)
-                
-                if 'location' in params:
-                    location_data = params['location'][0]
-                    self.navigate_from_http(location_data)
+
+                # パラメータをナビゲーションデータへ変換して処理（location または coordinates をサポート）
+                try:
+                    navigation_data = self._build_navigation_data_from_params(params)
+                except ValueError as e:
+                    raise
+
+                if navigation_data.get('type') == 'location':
+                    # エンコード済み location JSON を処理
+                    self.navigate_from_http(navigation_data['location'])
+                elif navigation_data.get('type') == 'coordinates':
+                    x = navigation_data.get('x')
+                    y = navigation_data.get('y')
+                    zoom = navigation_data.get('zoom')
+                    scale = navigation_data.get('scale')
+                    crs = navigation_data.get('crs')
+                    rotation = navigation_data.get('rotation')
+                    # 直接移動を実行（scale を優先）
+                    self.navigate_to_coordinates(x, y, scale, zoom, crs, rotation)
                 else:
-                    raise ValueError("HTTP URLにlocationパラメータがありません。")
+                    raise ValueError("HTTP URLのパラメータからナビゲーションデータを生成できませんでした。")
                     
             # 従来のカスタムプロトコル形式も維持
             elif permalink_url.startswith('qgis-permalink://'):
@@ -838,7 +941,7 @@ class QMapPermalink:
         except Exception as e:
             raise Exception(f"HTTP地図移動の処理中にエラーが発生しました: {str(e)}")
     
-    def navigate_to_coordinates(self, x, y, zoom, crs_auth_id):
+    def navigate_to_coordinates(self, x, y, scale, zoom, crs_auth_id, rotation=None):
         """座標指定でのナビゲーション処理
         
         Args:
@@ -850,25 +953,54 @@ class QMapPermalink:
         try:
             # 座標系を設定
             crs = QgsCoordinateReferenceSystem(crs_auth_id)
-            
-            # ズームレベルからおおよその範囲を計算
-            # ズームレベルが高いほど小さな範囲
-            scale_factor = 1000 / (2 ** (zoom - 10))  # おおよその計算
-            half_width = scale_factor / 2
-            half_height = scale_factor / 2
-            
-            # 範囲を作成
-            extent = QgsRectangle(
-                x - half_width,
-                y - half_height, 
-                x + half_width,
-                y + half_height
-            )
-            
+
+            # scale があればそれを優先して、QGIS のキャンバス API に scale をそのまま適用する
+            # ここでは明示的なスケール変換は行わず、canvas.zoomScale を使ってシンプルに反映する
+            scale_val = None
+            if scale is not None:
+                try:
+                    scale_val = float(scale)
+                except Exception:
+                    scale_val = None
+
+            # scale が無ければ zoom から簡易推定する（従来の互換用）
+            if scale_val is None and zoom is not None:
+                try:
+                    zoom_val = float(zoom)
+                    scale_val = 1000.0 / (2 ** (zoom_val - 10))
+                except Exception:
+                    scale_val = None
+
+            # 最終フォールバック
+            if scale_val is None:
+                scale_val = 1000.0
+
             # マップキャンバスに適用
             canvas = self.iface.mapCanvas()
             canvas.setDestinationCrs(crs)
-            canvas.setExtent(extent)
+
+            try:
+                # 中心点を設定してからスケールを適用する（QGIS 側で正しい表示範囲が計算される）
+                canvas.setCenter(QgsPointXY(float(x), float(y)))
+                canvas.zoomScale(float(scale_val))
+                # 回転が指定されていれば適用
+                if rotation is not None:
+                    try:
+                        canvas.setRotation(float(rotation))
+                    except Exception:
+                        pass
+            except Exception:
+                # 万が一 canvas の API が使えない/失敗した場合は従来の範囲設定にフォールバック
+                half_width = float(scale_val) / 2.0
+                half_height = float(scale_val) / 2.0
+                extent = QgsRectangle(
+                    float(x) - half_width,
+                    float(y) - half_height,
+                    float(x) + half_width,
+                    float(y) + half_height
+                )
+                canvas.setExtent(extent)
+
             canvas.refresh()
             
             self.iface.messageBar().pushMessage(
@@ -931,9 +1063,12 @@ class QMapPermalink:
                 # 個別座標パラメータを処理
                 x = navigation_data['x']
                 y = navigation_data['y']
-                zoom = navigation_data['zoom']
+                zoom = navigation_data.get('zoom')
+                scale = navigation_data.get('scale')
                 crs = navigation_data['crs']
-                self.navigate_to_coordinates(x, y, zoom, crs)
+                rotation = navigation_data.get('rotation')
+                # scale を優先して渡す（None の場合は zoom を使う）
+                self.navigate_to_coordinates(x, y, scale, zoom, crs, rotation)
                 
             print(f"ナビゲーション完了: {navigation_data['type']}")
             
