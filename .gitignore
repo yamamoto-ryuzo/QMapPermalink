@@ -1,0 +1,66 @@
+# Python cache and bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribution / packaging
+build/
+dist/
+dist/backup/
+*.egg-info/
+.eggs/
+*.whl
+*.zip
+
+# Virtual environments
+venv/
+env/
+.venv/
+.env
+env.bak/
+
+# IDEs and editors
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Test / coverage
+.pytest_cache/
+.tox/
+.nox/
+.mypy_cache/
+htmlcov/
+.coverage
+.coverage.*
+
+# Logs
+*.log
+
+# Compiled extensions
+*.so
+*.pyd
+
+# Localization compiled files
+*.qm
+
+# Misc
+*.bak
+*.swp
+
+# Node
+node_modules/
+
+# JetBrains project files
+/.idea/
+
+# Keep plugin source/tracked files (do not ignore src files)
+# QGIS plugin specific: exclude built plugin packages but keep source
+qmap_permalink/*.py
+qmap_permalink/*.ui
+qmap_permalink/*.png
+qmap_permalink/i18n/*
