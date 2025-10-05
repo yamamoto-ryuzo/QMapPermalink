@@ -110,7 +110,7 @@ python create_zip.py
 
 ### 技術仕様
 
-- **QGIS互換性**: 3.44 - 3.999
+- **QGIS互換性**: 3.00 - 3.99
 - **Qt要件**: Qt5
 - **プログラミング言語**: Python 3
 - **UIフレームワーク**: Qt Designer (.ui ファイル)
