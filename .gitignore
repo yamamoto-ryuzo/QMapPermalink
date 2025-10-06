@@ -5,12 +5,9 @@ __pycache__/
 
 # Distribution / packaging
 build/
-dist/
-dist/backup/
 *.egg-info/
 .eggs/
 *.whl
-*.zip
 
 # Virtual environments
 venv/

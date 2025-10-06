@@ -117,22 +117,35 @@ class QMapPermalinkZipCreator:
         """
         if not self.dist_dir.exists():
             return
-            
-        # バックアップディレクトリを作成
-        backup_dir = self.dist_dir / "backup"
-        backup_dir.mkdir(exist_ok=True)
-            
+
         zip_pattern = "qmap_permalink_*.zip"
         old_zips = list(self.dist_dir.glob(zip_pattern))
-        
+
+        if not old_zips:
+            return
+
+        # 可能なら send2trash を使ってごみ箱に移動し、なければ従来どおりバックアップへ移動
+        try:
+            from send2trash import send2trash
+            use_send2trash = True
+        except Exception:
+            use_send2trash = False
+            # バックアップディレクトリを作成
+            backup_dir = self.dist_dir / "backup"
+            backup_dir.mkdir(exist_ok=True)
+
         for zip_file in old_zips:
             try:
-                # バックアップフォルダに移動
-                backup_path = backup_dir / zip_file.name
-                shutil.move(str(zip_file), str(backup_path))
-                print(f"古いZIPファイルをバックアップに移動: {zip_file.name}")
+                if use_send2trash:
+                    send2trash(str(zip_file))
+                    print(f"古いZIPファイルをごみ箱に移動: {zip_file.name}")
+                else:
+                    # バックアップフォルダに移動
+                    backup_path = backup_dir / zip_file.name
+                    shutil.move(str(zip_file), str(backup_path))
+                    print(f"古いZIPファイルをバックアップに移動: {zip_file.name} (send2trash未インストール)")
             except Exception as e:
-                print(f"ファイル移動エラー {zip_file.name}: {e}")
+                print(f"ファイル移動/ごみ箱移動エラー {zip_file.name}: {e}")
                 
     def create_zip(self, version):
         """配布用ZIPファイルを作成
