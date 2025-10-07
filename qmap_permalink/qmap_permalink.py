@@ -57,6 +57,19 @@ import html
 
 from .qmap_permalink_dialog import QMapPermalinkDialog
 
+# パネルファイルの条件付きインポート
+try:
+    from .qmap_permalink_panel import QMapPermalinkPanel
+    PANEL_AVAILABLE = True
+except ImportError:
+    try:
+        # 簡易版をバックアップとして試行
+        from .qmap_permalink_panel_simple import SimpleQMapPermalinkPanel as QMapPermalinkPanel
+        PANEL_AVAILABLE = True
+    except ImportError:
+        PANEL_AVAILABLE = False
+        QMapPermalinkPanel = None
+
 
 class NavigationSignals(QObject):
     """QGIS APIへの安全なアクセスのためのシグナル"""
@@ -93,6 +106,9 @@ class QMapPermalink:
 
         # ダイアログ
         self.dlg = None
+        
+        # パネル（ドックウィジェット）
+        self.panel = None
 
         # HTTPサーバー関連
         self.http_server = None
@@ -173,11 +189,21 @@ class QMapPermalink:
     def initGui(self):
         """プラグインのGUI要素を作成（プラグイン読み込み時に呼ばれる）"""
         icon_path = os.path.join(self.plugin_dir, 'icon.png')
+        
+        # ダイアログ版のアクション
         self.add_action(
             icon_path,
-            text=self.tr(u'QMap Permalink'),
+            text=self.tr(u'QMap Permalink (Dialog)'),
             callback=self.run,
             parent=self.iface.mainWindow())
+            
+        # パネル版のアクション（パネルが利用可能な場合のみ）
+        if PANEL_AVAILABLE:
+            self.add_action(
+                icon_path,
+                text=self.tr(u'QMap Permalink Panel'),
+                callback=self.toggle_panel,
+                parent=self.iface.mainWindow())
 
         # HTTPサーバーを起動
         self.start_http_server()
@@ -185,10 +211,71 @@ class QMapPermalink:
         # 初回起動フラグ
         self.first_start = True
 
+    def toggle_panel(self):
+        """パネルの表示/非表示を切り替え"""
+        if not PANEL_AVAILABLE:
+            QMessageBox.warning(
+                self.iface.mainWindow(),
+                "QMap Permalink",
+                "パネル機能は利用できません。"
+            )
+            return
+            
+        try:
+            if self.panel is None:
+                # パネル利用可能性をデバッグ
+                self.iface.messageBar().pushMessage(
+                    "QMap Permalink", 
+                    f"PANEL_AVAILABLE: {PANEL_AVAILABLE}, QMapPermalinkPanel: {QMapPermalinkPanel}", 
+                    duration=5
+                )
+                
+                # パネルを作成
+                self.panel = QMapPermalinkPanel(self.iface.mainWindow())
+                
+                # パネルのボタンにイベントを接続
+                self.panel.pushButton_generate.clicked.connect(self.on_generate_clicked_panel)
+                self.panel.pushButton_navigate.clicked.connect(self.on_navigate_clicked_panel)
+                self.panel.pushButton_copy.clicked.connect(self.on_copy_clicked_panel)
+                if hasattr(self.panel, 'pushButton_open'):
+                    self.panel.pushButton_open.clicked.connect(self.on_open_clicked_panel)
+                
+                # HTTPサーバーの状態を更新
+                server_running = self.http_server is not None
+                self.panel.update_server_status(self.server_port, server_running)
+                
+                # QGISのメインウィンドウにドッキング
+                self.iface.addDockWidget(Qt.RightDockWidgetArea, self.panel)
+                
+                # デバッグメッセージ
+                self.iface.messageBar().pushMessage(
+                    "QMap Permalink", 
+                    "パネルを作成しました。", 
+                    duration=3
+                )
+            else:
+                # パネルの表示/非表示を切り替え
+                if self.panel.isVisible():
+                    self.panel.hide()
+                else:
+                    self.panel.show()
+                    
+        except Exception as e:
+            QMessageBox.critical(
+                self.iface.mainWindow(),
+                "QMap Permalink",
+                f"パネルの作成に失敗しました: {str(e)}"
+            )
+
     def unload(self):
         """プラグインのアンロード時の処理"""
         # HTTPサーバーを停止
         self.stop_http_server()
+        
+        # パネルを削除
+        if self.panel is not None:
+            self.iface.removeDockWidget(self.panel)
+            self.panel = None
         
         # シグナルを切断
         if hasattr(self, 'navigation_signals'):
@@ -1148,4 +1235,97 @@ class QMapPermalink:
                 self.iface.mainWindow(),
                 "QMap Permalink",
                 "クリップボードへのコピーに失敗しました。再試行するか手動でコピーしてください。"
+            )
+
+    # パネル用のイベントハンドラ
+    def on_generate_clicked_panel(self):
+        """パネル版：パーマリンク生成ボタンがクリックされた時の処理"""
+        try:
+            permalink = self.generate_permalink()
+            self.panel.lineEdit_permalink.setText(permalink)
+            self.iface.messageBar().pushMessage(
+                "QMap Permalink", 
+                "パーマリンクが生成されました。", 
+                duration=3
+            )
+        except Exception as e:
+            QMessageBox.critical(
+                self.iface.mainWindow(),
+                "QMap Permalink",
+                f"パーマリンクの生成に失敗しました: {str(e)}"
+            )
+
+    def on_navigate_clicked_panel(self):
+        """パネル版：ナビゲートボタンがクリックされた時の処理"""
+        permalink_url = self.panel.lineEdit_navigate.text().strip()
+        if not permalink_url:
+            QMessageBox.warning(
+                self.iface.mainWindow(),
+                "QMap Permalink",
+                "パーマリンクURLを入力してください。"
+            )
+            return
+            
+        self.navigate_to_permalink(permalink_url)
+
+    def on_copy_clicked_panel(self):
+        """パネル版：コピーボタンがクリックされた時の処理"""
+        permalink_url = self.panel.lineEdit_permalink.text().strip()
+        if not permalink_url:
+            QMessageBox.warning(
+                self.iface.mainWindow(),
+                "QMap Permalink",
+                "コピーするパーマリンクがありません。"
+            )
+            return
+            
+        clipboard = QApplication.clipboard()
+        success = False
+
+        for _ in range(3):
+            clipboard.setText(permalink_url, mode=QClipboard.Clipboard)
+            QApplication.processEvents()
+            if clipboard.text(mode=QClipboard.Clipboard) == permalink_url:
+                if clipboard.supportsSelection():
+                    clipboard.setText(permalink_url, mode=QClipboard.Selection)
+                success = True
+                break
+            QThread.msleep(50)
+
+        if success:
+            self.iface.messageBar().pushMessage(
+                "QMap Permalink",
+                "パーマリンクをクリップボードにコピーしました。",
+                duration=3
+            )
+        else:
+            QMessageBox.warning(
+                self.iface.mainWindow(),
+                "QMap Permalink",
+                "クリップボードへのコピーに失敗しました。再試行するか手動でコピーしてください。"
+            )
+
+    def on_open_clicked_panel(self):
+        """パネル版：ブラウザで開くボタンがクリックされた時の処理"""
+        permalink_url = self.panel.lineEdit_permalink.text().strip()
+        if not permalink_url:
+            QMessageBox.warning(
+                self.iface.mainWindow(),
+                "QMap Permalink",
+                "開くパーマリンクがありません。"
+            )
+            return
+            
+        try:
+            QDesktopServices.openUrl(QUrl(permalink_url))
+            self.iface.messageBar().pushMessage(
+                "QMap Permalink",
+                "パーマリンクをブラウザで開きました。",
+                duration=3
+            )
+        except Exception as e:
+            QMessageBox.critical(
+                self.iface.mainWindow(),
+                "QMap Permalink",
+                f"ブラウザでの表示に失敗しました: {str(e)}"
             )
