@@ -23,7 +23,7 @@
 """
 from qgis.PyQt.QtCore import QSettings, QTranslator, QCoreApplication, Qt, QUrl, QThread, pyqtSignal, QObject
 from qgis.PyQt.QtGui import QIcon, QDesktopServices, QClipboard
-from qgis.PyQt.QtWidgets import QAction, QMessageBox, QApplication
+from qgis.PyQt.QtWidgets import QAction, QMessageBox, QApplication, QDockWidget
 from qgis.core import QgsProject, QgsCoordinateReferenceSystem, QgsCoordinateTransform, QgsPointXY, QgsRectangle
 try:
     from qgis.core import qgsfunction
@@ -240,8 +240,11 @@ class QMapPermalink:
                 server_running = self.http_server is not None
                 self.panel.update_server_status(self.server_port, server_running)
                 
-                # QGISのメインウィンドウにドッキング
-                self.iface.addDockWidget(Qt.RightDockWidgetArea, self.panel)
+                # QGISのメインウィンドウの左側にドッキング
+                self.iface.addDockWidget(Qt.LeftDockWidgetArea, self.panel)
+                
+                # 既存の左側パネルがあればタブ化
+                self._try_tabify_with_existing_panels()
                 
                 # デバッグメッセージ
                 self.iface.messageBar().pushMessage(
@@ -261,6 +264,74 @@ class QMapPermalink:
                 self.iface.mainWindow(),
                 "QMap Permalink",
                 f"パネルの作成に失敗しました: {str(e)}"
+            )
+
+    def _try_tabify_with_existing_panels(self):
+        """既存の左側パネルがあればタブ化を試行"""
+        try:
+            # QGISメインウィンドウから左側ドックエリアのウィジェットを取得
+            main_window = self.iface.mainWindow()
+            
+            # よく使われるパネル名のリスト（優先順位順）
+            preferred_panels = [
+                'Layers',           # レイヤーパネル
+                'Browser',          # ブラウザパネル
+                'Browser2',         # ブラウザパネル（別名）
+                'LayerOrder',       # レイヤー順序パネル
+                'Processing',       # プロセシングツールボックス
+                'History',          # 履歴パネル
+            ]
+            
+            target_panel = None
+            
+            # 優先パネルから検索
+            for panel_name in preferred_panels:
+                for widget in main_window.findChildren(QDockWidget):
+                    if (widget != self.panel and 
+                        main_window.dockWidgetArea(widget) == Qt.LeftDockWidgetArea and
+                        widget.isVisible() and
+                        (panel_name.lower() in widget.objectName().lower() or
+                         panel_name.lower() in widget.windowTitle().lower())):
+                        target_panel = widget
+                        break
+                if target_panel:
+                    break
+            
+            # 優先パネルが見つからない場合は左側の最初のパネルを使用
+            if not target_panel:
+                for widget in main_window.findChildren(QDockWidget):
+                    if (widget != self.panel and 
+                        main_window.dockWidgetArea(widget) == Qt.LeftDockWidgetArea and
+                        widget.isVisible()):
+                        target_panel = widget
+                        break
+            
+            # タブ化実行
+            if target_panel:
+                main_window.tabifyDockWidget(target_panel, self.panel)
+                
+                # QMapPermalinkパネルをアクティブにする
+                self.panel.raise_()
+                
+                self.iface.messageBar().pushMessage(
+                    "QMap Permalink", 
+                    f"'{target_panel.windowTitle()}'パネルとタブ化しました。", 
+                    duration=3
+                )
+            else:
+                self.iface.messageBar().pushMessage(
+                    "QMap Permalink", 
+                    "左側に独立したパネルとして表示しました。", 
+                    duration=3
+                )
+                
+        except Exception as e:
+            # タブ化に失敗しても継続
+            print(f"パネルのタブ化でエラー: {e}")
+            self.iface.messageBar().pushMessage(
+                "QMap Permalink", 
+                "左側にパネルを表示しました。", 
+                duration=3
             )
 
     def unload(self):
