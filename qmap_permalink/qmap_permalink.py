@@ -25,7 +25,27 @@ from qgis.PyQt.QtCore import QSettings, QTranslator, QCoreApplication, Qt, QUrl,
 from qgis.PyQt.QtGui import QIcon, QDesktopServices, QClipboard
 from qgis.PyQt.QtWidgets import QAction, QMessageBox, QApplication
 from qgis.core import QgsProject, QgsCoordinateReferenceSystem, QgsCoordinateTransform, QgsPointXY, QgsRectangle
+try:
+    from qgis.core import qgsfunction
+except Exception:
+    qgsfunction = None
+
 from qgis.gui import QgsMapCanvas
+
+# ユーザー関数を追加（QGIS 環境では qgsfunction デコレータで登録）
+if qgsfunction:
+    try:
+        @qgsfunction(args='auto', group='Custom', usesgeometry=False)
+        def my_custom_function(value1, value2, feature, parent):
+            return value1 + value2
+    except Exception:
+        # 登録失敗しても通常の関数は定義しておく
+        def my_custom_function(value1, value2, feature, parent):
+            return value1 + value2
+else:
+    # QGIS 環境でない場合はデコレータなしで定義
+    def my_custom_function(value1, value2, feature, parent):
+        return value1 + value2
 
 import os.path
 import json
