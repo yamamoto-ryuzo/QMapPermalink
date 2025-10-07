@@ -11,6 +11,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **B**: UI changes, new plugin features, or moderate functionality additions
 - **C**: Profile/plugin fixes, minor bug fixes, and small improvements
 
+## [V1.3.0] - 2025-10-08
+
+### ⚠️ BREAKING CHANGES - Major Plugin Architecture Redesign
+
+### Removed
+- ダイアログ形式のUI（従来のポップアップウィンドウ）を完全に削除
+- `qmap_permalink_dialog.py` と `qmap_permalink_dialog_base.ui` を廃止
+- ダイアログ版のイベントハンドラを削除
+
+### Added
+- **パネル形式UI**: QGISの左側ドックエリアに常駐するパネルインターフェース
+- **自動タブ化機能**: 既存の左側パネル（レイヤーパネル、ブラウザパネルなど）と自動的にタブ統合
+- **完全多言語対応**: プラグインメッセージとパネルUIの両方を翻訳対応
+- **インテリジェントパネル配置**: 優先度に基づいて最適なパネルとのタブ化を実行
+- **フォールバック機能**: UIファイル読み込み失敗時の簡易パネル（`qmap_permalink_panel_simple.py`）
+
+### Changed
+- **UI形式**: ダイアログからドッキング可能パネルへの完全移行
+- **ワークフロー**: 常時アクセス可能なパネルによる効率的な操作
+- **翻訳システム**: 全メッセージを`tr()`関数で翻訳可能に変更
+- **パネルサイズ**: 左側パネルに最適化されたサイズ（幅250-400px）
+- **ユーザーフィードバック**: 操作結果の詳細なメッセージ表示
+
+### Enhanced
+- **日本語翻訳**: パネルUI要素を含む完全な日本語対応
+- **エラーハンドリング**: より詳細なエラーメッセージと対処法の提示
+- **デバッグ情報**: パネル作成・タブ化プロセスの可視化
+
+### Technical Changes
+- **アーキテクチャ**: `QDialog` から `QDockWidget` ベースに変更
+- **パネルクラス**: `QMapPermalinkPanel` による統合UI管理
+- **条件付きインポート**: パネル機能の可用性チェックとフォールバック
+- **翻訳ファイル**: `QMapPermalinkPanelBase` コンテキストの追加
+
+### Migration Notes
+- 既存のダイアログベースのワークフローは自動的にパネル形式に移行
+- 設定や機能に互換性はありますが、UI操作方法が変更されています
+- パネルは手動で位置を調整可能（ドラッグ&ドロップ、フローティング対応）
+
 ## [V1.2.0] - 2025-10-05
 
 ### Added

@@ -195,8 +195,8 @@ class QMapPermalink:
         else:
             # パネルが利用できない場合は警告メッセージ
             self.iface.messageBar().pushMessage(
-                "QMap Permalink",
-                "パネル機能が利用できません。プラグインの再インストールを試してください。",
+                self.tr("QMap Permalink"),
+                self.tr("Panel functionality is not available. Please try reinstalling the plugin."),
                 level=2,  # WARNING
                 duration=10
             )
@@ -212,8 +212,8 @@ class QMapPermalink:
         if not PANEL_AVAILABLE:
             QMessageBox.warning(
                 self.iface.mainWindow(),
-                "QMap Permalink",
-                "パネル機能は利用できません。"
+                self.tr("QMap Permalink"),
+                self.tr("Panel functionality is not available.")
             )
             return
             
@@ -248,8 +248,8 @@ class QMapPermalink:
                 
                 # デバッグメッセージ
                 self.iface.messageBar().pushMessage(
-                    "QMap Permalink", 
-                    "パネルを作成しました。", 
+                    self.tr("QMap Permalink"), 
+                    self.tr("Panel created successfully."), 
                     duration=3
                 )
             else:
@@ -262,8 +262,8 @@ class QMapPermalink:
         except Exception as e:
             QMessageBox.critical(
                 self.iface.mainWindow(),
-                "QMap Permalink",
-                f"パネルの作成に失敗しました: {str(e)}"
+                self.tr("QMap Permalink"),
+                self.tr("Failed to create panel: {error}").format(error=str(e))
             )
 
     def _try_tabify_with_existing_panels(self):
@@ -314,14 +314,14 @@ class QMapPermalink:
                 self.panel.raise_()
                 
                 self.iface.messageBar().pushMessage(
-                    "QMap Permalink", 
-                    f"'{target_panel.windowTitle()}'パネルとタブ化しました。", 
+                    self.tr("QMap Permalink"), 
+                    self.tr("Tabified with '{panel_name}' panel.").format(panel_name=target_panel.windowTitle()), 
                     duration=3
                 )
             else:
                 self.iface.messageBar().pushMessage(
-                    "QMap Permalink", 
-                    "左側に独立したパネルとして表示しました。", 
+                    self.tr("QMap Permalink"), 
+                    self.tr("Displayed as an independent panel on the left side."), 
                     duration=3
                 )
                 
@@ -329,8 +329,8 @@ class QMapPermalink:
             # タブ化に失敗しても継続
             print(f"パネルのタブ化でエラー: {e}")
             self.iface.messageBar().pushMessage(
-                "QMap Permalink", 
-                "左側にパネルを表示しました。", 
+                self.tr("QMap Permalink"), 
+                self.tr("Panel displayed on the left side."), 
                 duration=3
             )
 
@@ -1229,15 +1229,15 @@ class QMapPermalink:
             permalink = self.generate_permalink()
             self.panel.lineEdit_permalink.setText(permalink)
             self.iface.messageBar().pushMessage(
-                "QMap Permalink", 
-                "パーマリンクが生成されました。", 
+                self.tr("QMap Permalink"), 
+                self.tr("Permalink generated successfully."), 
                 duration=3
             )
         except Exception as e:
             QMessageBox.critical(
                 self.iface.mainWindow(),
-                "QMap Permalink",
-                f"パーマリンクの生成に失敗しました: {str(e)}"
+                self.tr("QMap Permalink"),
+                self.tr("Failed to generate permalink: {error}").format(error=str(e))
             )
 
     def on_navigate_clicked_panel(self):
@@ -1246,8 +1246,8 @@ class QMapPermalink:
         if not permalink_url:
             QMessageBox.warning(
                 self.iface.mainWindow(),
-                "QMap Permalink",
-                "パーマリンクURLを入力してください。"
+                self.tr("QMap Permalink"),
+                self.tr("Please enter a permalink URL.")
             )
             return
             
@@ -1259,8 +1259,8 @@ class QMapPermalink:
         if not permalink_url:
             QMessageBox.warning(
                 self.iface.mainWindow(),
-                "QMap Permalink",
-                "コピーするパーマリンクがありません。"
+                self.tr("QMap Permalink"),
+                self.tr("No permalink available to copy.")
             )
             return
             
@@ -1279,15 +1279,15 @@ class QMapPermalink:
 
         if success:
             self.iface.messageBar().pushMessage(
-                "QMap Permalink",
-                "パーマリンクをクリップボードにコピーしました。",
+                self.tr("QMap Permalink"),
+                self.tr("Permalink copied to clipboard."),
                 duration=3
             )
         else:
             QMessageBox.warning(
                 self.iface.mainWindow(),
-                "QMap Permalink",
-                "クリップボードへのコピーに失敗しました。再試行するか手動でコピーしてください。"
+                self.tr("QMap Permalink"),
+                self.tr("Failed to copy to clipboard. Please try again or copy manually.")
             )
 
     def on_open_clicked_panel(self):
@@ -1296,21 +1296,21 @@ class QMapPermalink:
         if not permalink_url:
             QMessageBox.warning(
                 self.iface.mainWindow(),
-                "QMap Permalink",
-                "開くパーマリンクがありません。"
+                self.tr("QMap Permalink"),
+                self.tr("No permalink available to open.")
             )
             return
             
         try:
             QDesktopServices.openUrl(QUrl(permalink_url))
             self.iface.messageBar().pushMessage(
-                "QMap Permalink",
-                "パーマリンクをブラウザで開きました。",
+                self.tr("QMap Permalink"),
+                self.tr("Permalink opened in browser."),
                 duration=3
             )
         except Exception as e:
             QMessageBox.critical(
                 self.iface.mainWindow(),
-                "QMap Permalink",
-                f"ブラウザでの表示に失敗しました: {str(e)}"
+                self.tr("QMap Permalink"),
+                self.tr("Failed to open in browser: {error}").format(error=str(e))
             )
