@@ -124,26 +124,70 @@ class QMapPermalinkZipCreator:
         if not old_zips:
             return
 
-        # 可能なら send2trash を使ってごみ箱に移動し、なければ従来どおりバックアップへ移動
+        # try send2trash first (cross-platform)
         try:
             from send2trash import send2trash
-            use_send2trash = True
         except Exception:
-            use_send2trash = False
-            # バックアップディレクトリを作成
-            backup_dir = self.dist_dir / "backup"
-            backup_dir.mkdir(exist_ok=True)
+            send2trash = None
 
         for zip_file in old_zips:
             try:
-                if use_send2trash:
-                    send2trash(str(zip_file))
-                    print(f"古いZIPファイルをごみ箱に移動: {zip_file.name}")
-                else:
-                    # バックアップフォルダに移動
-                    backup_path = backup_dir / zip_file.name
-                    shutil.move(str(zip_file), str(backup_path))
-                    print(f"古いZIPファイルをバックアップに移動: {zip_file.name} (send2trash未インストール)")
+                moved = False
+                if send2trash is not None:
+                    try:
+                        send2trash(str(zip_file))
+                        print(f"古いZIPファイルをごみ箱に移動: {zip_file.name} (send2trash)")
+                        moved = True
+                    except Exception as e:
+                        print(f"send2trash でごみ箱移動に失敗: {zip_file.name}: {e}")
+
+                # If not moved and on Windows, try SHFileOperationW
+                if not moved and os.name == 'nt':
+                    try:
+                        import ctypes
+                        from ctypes import wintypes
+
+                        class SHFILEOPSTRUCTW(ctypes.Structure):
+                            _fields_ = [
+                                ('hwnd', wintypes.HWND),
+                                ('wFunc', wintypes.UINT),
+                                ('pFrom', wintypes.LPCWSTR),
+                                ('pTo', wintypes.LPCWSTR),
+                                ('fFlags', ctypes.c_uint16),
+                                ('fAnyOperationsAborted', wintypes.BOOL),
+                                ('hNameMappings', wintypes.LPVOID),
+                                ('lpszProgressTitle', wintypes.LPCWSTR),
+                            ]
+
+                        FO_DELETE = 3
+                        FOF_ALLOWUNDO = 0x0040
+                        FOF_NOCONFIRMATION = 0x0010
+
+                        shell32 = ctypes.windll.shell32
+
+                        path_w = str(zip_file) + '\x00\x00'
+                        op = SHFILEOPSTRUCTW()
+                        op.hwnd = None
+                        op.wFunc = FO_DELETE
+                        op.pFrom = path_w
+                        op.pTo = None
+                        op.fFlags = FOF_ALLOWUNDO | FOF_NOCONFIRMATION
+                        res = shell32.SHFileOperationW(ctypes.byref(op))
+                        if res == 0:
+                            print(f"古いZIPファイルをごみ箱に移動: {zip_file.name} (SHFileOperationW)")
+                            moved = True
+                        else:
+                            print(f"SHFileOperationW が失敗しました: {zip_file.name} (戻り値 {res})")
+                    except Exception as e:
+                        print(f"Windows ごみ箱移動エラー {zip_file.name}: {e}")
+
+                # 最終手段: 削除（注意：恒久的に削除されます）
+                if not moved:
+                    try:
+                        os.remove(str(zip_file))
+                        print(f"古いZIPファイルを削除しました（ごみ箱へ移動不可だったため）: {zip_file.name}")
+                    except Exception as e:
+                        print(f"ファイル削除に失敗しました: {zip_file.name}: {e}")
             except Exception as e:
                 print(f"ファイル移動/ごみ箱移動エラー {zip_file.name}: {e}")
                 
