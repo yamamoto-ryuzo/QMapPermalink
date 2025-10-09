@@ -564,6 +564,8 @@ class QMapPermalink:
         scale_value = None
         # rotation パラメータがあれば含める
         rotation_value = None
+        # theme パラメータがあれば処理
+        theme_info = None
         if 'scale' in params:
             try:
                 scale_value = float(params['scale'][0])
@@ -574,6 +576,14 @@ class QMapPermalink:
                 rotation_value = float(params['rotation'][0])
             except Exception:
                 raise ValueError("rotation パラメータは数値で指定してください")
+        if 'theme' in params:
+            try:
+                theme_encoded = params['theme'][0]
+                theme_decoded = urllib.parse.unquote(theme_encoded)
+                theme_info = json.loads(theme_decoded)
+            except Exception as e:
+                print(f"テーマパラメータの解析エラー: {e}")
+                # エラーでも処理を続行
 
         if 'll' in params:
             lat, lon = self._parse_latlon(params['ll'][0])
@@ -587,6 +597,7 @@ class QMapPermalink:
                 'lon': lon,
                 'scale': scale_value,
                 'rotation': rotation_value,
+                'theme_info': theme_info,
             }
 
         if 'q' in params:
@@ -601,6 +612,7 @@ class QMapPermalink:
                 'lon': lon,
                 'scale': scale_value,
                 'rotation': rotation_value,
+                'theme_info': theme_info,
             }
 
         if 'center' in params:
@@ -641,6 +653,7 @@ class QMapPermalink:
                 'lon': lon_val,
                 'scale': scale_value,
                 'rotation': rotation_value,
+                'theme_info': theme_info,
             }
 
         if all(key in params for key in ('lat', 'lon')):
@@ -968,8 +981,11 @@ class QMapPermalink:
                 continue
         raise RuntimeError(f"ポート範囲 {start_port}-{end_port} で使用可能なポートが見つかりません")
     
-    def generate_permalink(self):
+    def generate_permalink(self, include_theme=True):
         """現在の地図ビューからパーマリンクを生成
+        
+        Args:
+            include_theme (bool): テーマ情報を含めるかどうか
         
         Returns:
             パーマリンクURL文字列（HTTP形式）
@@ -992,8 +1008,7 @@ class QMapPermalink:
         if zoom_level is None:
             zoom_level = self._estimate_zoom_from_scale(scale)
 
-        # 出力は現在のキャンバスCRSとキャンバス座標をそのまま使用し、標準では scale を含める
-        # 例: http://localhost:8089/qgis-map?x=123456.7890&y=4321987.1234&scale=1000.0&crs=EPSG:3857
+        # 基本パラメータを構築
         x_val = f"{center_point.x():.6f}"
         y_val = f"{center_point.y():.6f}"
         crs_id = crs.authid()  # e.g. 'EPSG:3857' or 'EPSG:4326'
@@ -1003,10 +1018,21 @@ class QMapPermalink:
             # 万が一 scale が取得できなければ、ズームレベルから推定して scale を算出（逆算は簡易）
             # ここでは推定値として 1000 を入れておく
             scale_val = 1000.0
+        
+        # 基本URL構築
         permalink_url = (
             f"http://localhost:{self.server_port}/qgis-map?x={x_val}&y={y_val}"
             f"&scale={scale_val:.1f}&crs={crs_id}&rotation={rotation:.2f}"
         )
+        
+        # テーマ情報を追加（オプション）
+        if include_theme:
+            theme_info = self._get_current_theme_info()
+            if theme_info:
+                # テーマ情報をJSONエンコードしてURLパラメータに追加
+                theme_encoded = urllib.parse.quote(json.dumps(theme_info))
+                permalink_url += f"&theme={theme_encoded}"
+        
         return permalink_url
 
     def navigate_to_permalink(self, permalink_url):
@@ -1038,8 +1064,9 @@ class QMapPermalink:
                     scale = navigation_data.get('scale')
                     crs = navigation_data.get('crs')
                     rotation = navigation_data.get('rotation')
+                    theme_info = navigation_data.get('theme_info')
                     # 直接移動を実行（scale を優先）
-                    self.navigate_to_coordinates(x, y, scale, zoom, crs, rotation)
+                    self.navigate_to_coordinates(x, y, scale, zoom, crs, rotation, theme_info)
                 else:
                     raise ValueError("HTTP URLのパラメータからナビゲーションデータを生成できませんでした。")
                     
@@ -1115,7 +1142,7 @@ class QMapPermalink:
         except Exception as e:
             raise Exception(f"HTTP地図移動の処理中にエラーが発生しました: {str(e)}")
     
-    def navigate_to_coordinates(self, x, y, scale, zoom, crs_auth_id, rotation=None):
+    def navigate_to_coordinates(self, x, y, scale, zoom, crs_auth_id, rotation=None, theme_info=None):
         """座標指定でのナビゲーション処理
         
         Args:
@@ -1123,6 +1150,8 @@ class QMapPermalink:
             y: 緯度またはY座標  
             zoom: ズームレベル
             crs_auth_id: 座標系ID (例: "EPSG:4326")
+            rotation: 回転角度（度）
+            theme_info: テーマ情報（辞書）
         """
         try:
             # 座標系を設定
@@ -1175,11 +1204,26 @@ class QMapPermalink:
                 )
                 canvas.setExtent(extent)
 
+            # テーマ情報がある場合は適用
+            theme_applied = False
+            if theme_info:
+                try:
+                    theme_applied = self._apply_theme_from_permalink(theme_info)
+                    if theme_applied:
+                        print("テーマが正常に適用されました")
+                except Exception as e:
+                    print(f"テーマ適用エラー: {e}")
+            
             canvas.refresh()
+            
+            # メッセージを表示
+            message = f"座標 ({x:.6f}, {y:.6f}) に移動しました。"
+            if theme_applied:
+                message += " テーマも復元されました。"
             
             self.iface.messageBar().pushMessage(
                 "QMap Permalink", 
-                f"座標 ({x:.6f}, {y:.6f}) に移動しました。", 
+                message, 
                 duration=3
             )
             
@@ -1207,8 +1251,9 @@ class QMapPermalink:
                 scale = navigation_data.get('scale')
                 crs = navigation_data['crs']
                 rotation = navigation_data.get('rotation')
+                theme_info = navigation_data.get('theme_info')
                 # scale を優先して渡す（None の場合は zoom を使う）
-                self.navigate_to_coordinates(x, y, scale, zoom, crs, rotation)
+                self.navigate_to_coordinates(x, y, scale, zoom, crs, rotation, theme_info)
                 
             print(f"ナビゲーション完了: {navigation_data['type']}")
             
@@ -1226,11 +1271,23 @@ class QMapPermalink:
     def on_generate_clicked_panel(self):
         """パネル版：パーマリンク生成ボタンがクリックされた時の処理"""
         try:
-            permalink = self.generate_permalink()
+            # テーマ情報を含めるかどうかをチェックボックスの状態から判定
+            include_theme = True  # デフォルト値
+            if hasattr(self.panel, 'checkBox_include_theme'):
+                include_theme = self.panel.checkBox_include_theme.isChecked()
+            
+            permalink = self.generate_permalink(include_theme=include_theme)
             self.panel.lineEdit_permalink.setText(permalink)
+            
+            # メッセージにテーマ情報の有無を含める
+            if include_theme:
+                message = self.tr("Permalink with theme information generated successfully.")
+            else:
+                message = self.tr("Permalink generated successfully.")
+            
             self.iface.messageBar().pushMessage(
                 self.tr("QMap Permalink"), 
-                self.tr("Permalink generated successfully."), 
+                message, 
                 duration=3
             )
         except Exception as e:
@@ -1314,3 +1371,239 @@ class QMapPermalink:
                 self.tr("QMap Permalink"),
                 self.tr("Failed to open in browser: {error}").format(error=str(e))
             )
+
+    # テーマ関連のメソッド群
+    
+    def _get_current_theme_info(self):
+        """現在のテーマ情報を取得
+        
+        Returns:
+            dict or None: テーマ情報を含む辞書、またはNone
+        """
+        try:
+            from qgis.core import QgsProject, QgsMapThemeCollection
+            
+            project = QgsProject.instance()
+            if not project:
+                return None
+                
+            theme_collection = project.mapThemeCollection()
+            if not theme_collection:
+                return None
+            
+            # 現在のレイヤー状態を取得
+            layer_states = self._get_current_layer_states()
+            
+            # アクティブなテーマがあるかチェック
+            current_theme = self._detect_current_theme(theme_collection, layer_states)
+            
+            theme_info = {
+                'version': '1.0',
+                'current_theme': current_theme,
+                'layer_states': layer_states,
+                'available_themes': theme_collection.mapThemes()
+            }
+            
+            return theme_info
+            
+        except ImportError:
+            # QGISが利用できない環境
+            return None
+        except Exception as e:
+            print(f"テーマ情報取得エラー: {e}")
+            return None
+    
+    def _get_current_layer_states(self):
+        """現在のレイヤー状態を取得
+        
+        Returns:
+            dict: レイヤー状態情報
+        """
+        try:
+            from qgis.core import QgsProject, QgsLayerTreeLayer, QgsLayerTreeGroup
+            
+            project = QgsProject.instance()
+            root = project.layerTreeRoot()
+            
+            layer_states = {}
+            
+            def collect_layer_info(node, path=""):
+                """レイヤーノードから情報を再帰的に収集"""
+                if isinstance(node, QgsLayerTreeLayer):
+                    layer = node.layer()
+                    if layer:
+                        layer_id = layer.id()
+                        layer_states[layer_id] = {
+                            'name': layer.name(),
+                            'visible': node.isVisible(),
+                            'expanded': node.isExpanded(),
+                            'opacity': getattr(layer, 'opacity', lambda: 1.0)(),
+                            'path': path,
+                            'type': layer.type().name if hasattr(layer.type(), 'name') else str(layer.type())
+                        }
+                        
+                        # スタイル情報も含める（可能であれば）
+                        if hasattr(layer, 'styleManager'):
+                            try:
+                                current_style = layer.styleManager().currentStyle()
+                                layer_states[layer_id]['current_style'] = current_style
+                                layer_states[layer_id]['available_styles'] = layer.styleManager().styles()
+                            except:
+                                pass
+                                
+                elif isinstance(node, QgsLayerTreeGroup):
+                    group_path = f"{path}/{node.name()}" if path else node.name()
+                    layer_states[f"group:{node.name()}"] = {
+                        'name': node.name(),
+                        'type': 'group',
+                        'visible': node.isVisible(),
+                        'expanded': node.isExpanded(),
+                        'path': path
+                    }
+                    
+                    # 子要素を再帰的に処理
+                    for child in node.children():
+                        collect_layer_info(child, group_path)
+            
+            # ルートから開始
+            for child in root.children():
+                collect_layer_info(child)
+            
+            return layer_states
+            
+        except Exception as e:
+            print(f"レイヤー状態取得エラー: {e}")
+            return {}
+    
+    def _detect_current_theme(self, theme_collection, current_layer_states):
+        """現在の状態に最も近いテーマを検出
+        
+        Args:
+            theme_collection: QgsMapThemeCollection
+            current_layer_states: 現在のレイヤー状態
+            
+        Returns:
+            str or None: テーマ名、または一致するものがない場合はNone
+        """
+        try:
+            available_themes = theme_collection.mapThemes()
+            
+            for theme_name in available_themes:
+                # テーマの状態と現在の状態を比較
+                # 実際の詳細比較は複雑になるため、簡単な一致判定を行う
+                
+                # ここでは簡単な実装として、テーマ名による判定のみ行う
+                # 実際の実装では、レイヤーの表示状態やスタイルを詳細に比較する必要がある
+                pass
+            
+            # 簡略化：現在は常にNoneを返す（完全一致の検出は複雑なため）
+            return None
+            
+        except Exception as e:
+            print(f"テーマ検出エラー: {e}")
+            return None
+    
+    def _apply_theme_from_permalink(self, theme_info):
+        """パーマリンクからテーマ情報を復元・適用
+        
+        Args:
+            theme_info (dict): テーマ情報を含む辞書
+            
+        Returns:
+            bool: 適用成功かどうか
+        """
+        try:
+            from qgis.core import QgsProject, QgsLayerTreeModel
+            
+            if not theme_info or not isinstance(theme_info, dict):
+                return False
+            
+            project = QgsProject.instance()
+            if not project:
+                return False
+            
+            # 指定されたテーマがある場合は適用
+            current_theme = theme_info.get('current_theme')
+            if current_theme:
+                theme_collection = project.mapThemeCollection()
+                if current_theme in theme_collection.mapThemes():
+                    root = project.layerTreeRoot()
+                    model = QgsLayerTreeModel(root)
+                    theme_collection.applyTheme(current_theme, root, model)
+                    return True
+            
+            # テーマが指定されていない場合は、レイヤー状態を個別に復元
+            layer_states = theme_info.get('layer_states', {})
+            if layer_states:
+                return self._apply_layer_states(layer_states)
+            
+            return False
+            
+        except ImportError:
+            # QGISが利用できない環境
+            return False
+        except Exception as e:
+            print(f"テーマ適用エラー: {e}")
+            return False
+    
+    def _apply_layer_states(self, layer_states):
+        """レイヤー状態を個別に適用
+        
+        Args:
+            layer_states (dict): レイヤー状態情報
+            
+        Returns:
+            bool: 適用成功かどうか
+        """
+        try:
+            from qgis.core import QgsProject
+            
+            project = QgsProject.instance()
+            root = project.layerTreeRoot()
+            
+            success_count = 0
+            total_count = 0
+            
+            for layer_id, state in layer_states.items():
+                if layer_id.startswith('group:'):
+                    # グループの処理
+                    group_name = layer_id[6:]  # "group:" を除去
+                    group_node = root.findGroup(group_name)
+                    if group_node:
+                        group_node.setItemVisibilityChecked(state.get('visible', True))
+                        group_node.setExpanded(state.get('expanded', True))
+                        success_count += 1
+                    total_count += 1
+                    
+                else:
+                    # レイヤーの処理
+                    layer_node = root.findLayer(layer_id)
+                    if layer_node:
+                        layer_node.setItemVisibilityChecked(state.get('visible', True))
+                        
+                        # レイヤーの透明度を設定
+                        layer = layer_node.layer()
+                        if layer and hasattr(layer, 'setOpacity'):
+                            layer.setOpacity(state.get('opacity', 1.0))
+                        
+                        # スタイルの適用（可能であれば）
+                        current_style = state.get('current_style')
+                        if current_style and layer and hasattr(layer, 'styleManager'):
+                            try:
+                                if current_style in layer.styleManager().styles():
+                                    layer.styleManager().setCurrentStyle(current_style)
+                            except Exception:
+                                pass
+                        
+                        success_count += 1
+                    total_count += 1
+            
+            # 地図キャンバスを更新
+            self.iface.mapCanvas().refresh()
+            
+            print(f"レイヤー状態適用: {success_count}/{total_count} 成功")
+            return success_count > 0
+            
+        except Exception as e:
+            print(f"レイヤー状態適用エラー: {e}")
+            return False

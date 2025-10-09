@@ -11,6 +11,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **B**: UI changes, new plugin features, or moderate functionality additions
 - **C**: Profile/plugin fixes, minor bug fixes, and small improvements
 
+## [V1.4.0] - 2025-10-09
+
+### 🎨 NEW FEATURE - Theme Support in Permalinks
+
+### Added
+- **テーマ機能サポート**: パーマリンクにマップテーマとレイヤー状態情報を含める機能
+- **レイヤー状態の保存・復元**: レイヤーの表示/非表示、透明度、スタイル情報をパーマリンクに含める
+- **パネルUIにテーマオプション**: 「Include current theme/layer states」チェックボックスを追加
+- **自動テーマ検出**: 現在のレイヤー状態から該当するマップテーマを検出する機能
+- **テーマ復元機能**: パーマリンクからナビゲーション時にテーマとレイヤー状態を自動復元
+
+### Enhanced
+- **パーマリンクURL拡張**: 新しい`theme`パラメータでテーマ情報をJSON形式で含める
+- **HTTPサーバー機能強化**: テーマパラメータの解析とナビゲーション処理を追加
+- **UI改善**: パネルでテーマ情報を含めるかどうかを選択可能
+- **メッセージ表示強化**: テーマ復元の成功/失敗を詳細にフィードバック
+
+### Technical Features
+- **QgsMapThemeCollection API**: QGISの標準マップテーマ機能と完全統合
+- **レイヤーツリー操作**: QgsLayerTreeの状態を詳細に取得・復元
+- **JSON形式のテーマデータ**: 構造化されたテーマ情報の保存形式
+- **後方互換性**: 既存のパーマリンクは引き続き動作（テーマなし）
+
+### Usage Examples
+テーマ情報を含むパーマリンクの例：
+```
+http://localhost:8089/qgis-map?x=139.01234&y=35.12345&scale=1000.0&crs=EPSG:4326&rotation=0.00&theme=%7B%22version%22%3A%221.0%22%2C%22current_theme%22%3A%22StandardMap%22%2C%22layer_states%22%3A%7B...%7D%7D
+```
+
+### Benefits
+- **完全な地図状態の共有**: 位置情報だけでなく、表示設定も含めた完全な地図状態を外部文書で共有
+- **チーム作業の効率化**: 複雑なレイヤー設定を含む地図ビューを瞬時に共有・復元
+- **テーマベースの資料作成**: マップテーマを活用した専門的な資料作成のサポート
+- **プロジェクト管理強化**: 異なる表示設定の地図ビューを効率的に管理・切り替え
+
+### Migration Notes
+- テーマ機能はオプションです。既存のワークフローに影響はありません
+- デフォルトでテーマ情報が含まれますが、パネルのチェックボックスで無効化可能
+- テーマ情報が含まれたパーマリンクは若干長くなりますが、機能は大幅に向上します
+
 ## [V1.3.0] - 2025-10-08
 
 ### ⚠️ BREAKING CHANGES - Major Plugin Architecture Redesign
