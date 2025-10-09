@@ -582,8 +582,9 @@ class QMapPermalink:
         if 'theme' in params:
             try:
                 theme_encoded = params['theme'][0]
-                theme_decoded = urllib.parse.unquote(theme_encoded)
-                theme_info = json.loads(theme_decoded)
+                theme_name = urllib.parse.unquote(theme_encoded)
+                # シンプルにテーマ名を保存
+                theme_info = theme_name
             except Exception as e:
                 print(f"テーマパラメータの解析エラー: {e}")
                 # エラーでも処理を続行
@@ -1030,18 +1031,10 @@ class QMapPermalink:
         )
         
         # テーマ情報を追加（オプション）
-        if include_theme:
-            if specific_theme:
-                # 指定されたテーマの情報を取得
-                theme_info = self.get_specified_theme_info(specific_theme)
-            else:
-                # 現在の状態からテーマ情報を取得
-                theme_info = self._get_current_theme_info()
-                
-            if theme_info:
-                # テーマ情報をJSONエンコードしてURLパラメータに追加
-                theme_encoded = urllib.parse.quote(json.dumps(theme_info))
-                permalink_url += f"&theme={theme_encoded}"
+        if include_theme and specific_theme:
+            # シンプルなテーマ名をパラメータに追加
+            theme_encoded = urllib.parse.quote(specific_theme)
+            permalink_url += f"&theme={theme_encoded}"
         
         return permalink_url
 
@@ -1291,9 +1284,6 @@ class QMapPermalink:
                 if selected_option == "-- No Theme (Position Only) --":
                     include_theme = False
                     specific_theme = None
-                elif selected_option == "-- Use Current State --":
-                    include_theme = True
-                    specific_theme = None
                 elif selected_option:  # 実際のテーマ名が選択された場合
                     include_theme = True
                     specific_theme = selected_option
@@ -1303,9 +1293,7 @@ class QMapPermalink:
             
             # メッセージにテーマ情報の有無を含める
             if include_theme and specific_theme:
-                message = self.tr("Permalink with specified theme '{theme}' generated successfully.").format(theme=specific_theme)
-            elif include_theme:
-                message = self.tr("Permalink with current state generated successfully.")
+                message = self.tr("Permalink with theme '{theme}' generated successfully.").format(theme=specific_theme)
             else:
                 message = self.tr("Permalink (position only) generated successfully.")
             
@@ -1399,11 +1387,13 @@ class QMapPermalink:
     # テーマ関連のメソッド群
     
     def _get_current_theme_info(self):
-        """現在のテーマ情報を取得
+        """現在のテーマ情報を取得（無効化 - 複雑すぎるため）
         
         Returns:
-            dict or None: テーマ情報を含む辞書、またはNone
+            None: 常にNoneを返す（機能無効化）
         """
+        # 複雑すぎて安定しないため、この機能を無効化
+        return None
         try:
             from qgis.core import QgsProject, QgsMapThemeCollection
             
@@ -1527,11 +1517,11 @@ class QMapPermalink:
             print(f"テーマ検出エラー: {e}")
             return None
     
-    def _apply_theme_from_permalink(self, theme_info):
-        """パーマリンクからテーマ情報を復元・適用
+    def _apply_theme_from_permalink(self, theme_name):
+        """パーマリンクからテーマを復元・適用
         
         Args:
-            theme_info (dict): テーマ情報を含む辞書
+            theme_name (str): テーマ名
             
         Returns:
             bool: 適用成功かどうか
@@ -1539,27 +1529,20 @@ class QMapPermalink:
         try:
             from qgis.core import QgsProject, QgsLayerTreeModel
             
-            if not theme_info or not isinstance(theme_info, dict):
+            if not theme_name or not isinstance(theme_name, str):
                 return False
             
             project = QgsProject.instance()
             if not project:
                 return False
             
-            # 指定されたテーマがある場合は適用
-            current_theme = theme_info.get('current_theme')
-            if current_theme:
-                theme_collection = project.mapThemeCollection()
-                if current_theme in theme_collection.mapThemes():
-                    root = project.layerTreeRoot()
-                    model = QgsLayerTreeModel(root)
-                    theme_collection.applyTheme(current_theme, root, model)
-                    return True
-            
-            # テーマが指定されていない場合は、レイヤー状態を個別に復元
-            layer_states = theme_info.get('layer_states', {})
-            if layer_states:
-                return self._apply_layer_states(layer_states)
+            # 指定されたテーマを適用
+            theme_collection = project.mapThemeCollection()
+            if theme_name in theme_collection.mapThemes():
+                root = project.layerTreeRoot()
+                model = QgsLayerTreeModel(root)
+                theme_collection.applyTheme(theme_name, root, model)
+                return True
             
             return False
             
@@ -1570,67 +1553,6 @@ class QMapPermalink:
             print(f"テーマ適用エラー: {e}")
             return False
     
-    def _apply_layer_states(self, layer_states):
-        """レイヤー状態を個別に適用
-        
-        Args:
-            layer_states (dict): レイヤー状態情報
-            
-        Returns:
-            bool: 適用成功かどうか
-        """
-        try:
-            from qgis.core import QgsProject
-            
-            project = QgsProject.instance()
-            root = project.layerTreeRoot()
-            
-            success_count = 0
-            total_count = 0
-            
-            for layer_id, state in layer_states.items():
-                if layer_id.startswith('group:'):
-                    # グループの処理
-                    group_name = layer_id[6:]  # "group:" を除去
-                    group_node = root.findGroup(group_name)
-                    if group_node:
-                        group_node.setItemVisibilityChecked(state.get('visible', True))
-                        group_node.setExpanded(state.get('expanded', True))
-                        success_count += 1
-                    total_count += 1
-                    
-                else:
-                    # レイヤーの処理
-                    layer_node = root.findLayer(layer_id)
-                    if layer_node:
-                        layer_node.setItemVisibilityChecked(state.get('visible', True))
-                        
-                        # レイヤーの透明度を設定
-                        layer = layer_node.layer()
-                        if layer and hasattr(layer, 'setOpacity'):
-                            layer.setOpacity(state.get('opacity', 1.0))
-                        
-                        # スタイルの適用（可能であれば）
-                        current_style = state.get('current_style')
-                        if current_style and layer and hasattr(layer, 'styleManager'):
-                            try:
-                                if current_style in layer.styleManager().styles():
-                                    layer.styleManager().setCurrentStyle(current_style)
-                            except Exception:
-                                pass
-                        
-                        success_count += 1
-                    total_count += 1
-            
-            # 地図キャンバスを更新
-            self.iface.mapCanvas().refresh()
-            
-            print(f"レイヤー状態適用: {success_count}/{total_count} 成功")
-            return success_count > 0
-            
-        except Exception as e:
-            print(f"レイヤー状態適用エラー: {e}")
-            return False
 
     def update_theme_list(self):
         """パネルのテーマ一覧を更新"""
@@ -1653,7 +1575,6 @@ class QMapPermalink:
             
             # システムオプションを追加
             self.panel.comboBox_themes.addItem("-- No Theme (Position Only) --")
-            self.panel.comboBox_themes.addItem("-- Use Current State --")
             
             # 利用可能なテーマを追加
             available_themes = theme_collection.mapThemes()
@@ -1668,39 +1589,4 @@ class QMapPermalink:
         except Exception as e:
             print(f"テーマ一覧更新エラー: {e}")
 
-    def get_specified_theme_info(self, theme_name):
-        """指定されたテーマの情報を取得
-        
-        Args:
-            theme_name (str): テーマ名
-            
-        Returns:
-            dict or None: テーマ情報を含む辞書、またはNone
-        """
-        try:
-            from qgis.core import QgsProject, QgsMapThemeCollection
-            
-            project = QgsProject.instance()
-            if not project:
-                return None
-                
-            theme_collection = project.mapThemeCollection()
-            if not theme_collection or theme_name not in theme_collection.mapThemes():
-                return None
-            
-            # 指定されたテーマの情報を構築
-            theme_info = {
-                'version': '1.0',
-                'current_theme': theme_name,
-                'layer_states': {},  # 実際のテーマ適用時に取得される
-                'available_themes': theme_collection.mapThemes(),
-                'specified_theme': True  # 指定テーマであることを示すフラグ
-            }
-            
-            return theme_info
-            
-        except ImportError:
-            return None
-        except Exception as e:
-            print(f"指定テーマ情報取得エラー: {e}")
-            return None
+

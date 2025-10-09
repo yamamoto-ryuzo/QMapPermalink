@@ -11,6 +11,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **B**: UI changes, new plugin features, or moderate functionality additions
 - **C**: Profile/plugin fixes, minor bug fixes, and small improvements
 
+## [V1.5.4] - 2025-10-09
+
+### 🚀 SIMPLIFIED THEME PARAMETERS - Clean and Lightweight
+
+### Changed
+- **シンプルなテーマパラメータ**: JSONから単純な`theme=テーマ名`形式に変更
+- **軽量なURL**: 複雑なJSONエンコーディングを削除し、読みやすいパラメータに
+- **実装のクリーンアップ**: 不要な複雑なメソッドを削除
+
+### Technical Improvements
+- **パラメータ形式変更**: `theme=%7B...%7D` → `theme=StandardMap`
+- **コード簡素化**: JSON処理やレイヤー状態処理の複雑な部分を削除
+- **保守性向上**: シンプルな実装で理解しやすく、バグが少ない構造
+
+### Usage Examples
+新しいシンプルなパーマリンク形式：
+```
+http://localhost:8089/qgis-map?x=139.01234&y=35.12345&scale=1000.0&crs=EPSG:4326&rotation=0.00&theme=StandardMap
+```
+
+## [V1.5.2] - 2025-10-09
+
+### 🔧 SIMPLIFICATION - Remove Complex Current State Feature
+
+### Removed
+- **Use Current State機能削除**: 複雑で不安定な「-- Use Current State --」オプションを削除
+- **複雑なレイヤー状態取得**: `_get_current_theme_info()`機能を無効化（技術的困難のため）
+
+### Changed
+- **シンプルな2択構成**: 
+  - `-- No Theme (Position Only) --`: 位置情報のみ（デフォルト・推奨）
+  - 具体的なテーマ名: プロジェクト内の既存マップテーマのみ
+- **安定性向上**: 複雑な現在状態取得を排除し、確実に動作する機能のみ提供
+
+### Rationale
+- 現在のレイヤー状態を完全に取得・復元するのは技術的に困難
+- シンプルで確実に動作する機能に集約
+- 既存のマップテーマ活用で十分な価値を提供
+
 ## [V1.5.0] - 2025-10-09
 
 ### 🎨 MAJOR UI REDESIGN - Unified Theme Control
@@ -50,21 +89,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **テーマ復元機能**: パーマリンクからナビゲーション時にテーマとレイヤー状態を自動復元
 
 ### Enhanced
-- **パーマリンクURL拡張**: 新しい`theme`パラメータでテーマ情報をJSON形式で含める
+- **パーマリンクURL拡張**: 新しい`theme`パラメータでテーマ名をシンプルに含める
 - **HTTPサーバー機能強化**: テーマパラメータの解析とナビゲーション処理を追加
 - **UI改善**: パネルでテーマ情報を含めるかどうかを選択可能
 - **メッセージ表示強化**: テーマ復元の成功/失敗を詳細にフィードバック
 
 ### Technical Features
-- **QgsMapThemeCollection API**: QGISの標準マップテーマ機能と完全統合
-- **レイヤーツリー操作**: QgsLayerTreeの状態を詳細に取得・復元
-- **JSON形式のテーマデータ**: 構造化されたテーマ情報の保存形式
+- **QgsMapThemeCollection API**: QGISの標準マップテーマ機能と統合
+- **シンプルなテーマ指定**: テーマ名のみの軽量パラメータ形式
 - **後方互換性**: 既存のパーマリンクは引き続き動作（テーマなし）
 
 ### Usage Examples
 テーマ情報を含むパーマリンクの例：
 ```
-http://localhost:8089/qgis-map?x=139.01234&y=35.12345&scale=1000.0&crs=EPSG:4326&rotation=0.00&theme=%7B%22version%22%3A%221.0%22%2C%22current_theme%22%3A%22StandardMap%22%2C%22layer_states%22%3A%7B...%7D%7D
+http://localhost:8089/qgis-map?x=139.01234&y=35.12345&scale=1000.0&crs=EPSG:4326&rotation=0.00&theme=StandardMap
 ```
 
 ### Benefits
