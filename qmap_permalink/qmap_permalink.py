@@ -240,6 +240,9 @@ class QMapPermalink:
                 server_running = self.http_server is not None
                 self.panel.update_server_status(self.server_port, server_running)
                 
+                # テーマ一覧を更新
+                self.update_theme_list()
+                
                 # QGISのメインウィンドウの左側にドッキング
                 self.iface.addDockWidget(Qt.LeftDockWidgetArea, self.panel)
                 
@@ -981,11 +984,12 @@ class QMapPermalink:
                 continue
         raise RuntimeError(f"ポート範囲 {start_port}-{end_port} で使用可能なポートが見つかりません")
     
-    def generate_permalink(self, include_theme=True):
+    def generate_permalink(self, include_theme=True, specific_theme=None):
         """現在の地図ビューからパーマリンクを生成
         
         Args:
             include_theme (bool): テーマ情報を含めるかどうか
+            specific_theme (str): 指定するテーマ名（None の場合は現在の状態を使用）
         
         Returns:
             パーマリンクURL文字列（HTTP形式）
@@ -1027,7 +1031,13 @@ class QMapPermalink:
         
         # テーマ情報を追加（オプション）
         if include_theme:
-            theme_info = self._get_current_theme_info()
+            if specific_theme:
+                # 指定されたテーマの情報を取得
+                theme_info = self.get_specified_theme_info(specific_theme)
+            else:
+                # 現在の状態からテーマ情報を取得
+                theme_info = self._get_current_theme_info()
+                
             if theme_info:
                 # テーマ情報をJSONエンコードしてURLパラメータに追加
                 theme_encoded = urllib.parse.quote(json.dumps(theme_info))
@@ -1271,19 +1281,33 @@ class QMapPermalink:
     def on_generate_clicked_panel(self):
         """パネル版：パーマリンク生成ボタンがクリックされた時の処理"""
         try:
-            # テーマ情報を含めるかどうかをチェックボックスの状態から判定
-            include_theme = True  # デフォルト値
-            if hasattr(self.panel, 'checkBox_include_theme'):
-                include_theme = self.panel.checkBox_include_theme.isChecked()
+            # ドロップダウンの選択からテーマ設定を判定
+            include_theme = False
+            specific_theme = None
             
-            permalink = self.generate_permalink(include_theme=include_theme)
+            if hasattr(self.panel, 'comboBox_themes'):
+                selected_option = self.panel.comboBox_themes.currentText()
+                
+                if selected_option == "-- No Theme (Position Only) --":
+                    include_theme = False
+                    specific_theme = None
+                elif selected_option == "-- Use Current State --":
+                    include_theme = True
+                    specific_theme = None
+                elif selected_option:  # 実際のテーマ名が選択された場合
+                    include_theme = True
+                    specific_theme = selected_option
+            
+            permalink = self.generate_permalink(include_theme=include_theme, specific_theme=specific_theme)
             self.panel.lineEdit_permalink.setText(permalink)
             
             # メッセージにテーマ情報の有無を含める
-            if include_theme:
-                message = self.tr("Permalink with theme information generated successfully.")
+            if include_theme and specific_theme:
+                message = self.tr("Permalink with specified theme '{theme}' generated successfully.").format(theme=specific_theme)
+            elif include_theme:
+                message = self.tr("Permalink with current state generated successfully.")
             else:
-                message = self.tr("Permalink generated successfully.")
+                message = self.tr("Permalink (position only) generated successfully.")
             
             self.iface.messageBar().pushMessage(
                 self.tr("QMap Permalink"), 
@@ -1607,3 +1631,76 @@ class QMapPermalink:
         except Exception as e:
             print(f"レイヤー状態適用エラー: {e}")
             return False
+
+    def update_theme_list(self):
+        """パネルのテーマ一覧を更新"""
+        if not self.panel or not hasattr(self.panel, 'comboBox_themes'):
+            return
+            
+        try:
+            from qgis.core import QgsProject, QgsMapThemeCollection
+            
+            project = QgsProject.instance()
+            if not project:
+                return
+                
+            theme_collection = project.mapThemeCollection()
+            if not theme_collection:
+                return
+            
+            # コンボボックスをクリア
+            self.panel.comboBox_themes.clear()
+            
+            # システムオプションを追加
+            self.panel.comboBox_themes.addItem("-- No Theme (Position Only) --")
+            self.panel.comboBox_themes.addItem("-- Use Current State --")
+            
+            # 利用可能なテーマを追加
+            available_themes = theme_collection.mapThemes()
+            for theme_name in sorted(available_themes):
+                self.panel.comboBox_themes.addItem(theme_name)
+                
+            print(f"テーマ一覧を更新: {len(available_themes)} テーマが見つかりました")
+            
+        except ImportError:
+            # QGISが利用できない環境
+            print("QGIS環境が利用できません")
+        except Exception as e:
+            print(f"テーマ一覧更新エラー: {e}")
+
+    def get_specified_theme_info(self, theme_name):
+        """指定されたテーマの情報を取得
+        
+        Args:
+            theme_name (str): テーマ名
+            
+        Returns:
+            dict or None: テーマ情報を含む辞書、またはNone
+        """
+        try:
+            from qgis.core import QgsProject, QgsMapThemeCollection
+            
+            project = QgsProject.instance()
+            if not project:
+                return None
+                
+            theme_collection = project.mapThemeCollection()
+            if not theme_collection or theme_name not in theme_collection.mapThemes():
+                return None
+            
+            # 指定されたテーマの情報を構築
+            theme_info = {
+                'version': '1.0',
+                'current_theme': theme_name,
+                'layer_states': {},  # 実際のテーマ適用時に取得される
+                'available_themes': theme_collection.mapThemes(),
+                'specified_theme': True  # 指定テーマであることを示すフラグ
+            }
+            
+            return theme_info
+            
+        except ImportError:
+            return None
+        except Exception as e:
+            print(f"指定テーマ情報取得エラー: {e}")
+            return None

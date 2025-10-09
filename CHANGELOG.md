@@ -11,6 +11,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **B**: UI changes, new plugin features, or moderate functionality additions
 - **C**: Profile/plugin fixes, minor bug fixes, and small improvements
 
+## [V1.5.0] - 2025-10-09
+
+### 🎨 MAJOR UI REDESIGN - Unified Theme Control
+
+### Changed
+- **チェックボックス削除**: 「Include current theme/layer states」チェックボックスを削除
+- **統合ドロップダウン**: テーマ制御を1つのドロップダウンに統合
+- **選択肢の明確化**: 
+  - `-- No Theme (Position Only) --`: 位置情報のみ（デフォルト）
+  - `-- Use Current State --`: 現在の地図状態を含む
+  - 具体的なテーマ名: 既存のマップテーマを選択
+
+### Added
+- **テーマ一覧自動更新**: プロジェクト内の利用可能なテーマを自動検出・表示
+- **指定テーマ機能**: 既存のマップテーマを選択してパーマリンクに含める機能
+- **動的テーマリスト**: テーマの追加・削除に応じた自動更新
+
+### Enhanced
+- **シンプルなUI**: 複数のコントロールから単一のドロップダウンで直感的操作
+- **メッセージ改善**: 選択されたオプションに応じた詳細なフィードバック
+- **柔軟な制御**: 位置のみ、現在状態、指定テーマの3つの選択肢
+
+### Technical Changes
+- **generate_permalink()拡張**: `specific_theme`パラメータ追加
+- **update_theme_list()新設**: テーマ一覧の動的更新機能
+- **get_specified_theme_info()新設**: 指定テーマ情報の取得機能
+
 ## [V1.4.0] - 2025-10-09
 
 ### 🎨 NEW FEATURE - Theme Support in Permalinks
