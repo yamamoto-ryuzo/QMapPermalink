@@ -502,32 +502,63 @@ class QMapPermalink:
             # メインスレッドでナビゲーションを実行
             self.navigation_signals.navigate_requested.emit(navigation_data)
 
-            google_url = self._build_google_maps_url(navigation_data)
-            if google_url:
-                escaped_url = html.escape(google_url)
-                body = (
-                    "<!DOCTYPE html>"
-                    "<html lang=\"ja\">"
-                    "<head>"
-                    "<meta charset=\"utf-8\">"
-                    "<title>QMap Permalink</title>"
-                    "</head>"
-                    "<body>"
-                    "<p>地図の移動を受け付けました。Google Mapsでも同じ地点を開けます:</p>"
-                    "<p><a href=\"" + escaped_url + "\" target=\"_blank\" rel=\"noopener noreferrer\">" + escaped_url + "</a></p>"
-                    "</body>"
-                    "</html>"
-                )
-                self._send_http_response(conn, 200, "OK", body, "text/html; charset=utf-8")
-            else:
-                body = (
-                    "<!DOCTYPE html>"
-                    "<html lang=\"ja\">"
-                    "<head><meta charset=\"utf-8\"><title>QMap Permalink</title></head>"
-                    "<body><p>地図の移動を受け付けました。</p></body>"
-                    "</html>"
-                )
-                self._send_http_response(conn, 200, "OK", body, "text/html; charset=utf-8")
+            # Google MapsとGoogle EarthのURLを生成
+            google_maps_url = self._build_google_maps_url(navigation_data)
+            google_earth_url = self._build_google_earth_url(navigation_data)
+            
+            # HTMLレスポンスを構築
+            body_parts = [
+                "<!DOCTYPE html>",
+                "<html lang=\"ja\">",
+                "<head>",
+                "<meta charset=\"utf-8\">",
+                "<title>QMap Permalink</title>",
+                "<style>",
+                "body { font-family: Arial, sans-serif; margin: 20px; }",
+                ".link-section { margin: 15px 0; padding: 10px; border: 1px solid #ddd; border-radius: 5px; }",
+                ".link-title { font-weight: bold; color: #333; margin-bottom: 5px; }",
+                "a { color: #1a73e8; text-decoration: none; word-break: break-all; }",
+                "a:hover { text-decoration: underline; }",
+                "</style>",
+                "</head>",
+                "<body>",
+                "<h2>QMap Permalink - 地図移動完了</h2>",
+                "<p>地図の移動を受け付けました。以下のリンクから同じ地点を他のサービスでも表示できます：</p>",
+            ]
+            
+            # Google Mapsリンクを追加
+            if google_maps_url:
+                escaped_maps_url = html.escape(google_maps_url)
+                body_parts.extend([
+                    "<div class=\"link-section\">",
+                    "<div class=\"link-title\">🗺️ Google Maps で表示</div>",
+                    f"<a href=\"{escaped_maps_url}\" target=\"_blank\" rel=\"noopener noreferrer\">{escaped_maps_url}</a>",
+                    "</div>"
+                ])
+            
+            # Google Earthリンクを追加
+            if google_earth_url:
+                escaped_earth_url = html.escape(google_earth_url)
+                body_parts.extend([
+                    "<div class=\"link-section\">",
+                    "<div class=\"link-title\">🌍 Google Earth で表示</div>",
+                    f"<a href=\"{escaped_earth_url}\" target=\"_blank\" rel=\"noopener noreferrer\">{escaped_earth_url}</a>",
+                    "</div>"
+                ])
+            
+            # リンクがない場合のメッセージ
+            if not google_maps_url and not google_earth_url:
+                body_parts.append("<p>外部サービス用のリンクを生成できませんでした。</p>")
+            
+            body_parts.extend([
+                "<hr>",
+                "<p><small>このページはQGISプラグイン「QMap Permalink」によって生成されました。</small></p>",
+                "</body>",
+                "</html>"
+            ])
+            
+            body = "\n".join(body_parts)
+            self._send_http_response(conn, 200, "OK", body, "text/html; charset=utf-8")
         
     def _build_navigation_data_from_params(self, params):
         """HTTPクエリパラメータからナビゲーション用データを生成
@@ -791,8 +822,9 @@ class QMapPermalink:
                     zoom_value = self._estimate_zoom_from_scale(navigation_data.get('scale'))
                 if zoom_value is None:
                     zoom_value = 16.0
-                zoom_int = max(0, int(round(float(zoom_value))))
-                return f"https://www.google.co.jp/maps/@{lat:.6f},{lon:.6f},{zoom_int}z"
+                # 小数点レベルのズームをサポート（最大2桁まで）
+                zoom_formatted = f"{float(zoom_value):.2f}".rstrip('0').rstrip('.')
+                return f"https://www.google.co.jp/maps/@{lat:.6f},{lon:.6f},{zoom_formatted}z"
 
             if navigation_data.get('type') == 'location':
                 lat = navigation_data.get('lat')
@@ -835,8 +867,136 @@ class QMapPermalink:
                 if zoom_value is None:
                     zoom_value = 16.0
 
-                zoom_int = max(0, int(round(float(zoom_value))))
-                return f"https://www.google.co.jp/maps/@{lat:.6f},{lon:.6f},{zoom_int}z"
+                # 小数点レベルのズームをサポート（最大2桁まで）
+                zoom_formatted = f"{float(zoom_value):.2f}".rstrip('0').rstrip('.')
+                return f"https://www.google.co.jp/maps/@{lat:.6f},{lon:.6f},{zoom_formatted}z"
+
+        except Exception:
+            return None
+
+        return None
+
+    def _build_google_earth_url(self, navigation_data):
+        """ナビゲーションデータからGoogle Earth用URLを生成
+
+        Google Earth Web版用のURL形式: https://earth.google.com/web/@lat,lon,altitude,heading,tilt,roll
+        Google Mapsと同じスケール変換を使用してより正確な高度を計算します。
+        """
+        try:
+            if navigation_data.get('type') == 'coordinates':
+                lat, lon = self._resolve_coordinates(navigation_data)
+                if lat is None or lon is None:
+                    return None
+                
+                # Google Mapsと同じズームレベル推定を使用
+                zoom_value = navigation_data.get('zoom')
+                if zoom_value is None:
+                    zoom_value = self._estimate_zoom_from_scale(navigation_data.get('scale'))
+                if zoom_value is None:
+                    zoom_value = 16.0
+                
+                # Google Earth用の正確なパラメータ計算（実測値に基づく）
+                # 実測分析: 1:15695スケール → 距離5554m、高度22m
+                if navigation_data.get('scale'):
+                    scale_value = navigation_data['scale']
+                else:
+                    # ズームレベルからスケールを逆算
+                    estimated_scale = self._estimate_scale_from_zoom(zoom_value)
+                    scale_value = estimated_scale
+                
+                # 実測データに基づくGoogle Earth用パラメータ計算
+                # 実測値: 1:15695スケール → 高度32m、距離160699m、1y角度
+                if scale_value:
+                    # 実測基準値
+                    reference_scale = 15695.0
+                    reference_altitude = 32.03670052  # 実測高度
+                    reference_distance = 160699.35527964  # 実測距離
+                    
+                    # スケールに比例した高度計算（実測データベース）
+                    altitude = reference_altitude * (scale_value / reference_scale) ** 0.5
+                    altitude = max(10.0, min(2000.0, altitude))
+                    
+                    # スケールに比例した距離計算（実測データベース）
+                    distance = reference_distance * (scale_value / reference_scale)
+                    distance = max(100.0, min(500000.0, distance))
+                else:
+                    altitude = 100.0
+                    distance = 50000.0
+                
+                # 実測に基づくGoogle Earth URL形式（1y角度で適切な表示）
+                return f"https://earth.google.com/web/@{lat:.6f},{lon:.6f},{altitude:.8f}a,{distance:.8f}d,1y,0h,0t,0r"
+
+            if navigation_data.get('type') == 'location':
+                lat = navigation_data.get('lat')
+                lon = navigation_data.get('lon')
+                zoom_value = navigation_data.get('zoom')
+
+                if lat is None or lon is None:
+                    try:
+                        decoded = urllib.parse.unquote(navigation_data['location'])
+                        data = json.loads(decoded)
+                    except Exception:
+                        data = {}
+
+                    if data:
+                        center_lat = data.get('center_wgs84_lat')
+                        center_lon = data.get('center_wgs84_lon')
+                        if center_lat is not None and center_lon is not None:
+                            lat = float(center_lat)
+                            lon = float(center_lon)
+                        else:
+                            center_x = data.get('center_x')
+                            center_y = data.get('center_y')
+                            crs_authid = data.get('center_crs') or data.get('crs')
+                            if center_x is not None and center_y is not None and crs_authid:
+                                lat, lon = self._convert_to_wgs84(center_x, center_y, crs_authid)
+                        if zoom_value is None:
+                            zoom_value = self._estimate_zoom_from_scale(data.get('scale'))
+
+                if (lat is None or lon is None) and navigation_data.get('center_x') is not None:
+                    crs_authid = navigation_data.get('crs')
+                    lat, lon = self._convert_to_wgs84(
+                        navigation_data.get('center_x'),
+                        navigation_data.get('center_y'),
+                        crs_authid,
+                    )
+
+                if lat is None or lon is None:
+                    return None
+
+                if zoom_value is None:
+                    zoom_value = 16.0
+
+                # Google Earth用の正確なパラメータ計算（実測值に基づく）
+                scale_value = navigation_data.get('scale')
+                if not scale_value and 'location' in navigation_data:
+                    try:
+                        decoded = urllib.parse.unquote(navigation_data['location'])
+                        data = json.loads(decoded)
+                        scale_value = data.get('scale')
+                    except Exception:
+                        pass
+                
+                if scale_value:
+                    # 実測データに基づくGoogle Earth用パラメータ計算
+                    # 実測値: 1:15695スケール → 高度32m、距離160699m、1y角度
+                    reference_scale = 15695.0
+                    reference_altitude = 32.03670052  # 実測高度
+                    reference_distance = 160699.35527964  # 実測距離
+                    
+                    # スケールに比例した高度計算（実測データベース）
+                    altitude = reference_altitude * (scale_value / reference_scale) ** 0.5
+                    altitude = max(10.0, min(2000.0, altitude))
+                    
+                    # スケールに比例した距離計算（実測データベース）
+                    distance = reference_distance * (scale_value / reference_scale)
+                    distance = max(100.0, min(500000.0, distance))
+                else:
+                    altitude = 100.0
+                    distance = 50000.0
+                
+                # 実測に基づくGoogle Earth URL形式（1y角度で適切な表示）
+                return f"https://earth.google.com/web/@{lat:.6f},{lon:.6f},{altitude:.8f}a,{distance:.8f}d,1y,0h,0t,0r"
 
         except Exception:
             return None
@@ -860,10 +1020,10 @@ class QMapPermalink:
 
 
     def _estimate_zoom_from_scale(self, scale):
-        """スケール値からGoogle Maps用ズームレベルを推定（QGISスケール感覚対応版改良）
+        """スケール値からGoogle Maps用ズームレベルを推定（連続値対応改良版）
         
-        QGISの実際のスケール表示に合わせた固定テーブル方式を使用します。
-        「ズームレベルが小さく表示される」問題を改善するため、詳細スケールでズームレベルを上げています。
+        固定テーブル方式をベースに、テーブル間の中間値を線形補間で計算し、
+        小数点レベルでの詳細なズームレベル推定を可能にします。
         """
         if not scale:
             return 16.0
@@ -898,20 +1058,138 @@ class QMapPermalink:
             for z in range(24, 31):
                 scale_table[z] = scale_table[23] / (2 ** (z - 23))
 
-            # 比較は対数空間（スケールの比率差）で行う方が自然
+            # 対数空間での線形補間によるズームレベル推定
             target_log = math.log(s)
-            best_zoom = 16
-            best_diff = None
-            for z, zscale in scale_table.items():
-                diff = abs(math.log(zscale) - target_log)
-                if best_diff is None or diff < best_diff:
-                    best_diff = diff
-                    best_zoom = z
-
-            # clamp 0..30
-            return max(0, min(30, int(best_zoom)))
+            
+            # ソートされたズームレベルのリストを作成
+            zoom_levels = sorted(scale_table.keys())
+            
+            # 範囲外の処理
+            if s >= scale_table[zoom_levels[0]]:
+                return float(zoom_levels[0])  # 最小ズームレベル
+            if s <= scale_table[zoom_levels[-1]]:
+                return float(zoom_levels[-1])  # 最大ズームレベル
+            
+            # 線形補間で中間値を計算
+            for i in range(len(zoom_levels) - 1):
+                z1, z2 = zoom_levels[i], zoom_levels[i + 1]
+                s1, s2 = scale_table[z1], scale_table[z2]
+                
+                # 対象スケールが2つのテーブル値の間にある場合
+                if s1 >= s >= s2:
+                    # 対数空間での線形補間
+                    log_s1, log_s2 = math.log(s1), math.log(s2)
+                    # 補間係数を計算（0.0〜1.0）
+                    t = (target_log - log_s1) / (log_s2 - log_s1) if log_s2 != log_s1 else 0.0
+                    # ズームレベルを線形補間
+                    interpolated_zoom = z1 + t * (z2 - z1)
+                    return max(0.0, min(30.0, interpolated_zoom))
+            
+            # フォールバック（理論的には到達しないはず）
+            return 16.0
+            
         except (ValueError, TypeError, OverflowError):
             return 16.0
+
+    def _zoom_to_earth_distance(self, zoom_level):
+        """ズームレベルからGoogle Earth用の適切な距離を計算
+        
+        Args:
+            zoom_level: ズームレベル（小数点可）
+            
+        Returns:
+            距離（メートル）
+        """
+        if zoom_level is None:
+            return 5000
+            
+        try:
+            z = float(zoom_level)
+            # ズームレベルに対応する距離テーブル
+            zoom_distances = {
+                0: 20000000, 1: 10000000, 2: 5000000, 3: 2000000, 4: 1000000,
+                5: 500000, 6: 200000, 7: 100000, 8: 50000, 9: 20000,
+                10: 10000, 11: 5000, 12: 2000, 13: 1000, 14: 500,
+                15: 200, 16: 100, 17: 50, 18: 20, 19: 10, 20: 5
+            }
+            
+            # 最も近い整数ズームレベルの距離を使用
+            rounded_zoom = max(0, min(20, round(z)))
+            return zoom_distances.get(rounded_zoom, 5000)
+            
+        except (ValueError, TypeError):
+            return 5000
+
+    def _estimate_scale_from_zoom(self, zoom_level):
+        """ズームレベルからスケール値を逆算（小数点対応版）
+        
+        小数点レベルのズームレベルにも対応し、線形補間でスケール値を計算します。
+        
+        Args:
+            zoom_level: ズームレベル（小数点可）
+            
+        Returns:
+            推定スケール値
+        """
+        if zoom_level is None:
+            return 20000.0  # デフォルトスケール
+            
+        try:
+            z = float(zoom_level)
+            
+            # _estimate_zoom_from_scale と同じテーブル
+            scale_table = {
+                0: 400_000_000.0, 1: 200_000_000.0, 2: 100_000_000.0, 3: 60_000_000.0, 4: 30_000_000.0,
+                5: 15_000_000.0, 6: 8_000_000.0, 7: 4_000_000.0, 8: 2_000_000.0, 9: 1_000_000.0,
+                10: 600_000.0, 11: 300_000.0, 12: 150_000.0, 13: 75_000.0, 14: 40_000.0,
+                15: 20_000.0, 16: 10_000.0, 17: 5_000.0, 18: 2_500.0, 19: 1_250.0,
+                20: 600.0, 21: 300.0, 22: 150.0, 23: 75.0,
+            }
+            
+            # 外挿値も計算
+            for zoom in range(24, 31):
+                scale_table[zoom] = scale_table[23] / (2 ** (zoom - 23))
+            
+            # 範囲チェック
+            z = max(0.0, min(30.0, z))
+            
+            # 整数ズームレベルの場合はテーブルから直接取得
+            if z == int(z) and int(z) in scale_table:
+                return scale_table[int(z)]
+            
+            # 小数点ズームレベルの場合は線形補間
+            z_floor = int(math.floor(z))
+            z_ceil = int(math.ceil(z))
+            
+            # 範囲内チェック
+            if z_floor < 0:
+                z_floor = 0
+            if z_ceil > 30:
+                z_ceil = 30
+            if z_floor not in scale_table:
+                z_floor = max([k for k in scale_table.keys() if k <= z_floor], default=0)
+            if z_ceil not in scale_table:
+                z_ceil = min([k for k in scale_table.keys() if k >= z_ceil], default=30)
+                
+            # 同じ値の場合
+            if z_floor == z_ceil:
+                return scale_table.get(z_floor, 20000.0)
+            
+            # 線形補間（対数空間）
+            s1, s2 = scale_table[z_floor], scale_table[z_ceil]
+            log_s1, log_s2 = math.log(s1), math.log(s2)
+            
+            # 補間係数
+            t = (z - z_floor) / (z_ceil - z_floor) if z_ceil != z_floor else 0.0
+            
+            # 対数空間で補間してから指数に戻す
+            interpolated_log_scale = log_s1 + t * (log_s2 - log_s1)
+            interpolated_scale = math.exp(interpolated_log_scale)
+            
+            return interpolated_scale
+            
+        except (ValueError, TypeError, OverflowError):
+            return 20000.0
 
     def _convert_to_wgs84(self, x, y, source_crs_authid):
         """任意座標をWGS84へ変換"""
