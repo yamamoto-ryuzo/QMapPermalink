@@ -858,41 +858,12 @@ class QMapPermalink:
 
         return self._convert_to_wgs84(x, y, crs_authid)
 
-    def _calculate_zoom_level(self, canvas, center_point, crs):
-        """現在のキャンバス情報からWeb地図相当のズームレベルを概算"""
-        try:
-            map_units_per_pixel = canvas.mapUnitsPerPixel()
-        except Exception:
-            map_units_per_pixel = None
 
-        if not map_units_per_pixel or map_units_per_pixel <= 0:
-            return None
-
-        web_mercator = QgsCoordinateReferenceSystem("EPSG:3857")
-        try:
-            if crs != web_mercator:
-                transform = QgsCoordinateTransform(crs, web_mercator, QgsProject.instance())
-                merc_center = transform.transform(center_point)
-                merc_right = transform.transform(QgsPointXY(center_point.x() + map_units_per_pixel, center_point.y()))
-            else:
-                merc_center = QgsPointXY(center_point)
-                merc_right = QgsPointXY(center_point.x() + map_units_per_pixel, center_point.y())
-
-            resolution = abs(merc_right.x() - merc_center.x())
-            if resolution <= 0:
-                raise ValueError("invalid resolution")
-
-            zoom = math.log2(156543.03392804097 / resolution)
-            return max(0.0, min(21.0, round(zoom)))
-
-        except Exception:
-            return None
-    
     def _estimate_zoom_from_scale(self, scale):
-        """スケール値からGoogle Maps用ズームレベルを推定（Web標準対応版）
+        """スケール値からGoogle Maps用ズームレベルを推定（QGISスケール感覚対応版改良）
         
-        Web地図の標準的な変換式を使用してより正確なズームレベルを算出します。
-        Google Mapsやその他のWeb地図サービスと互換性があります。
+        QGISの実際のスケール表示に合わせた固定テーブル方式を使用します。
+        「ズームレベルが小さく表示される」問題を改善するため、詳細スケールでズームレベルを上げています。
         """
         if not scale:
             return 16.0
@@ -900,15 +871,45 @@ class QMapPermalink:
             s = float(scale)
             if s <= 0:
                 return 16.0
-            
-            # Web Mercator標準の変換式
-            # ズーム0で約1億5千万のスケール、各ズームレベルでスケールは半分になるは半分になる
-            base_scale = 156543033.9  # ズーム0の基準スケール（Web Mercator）
-            zoom = math.log2(base_scale / s)
-            
-            # 1-20の範囲に制限（Google Mapsの有効範囲）
-            return max(1.0, min(20.0, round(zoom, 1)))
-            
+
+            # QGIS実スケール対応の改良版固定スケールテーブル
+            # 詳細スケール（1:500〜1:25000）で+1〜2ズームレベル上げて調整
+            scale_table = {
+                0: 400_000_000.0, 1: 200_000_000.0, 2: 100_000_000.0, 3: 60_000_000.0, 4: 30_000_000.0,
+                5: 15_000_000.0, 6: 8_000_000.0, 7: 4_000_000.0, 8: 2_000_000.0, 9: 1_000_000.0,
+                # 中〜詳細スケールを高ズーム方向に調整
+                10: 600_000.0,    # 元: 400_000.0 → より詳細に
+                11: 300_000.0,    # 元: 200_000.0 → より詳細に
+                12: 150_000.0,    # 元: 100_000.0 → より詳細に
+                13: 75_000.0,     # 元: 40_000.0 → 大幅に詳細化
+                14: 40_000.0,     # 元: 20_000.0 → 2倍詳細
+                15: 20_000.0,     # 元: 10_000.0 → 2倍詳細
+                16: 10_000.0,     # 元: 5_000.0 → 2倍詳細
+                17: 5_000.0,      # 元: 2_500.0 → 2倍詳細
+                18: 2_500.0,      # 元: 1_250.0 → 2倍詳細
+                19: 1_250.0,      # 元: 600.0 → 大幅に詳細化
+                20: 600.0,        # 元: 300.0 → 2倍詳細
+                21: 300.0,        # 元: 150.0 → 2倍詳細
+                22: 150.0,        # 元: 75.0 → 2倍詳細
+                23: 75.0,         # 元: 40.0 → やや詳細に
+            }
+
+            # 外挿: 24-30 は 23 の値を半分ずつ外挿
+            for z in range(24, 31):
+                scale_table[z] = scale_table[23] / (2 ** (z - 23))
+
+            # 比較は対数空間（スケールの比率差）で行う方が自然
+            target_log = math.log(s)
+            best_zoom = 16
+            best_diff = None
+            for z, zscale in scale_table.items():
+                diff = abs(math.log(zscale) - target_log)
+                if best_diff is None or diff < best_diff:
+                    best_diff = diff
+                    best_zoom = z
+
+            # clamp 0..30
+            return max(0, min(30, int(best_zoom)))
         except (ValueError, TypeError, OverflowError):
             return 16.0
 
@@ -967,10 +968,8 @@ class QMapPermalink:
             (extent.yMinimum() + extent.yMaximum()) / 2.0,
         )
 
-        # ズームレベルを算出（失敗したらスケールから推定）
-        zoom_level = self._calculate_zoom_level(canvas, center_point, crs)
-        if zoom_level is None:
-            zoom_level = self._estimate_zoom_from_scale(scale)
+        # スケールからズームレベルを推定（Web標準対応でより正確）
+        zoom_level = self._estimate_zoom_from_scale(scale)
 
         # 基本パラメータを構築
         x_val = f"{center_point.x():.6f}"
