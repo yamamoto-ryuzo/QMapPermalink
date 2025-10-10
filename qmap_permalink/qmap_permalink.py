@@ -1527,6 +1527,9 @@ class QMapPermalink:
             permalink = self.generate_permalink(include_theme=include_theme, specific_theme=specific_theme)
             self.panel.lineEdit_permalink.setText(permalink)
             
+            # ナビゲート用の欄にも同じURLを自動設定
+            self.panel.lineEdit_navigate.setText(permalink)
+            
             # メッセージにテーマ情報の有無を含める
             if include_theme and specific_theme:
                 message = self.tr("Permalink with theme '{theme}' generated successfully.").format(theme=specific_theme)
