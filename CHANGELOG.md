@@ -11,6 +11,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **B**: UI changes, new plugin features, or moderate functionality additions
 - **C**: Profile/plugin fixes, minor bug fixes, and small improvements
 
+## [V1.8.0] - 2025-01-22
+
+### 🔧 CODE MODULARIZATION - WebMap Generation Module Separation
+
+### Added
+- **新規モジュール**: `qmap_webmap_generator.py` - OpenLayersマップ生成専用クラス
+- **QMapWebMapGenerator**: QGISマップビューからウェブマップを生成する専用クラス
+- **モジュール分離**: OpenLayers関連機能をメインプラグインから独立
+
+### Refactored
+- **メソッド移動**: 
+  - `_generate_openlayers_map()` → `QMapWebMapGenerator.generate_openlayers_map()`
+  - `_get_qgis_layers_info()` → `QMapWebMapGenerator.get_qgis_layers_info()`
+  - `_get_current_extent_info()` → `QMapWebMapGenerator.get_current_extent_info()`
+- **クリーンな分離**: レイヤー情報取得、範囲取得、座標変換機能を専用モジュールに集約
+- **メインプラグインの簡素化**: qmap_permalink.py のコード量を大幅削減
+
+### Enhanced
+- **保守性向上**: WebMap生成機能が独立したモジュールとして管理しやすく
+- **再利用性**: 他のプラグインでもWebMap生成機能が利用可能
+- **コード可読性**: 関心の分離によりそれぞれのモジュールが理解しやすく
+
+### Technical Architecture
+- **クラス設計**: `QMapWebMapGenerator(iface)` でQGISインターフェース受け取り
+- **メソッド構造**: レイヤー解析、範囲計算、HTML生成を明確に分離
+- **エラーハンドリング**: モジュール単位での例外処理とフォールバック
+- **インポートシステム**: 動的インポートによる堅牢なモジュール読み込み
+
+### Benefits
+- **コード管理**: 複雑化していたOpenLayers機能が専用モジュールで整理
+- **開発効率**: WebMap機能の修正・拡張が独立して実行可能
+- **プラグイン安定性**: メインプラグインの責任範囲が明確化され安定性向上
+- **将来対応**: 新しいWebマップライブラリ追加時の拡張容易性
+
 ## [V1.7.0] - 2025-10-11
 
 ### 🔗 ONE-CLICK EXTERNAL MAP ACCESS - Direct UI Integration

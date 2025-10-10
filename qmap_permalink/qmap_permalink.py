@@ -68,6 +68,14 @@ except ImportError:
         PANEL_AVAILABLE = False
         QMapPermalinkPanel = None
 
+# WebMap生成モジュールのインポート
+try:
+    from .qmap_webmap_generator import QMapWebMapGenerator
+    WEBMAP_AVAILABLE = True
+except ImportError:
+    WEBMAP_AVAILABLE = False
+    QMapWebMapGenerator = None
+
 
 class NavigationSignals(QObject):
     """QGIS APIへの安全なアクセスのためのシグナル"""
@@ -115,6 +123,12 @@ class QMapPermalink:
         # ナビゲーション用シグナル
         self.navigation_signals = NavigationSignals()
         self.navigation_signals.navigate_requested.connect(self.handle_navigation_request)
+
+        # WebMap生成器の初期化
+        if WEBMAP_AVAILABLE and QMapWebMapGenerator:
+            self.webmap_generator = QMapWebMapGenerator(self.iface)
+        else:
+            self.webmap_generator = None
 
         # ツールバーの確認（初回実行時にツールバーが存在するかチェック）
         self.first_start = None
@@ -512,25 +526,45 @@ class QMapPermalink:
             google_maps_url = self._build_google_maps_url(navigation_data)
             google_earth_url = self._build_google_earth_url(navigation_data)
             
-            # HTMLレスポンスを構築
+            # OpenLayersマップを含むHTMLレスポンスを構築
+            if self.webmap_generator:
+                openlayers_map_html = self.webmap_generator.generate_openlayers_map(navigation_data)
+            else:
+                openlayers_map_html = "<div class='error-message'>WebMap生成モジュールが利用できません。</div>"
+            
             body_parts = [
                 "<!DOCTYPE html>",
                 "<html lang=\"ja\">",
                 "<head>",
                 "<meta charset=\"utf-8\">",
-                "<title>QMap Permalink</title>",
+                "<title>QMap Permalink - Interactive Map</title>",
+                "<link rel=\"stylesheet\" href=\"https://cdn.jsdelivr.net/npm/ol@8.2.0/ol.css\" type=\"text/css\">",
+                "<script src=\"https://cdn.jsdelivr.net/npm/ol@8.2.0/dist/ol.js\"></script>",
                 "<style>",
-                "body { font-family: Arial, sans-serif; margin: 20px; }",
+                "body { font-family: Arial, sans-serif; margin: 10px; }",
+                "#map { width: 100%; height: 400px; border: 2px solid #ddd; border-radius: 8px; margin: 10px 0; }",
+                ".info-section { margin: 15px 0; padding: 15px; background: #f8f9fa; border-radius: 5px; }",
                 ".link-section { margin: 15px 0; padding: 10px; border: 1px solid #ddd; border-radius: 5px; }",
                 ".link-title { font-weight: bold; color: #333; margin-bottom: 5px; }",
+                ".map-title { font-weight: bold; color: #2c5aa0; margin-bottom: 10px; font-size: 18px; }",
                 "a { color: #1a73e8; text-decoration: none; word-break: break-all; }",
                 "a:hover { text-decoration: underline; }",
+                ".coordinates { font-family: monospace; background: #e9ecef; padding: 5px; border-radius: 3px; }",
                 "</style>",
                 "</head>",
                 "<body>",
-                "<h2>QMap Permalink - 地図移動完了</h2>",
-                "<p>地図の移動を受け付けました。以下のリンクから同じ地点を他のサービスでも表示できます：</p>",
+                "<h2>🗺️ QMap Permalink - Interactive Map View</h2>",
+                "<div class=\"info-section\">",
+                "<div class=\"map-title\">📍 QGISマップビュー再現</div>",
+                "<p>QGISの現在の地図表示をOpenLayersで再現しています。同じ位置・ズームレベルで表示されます。</p>",
+                "</div>",
+                openlayers_map_html,
             ]
+            
+            # 外部サービスリンクセクション
+            body_parts.append("<div class=\"info-section\">")
+            body_parts.append("<div class=\"map-title\">🔗 外部マップサービス</div>")
+            body_parts.append("<p>同じ位置を他のマップサービスでも確認できます：</p>")
             
             # Google Mapsリンクを追加
             if google_maps_url:
@@ -556,15 +590,23 @@ class QMapPermalink:
             if not google_maps_url and not google_earth_url:
                 body_parts.append("<p>外部サービス用のリンクを生成できませんでした。</p>")
             
+            body_parts.append("</div>")  # info-section終了
+            
             body_parts.extend([
                 "<hr>",
-                "<p><small>このページはQGISプラグイン「QMap Permalink」によって生成されました。</small></p>",
+                "<div class=\"info-section\">",
+                "<p><strong>📡 QMap Permalink v1.8.0</strong></p>",
+                "<p>このインタラクティブマップはQGISプラグイン「QMap Permalink」によって生成されました。</p>",
+                "<p>マップをクリックして座標を確認したり、ズーム・パンで周辺を探索できます。</p>",
+                "</div>",
                 "</body>",
                 "</html>"
             ])
             
             body = "\n".join(body_parts)
             self._send_http_response(conn, 200, "OK", body, "text/html; charset=utf-8")
+
+
         
     def _build_navigation_data_from_params(self, params):
         """HTTPクエリパラメータからナビゲーション用データを生成
