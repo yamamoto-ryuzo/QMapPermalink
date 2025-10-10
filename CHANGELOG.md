@@ -11,6 +11,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **B**: UI changes, new plugin features, or moderate functionality additions
 - **C**: Profile/plugin fixes, minor bug fixes, and small improvements
 
+## [V1.7.0] - 2025-10-11
+
+### 🔗 ONE-CLICK EXTERNAL MAP ACCESS - Direct UI Integration
+
+### Added
+- **Google Maps Button**: Dedicated UI button to instantly open current map location in Google Maps
+- **Google Earth Button**: Dedicated UI button to instantly open current map location in Google Earth  
+- **Direct Browser Launch**: One-click access to external map services without generating permalinks
+- **Real-time Coordinate Conversion**: Live conversion from current QGIS view to Google Maps/Earth URLs
+
+### Enhanced
+- **Seamless Integration**: Buttons integrated into existing panel UI with consistent design
+- **Error Handling**: Comprehensive error messages and status feedback for button operations
+- **Coordinate Accuracy**: Uses same precise coordinate conversion as HTTP response system
+- **User Experience**: Instant external map access with visual feedback messages
+
+### Technical Implementation
+- **Code Reuse**: Leverages existing HTTP response methods (`_build_google_maps_url`, `_build_google_earth_url`)
+- **Live Data Extraction**: Direct access to current map canvas state (extent, CRS, scale)
+- **Coordinate Transformation**: Real-time WGS84 conversion using `_convert_to_wgs84` method
+- **URL Generation**: Same accurate altitude/distance calculations as V1.6.0 system
+
+### Benefits
+- **Workflow Efficiency**: No need to generate permalinks for quick external map checks
+- **Instant Verification**: Immediately verify QGIS locations in Google Maps/Earth
+- **Enhanced Productivity**: Streamlined workflow for spatial data comparison and validation
+
 ## [V1.6.0] - 2025-10-10
 
 ### 🌍 GOOGLE EARTH INTEGRATION - Real-World Data Based

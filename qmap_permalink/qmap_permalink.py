@@ -236,6 +236,12 @@ class QMapPermalink:
                 if hasattr(self.panel, 'pushButton_open'):
                     self.panel.pushButton_open.clicked.connect(self.on_open_clicked_panel)
                 
+                # Google Maps/Earthボタンのイベントを接続
+                if hasattr(self.panel, 'pushButton_google_maps'):
+                    self.panel.pushButton_google_maps.clicked.connect(self.on_google_maps_clicked_panel)
+                if hasattr(self.panel, 'pushButton_google_earth'):
+                    self.panel.pushButton_google_earth.clicked.connect(self.on_google_earth_clicked_panel)
+                
                 # HTTPサーバーの状態を更新
                 server_running = self.http_server is not None
                 self.panel.update_server_status(self.server_port, server_running)
@@ -1621,6 +1627,98 @@ class QMapPermalink:
                 self.iface.mainWindow(),
                 self.tr("QMap Permalink"),
                 self.tr("Failed to open in browser: {error}").format(error=str(e))
+            )
+
+    def on_google_maps_clicked_panel(self):
+        """パネル版：Google Mapsボタンがクリックされた時の処理"""
+        try:
+            # 現在の地図ビューから直接ナビゲーションデータを作成
+            canvas = self.iface.mapCanvas()
+            extent = canvas.extent()
+            crs = canvas.mapSettings().destinationCrs()
+            scale = canvas.scale()
+            
+            # 中心点を計算
+            center_x = extent.center().x()
+            center_y = extent.center().y()
+            
+            # WGS84座標に変換
+            lat, lon = self._convert_to_wgs84(center_x, center_y, crs.authid())
+            
+            if lat is None or lon is None:
+                self.iface.messageBar().pushMessage(
+                    "QMap Permalink", "座標変換に失敗しました。", duration=3
+                )
+                return
+            
+            # HTTPレスポンス用と同じ形式のナビゲーションデータを作成
+            navigation_data = {
+                'type': 'coordinates',
+                'x': center_x,
+                'y': center_y,
+                'lat': lat,
+                'lon': lon,
+                'scale': scale,
+                'crs': crs.authid(),
+                'zoom': self._estimate_zoom_from_scale(scale)
+            }
+            
+            # HTTPレスポンスと同じメソッドでGoogle Maps URLを生成
+            google_maps_url = self._build_google_maps_url(navigation_data)
+            if google_maps_url:
+                QDesktopServices.openUrl(QUrl(google_maps_url))
+                self.iface.messageBar().pushMessage(
+                    "QMap Permalink", "Google Mapsで開きました。", duration=3
+                )
+        except Exception as e:
+            self.iface.messageBar().pushMessage(
+                "QMap Permalink", f"Google Maps起動エラー: {str(e)}", duration=5
+            )
+
+    def on_google_earth_clicked_panel(self):
+        """パネル版：Google Earthボタンがクリックされた時の処理"""
+        try:
+            # 現在の地図ビューから直接ナビゲーションデータを作成
+            canvas = self.iface.mapCanvas()
+            extent = canvas.extent()
+            crs = canvas.mapSettings().destinationCrs()
+            scale = canvas.scale()
+            
+            # 中心点を計算
+            center_x = extent.center().x()
+            center_y = extent.center().y()
+            
+            # WGS84座標に変換
+            lat, lon = self._convert_to_wgs84(center_x, center_y, crs.authid())
+            
+            if lat is None or lon is None:
+                self.iface.messageBar().pushMessage(
+                    "QMap Permalink", "座標変換に失敗しました。", duration=3
+                )
+                return
+            
+            # HTTPレスポンス用と同じ形式のナビゲーションデータを作成
+            navigation_data = {
+                'type': 'coordinates',
+                'x': center_x,
+                'y': center_y,
+                'lat': lat,
+                'lon': lon,
+                'scale': scale,
+                'crs': crs.authid(),
+                'zoom': self._estimate_zoom_from_scale(scale)
+            }
+            
+            # HTTPレスポンスと同じメソッドでGoogle Earth URLを生成
+            google_earth_url = self._build_google_earth_url(navigation_data)
+            if google_earth_url:
+                QDesktopServices.openUrl(QUrl(google_earth_url))
+                self.iface.messageBar().pushMessage(
+                    "QMap Permalink", "Google Earthで開きました。", duration=3
+                )
+        except Exception as e:
+            self.iface.messageBar().pushMessage(
+                "QMap Permalink", f"Google Earth起動エラー: {str(e)}", duration=5
             )
 
     # テーマ関連のメソッド群
