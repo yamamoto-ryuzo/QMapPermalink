@@ -34,13 +34,30 @@ class QMapPermalinkZipCreator:
         self.include_files = [
             "__init__.py",
             "qmap_permalink.py", 
+            "qmap_permalink_server_manager.py",  # 新しく分離したHTTPサーバーマネージャー
             "qmap_permalink_panel.py",
             "qmap_permalink_panel_base.ui",
             "qmap_permalink_panel_simple.py",
+            "qmap_permalink_dialog.py",  # ダイアログファイル
+            "qmap_permalink_dialog_base.ui",  # ダイアログUIファイル
+            "qmap_webmap_generator.py",  # WebMap生成器
             "metadata.txt",
             "icon.png",
             "LICENSE",
             "i18n/"  # ディレクトリ全体
+        ]
+        
+        # 配布から除外するファイル/パターン
+        self.exclude_patterns = [
+            "__pycache__",
+            "*.pyc",
+            "*.pyo", 
+            "*_original.py",  # バックアップファイル
+            "*_http_server.py",  # 古いHTTPサーバーファイル
+            "icon_org.png",  # オリジナルアイコン
+            ".DS_Store",
+            "Thumbs.db",
+            "*.tmp"
         ]
         
     def read_metadata(self):
@@ -192,6 +209,25 @@ class QMapPermalinkZipCreator:
             except Exception as e:
                 print(f"ファイル移動/ごみ箱移動エラー {zip_file.name}: {e}")
                 
+    def should_exclude(self, file_path):
+        """ファイルが除外対象かどうかをチェック
+        
+        Args:
+            file_path (Path): チェック対象のファイルパス
+            
+        Returns:
+            bool: 除外対象の場合True
+        """
+        import fnmatch
+        
+        file_name = file_path.name
+        file_str = str(file_path)
+        
+        for pattern in self.exclude_patterns:
+            if fnmatch.fnmatch(file_name, pattern) or fnmatch.fnmatch(file_str, pattern):
+                return True
+        return False
+
     def create_zip(self, version):
         """配布用ZIPファイルを作成
         
@@ -212,7 +248,10 @@ class QMapPermalinkZipCreator:
                 item_path = self.plugin_dir / item
                 
                 if item_path.is_file():
-                    # ファイルの場合
+                    # ファイルの場合（除外チェック）
+                    if self.should_exclude(item_path):
+                        print(f"  除外: {item}")
+                        continue
                     arcname = f"qmap_permalink/{item}"
                     zipf.write(item_path, arcname)
                     print(f"  追加: {item}")
@@ -220,24 +259,48 @@ class QMapPermalinkZipCreator:
                 elif item_path.is_dir():
                     # ディレクトリの場合（再帰的に追加）
                     for file_path in item_path.rglob('*'):
-                        if file_path.is_file():
+                        if file_path.is_file() and not self.should_exclude(file_path):
                             # 相対パスを計算
                             rel_path = file_path.relative_to(self.plugin_dir)
                             arcname = f"qmap_permalink/{rel_path}"
                             zipf.write(file_path, arcname)
                             print(f"  追加: {rel_path}")
+                        elif file_path.is_file():
+                            rel_path = file_path.relative_to(self.plugin_dir)
+                            print(f"  除外: {rel_path}")
                 else:
                     print(f"  警告: {item} が見つかりません")
                     
         print(f"ZIPファイルを作成しました: {zip_path}")
         return zip_path
         
+    def validate_files(self):
+        """必要なファイルがすべて存在するかを検証"""
+        missing_files = []
+        
+        for item in self.include_files:
+            item_path = self.plugin_dir / item
+            if not item_path.exists():
+                missing_files.append(item)
+        
+        if missing_files:
+            print("警告: 以下のファイルが見つかりません:")
+            for file in missing_files:
+                print(f"  - {file}")
+            
+        return len(missing_files) == 0
+
     def create_distribution(self):
         """配布パッケージ作成のメイン処理"""
         try:
             print("=== QMap Permalink 配布用ZIP作成 ===")
             print(f"作業ディレクトリ: {self.script_dir}")
             print(f"プラグインディレクトリ: {self.plugin_dir}")
+            
+            # ファイル存在チェック
+            print("\n--- ファイル存在チェック ---")
+            if not self.validate_files():
+                print("いくつかのファイルが見つかりませんが、続行します...")
             
             # 現在のバージョンを読み取り
             current_version, config = self.read_metadata()

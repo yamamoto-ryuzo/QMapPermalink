@@ -48,12 +48,9 @@ else:
         return value1 + value2
 
 import os.path
-import json
 import urllib.parse
-import threading
-import socket
+import json
 import math
-import html
 
 # パネルファイルのインポート
 try:
@@ -113,13 +110,6 @@ class QMapPermalink:
         # パネル（ドックウィジェット）
         self.panel = None
 
-        # HTTPサーバー関連
-        self.http_server = None
-        self.server_thread = None
-        self.server_port = 8089  # デフォルトポート
-        self._http_running = False
-        self._last_request_text = ""
-        
         # ナビゲーション用シグナル
         self.navigation_signals = NavigationSignals()
         self.navigation_signals.navigate_requested.connect(self.handle_navigation_request)
@@ -129,6 +119,19 @@ class QMapPermalink:
             self.webmap_generator = QMapWebMapGenerator(self.iface)
         else:
             self.webmap_generator = None
+
+        # HTTPサーバーマネージャー
+        from .qmap_permalink_server_manager import QMapPermalinkServerManager
+        self.server_manager = QMapPermalinkServerManager(
+            self.iface, 
+            self.navigation_signals, 
+            self.webmap_generator,
+            self  # メインプラグインインスタンスを渡す
+        )
+        
+        # 後方互換性のための一時的な属性（削除予定）
+        # server_portアトリビュートエラーを回避
+        self.server_port = 8089
 
         # ツールバーの確認（初回実行時にツールバーが存在するかチェック）
         self.first_start = None
@@ -216,7 +219,7 @@ class QMapPermalink:
             )
 
         # HTTPサーバーを起動
-        self.start_http_server()
+        self.server_manager.start_http_server()
 
         # 初回起動フラグ
         self.first_start = True
@@ -241,9 +244,12 @@ class QMapPermalink:
                 )
                 
                 # パネルを作成
+                print("パネル作成開始...")
                 self.panel = QMapPermalinkPanel(self.iface.mainWindow())
+                print("パネル作成完了")
                 
                 # パネルのボタンにイベントを接続
+                print("ボタンイベント接続開始...")
                 self.panel.pushButton_generate.clicked.connect(self.on_generate_clicked_panel)
                 self.panel.pushButton_navigate.clicked.connect(self.on_navigate_clicked_panel)
                 self.panel.pushButton_copy.clicked.connect(self.on_copy_clicked_panel)
@@ -255,10 +261,16 @@ class QMapPermalink:
                     self.panel.pushButton_google_maps.clicked.connect(self.on_google_maps_clicked_panel)
                 if hasattr(self.panel, 'pushButton_google_earth'):
                     self.panel.pushButton_google_earth.clicked.connect(self.on_google_earth_clicked_panel)
+                print("ボタンイベント接続完了")
                 
                 # HTTPサーバーの状態を更新
-                server_running = self.http_server is not None
-                self.panel.update_server_status(self.server_port, server_running)
+                print("サーバー状態取得開始...")
+                server_running = self.server_manager.is_server_running()
+                server_port = self.server_manager.get_server_port() or 8089
+                print(f"サーバー状態: running={server_running}, port={server_port}")
+                print("パネル更新開始...")
+                self.panel.update_server_status(server_port, server_running)
+                print("パネル更新完了")
                 
                 # テーマ一覧を更新
                 self.update_theme_list()
@@ -283,6 +295,9 @@ class QMapPermalink:
                     self.panel.show()
                     
         except Exception as e:
+            import traceback
+            error_details = traceback.format_exc()
+            print(f"パネル作成エラーの詳細:\n{error_details}")
             QMessageBox.critical(
                 self.iface.mainWindow(),
                 self.tr("QMap Permalink"),
@@ -360,7 +375,7 @@ class QMapPermalink:
     def unload(self):
         """プラグインのアンロード時の処理"""
         # HTTPサーバーを停止
-        self.stop_http_server()
+        self.server_manager.stop_http_server()
         
         # パネルを削除
         if self.panel is not None:
@@ -377,481 +392,17 @@ class QMapPermalink:
                 action)
             self.iface.removeToolBarIcon(action)
 
-    def start_http_server(self):
-        """HTTPサーバーを起動"""
-        try:
-            if self._http_running:
-                return
 
-            # 使用可能なポートを探す
-            self.server_port = self.find_available_port(8089, 8099)
 
-            server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            server_socket.bind(('localhost', self.server_port))
-            server_socket.listen(5)
-            server_socket.settimeout(1.0)
 
-            self.http_server = server_socket
-            self._http_running = True
-
-            self.server_thread = threading.Thread(
-                target=self.run_server,
-                name="QMapPermalinkHTTP",
-                daemon=True,
-            )
-            self.server_thread.start()
-
-            print(f"QMap Permalink HTTPサーバーが起動しました: http://localhost:{self.server_port}")
-            self.iface.messageBar().pushMessage(
-                "QMap Permalink",
-                f"HTTPサーバーが起動しました (ポート: {self.server_port})",
-                duration=3
-            )
-
-        except Exception as e:
-            print(f"HTTPサーバーの起動に失敗しました: {e}")
-            self.iface.messageBar().pushMessage(
-                "QMap Permalink エラー",
-                f"HTTPサーバーの起動に失敗しました: {str(e)}",
-                duration=5
-            )
-            self._http_running = False
-            if self.http_server:
-                try:
-                    self.http_server.close()
-                except Exception:
-                    pass
-                self.http_server = None
-    
-    def run_server(self):
-        """サーバーを安全に実行"""
-        try:
-            while self._http_running and self.http_server:
-                try:
-                    conn, addr = self.http_server.accept()
-                except socket.timeout:
-                    continue
-                except OSError:
-                    break
-
-                try:
-                    self._handle_client_connection(conn, addr)
-                except Exception as e:
-                    print(f"HTTPリクエスト処理中にエラーが発生しました: {e}")
-
-        finally:
-            self._http_running = False
-            if self.http_server:
-                try:
-                    self.http_server.close()
-                except Exception:
-                    pass
-                self.http_server = None
-            print("HTTPサーバーが停止しました")
-    
-    def stop_http_server(self):
-        """HTTPサーバーを停止"""
-        try:
-            self._http_running = False
-
-            if self.http_server:
-                try:
-                    self.http_server.close()
-                except Exception:
-                    pass
-                self.http_server = None
-
-            # スレッドの終了を待つ
-            if self.server_thread and self.server_thread.is_alive():
-                try:
-                    self.server_thread.join(timeout=3.0)
-                except Exception:
-                    pass
-                self.server_thread = None
-
-            print("QMap Permalink HTTPサーバーが停止しました")
-            
-        except Exception as e:
-            print(f"HTTPサーバーの停止中にエラーが発生しました: {e}")
-
-    def _handle_client_connection(self, conn, addr):
-        """HTTPリクエストを解析して必要であればナビゲーションを実行"""
-        with conn:
-            request_bytes = self._read_http_request(conn)
-            if not request_bytes:
-                return
-
-            request_text = request_bytes.decode('iso-8859-1', errors='replace')
-            self._last_request_text = request_text
-
-            print("QMap Permalink HTTP request from", addr)
-            print(request_text)
-
-            try:
-                request_line = request_text.splitlines()[0]
-            except IndexError:
-                self._send_http_response(conn, 400, "Bad Request", "Invalid HTTP request line.")
-                return
-
-            parts = request_line.split()
-            if len(parts) < 3:
-                self._send_http_response(conn, 400, "Bad Request", "Malformed HTTP request line.")
-                return
-
-            method, target, _ = parts
-
-            if method.upper() != 'GET':
-                self._send_http_response(conn, 405, "Method Not Allowed", "Only GET is supported.")
-                return
-
-            parsed_url = urllib.parse.urlparse(target)
-
-            if parsed_url.path != '/qgis-map':
-                self._send_http_response(conn, 404, "Not Found", "Endpoint not found.")
-                return
-
-            params = urllib.parse.parse_qs(parsed_url.query)
-
-            try:
-                navigation_data = self._build_navigation_data_from_params(params)
-            except ValueError as e:
-                self._send_http_response(conn, 400, "Bad Request", str(e))
-                return
-
-            # メインスレッドでナビゲーションを実行
-            self.navigation_signals.navigate_requested.emit(navigation_data)
-
-            # Google MapsとGoogle EarthのURLを生成
-            google_maps_url = self._build_google_maps_url(navigation_data)
-            google_earth_url = self._build_google_earth_url(navigation_data)
-            
-            # OpenLayersマップを含むHTMLレスポンスを構築
-            if self.webmap_generator:
-                openlayers_map_html = self.webmap_generator.generate_openlayers_map(navigation_data)
-            else:
-                openlayers_map_html = "<div class='error-message'>WebMap生成モジュールが利用できません。</div>"
-            
-            body_parts = [
-                "<!DOCTYPE html>",
-                "<html lang=\"ja\">",
-                "<head>",
-                "<meta charset=\"utf-8\">",
-                "<title>QMap Permalink - Interactive Map</title>",
-                "<link rel=\"stylesheet\" href=\"https://cdn.jsdelivr.net/npm/ol@8.2.0/ol.css\" type=\"text/css\">",
-                "<script src=\"https://cdn.jsdelivr.net/npm/ol@8.2.0/dist/ol.js\"></script>",
-                "<style>",
-                "body { font-family: Arial, sans-serif; margin: 10px; }",
-                "#map { width: 100%; height: 400px; border: 2px solid #ddd; border-radius: 8px; margin: 10px 0; }",
-                ".info-section { margin: 15px 0; padding: 15px; background: #f8f9fa; border-radius: 5px; }",
-                ".link-section { margin: 15px 0; padding: 10px; border: 1px solid #ddd; border-radius: 5px; }",
-                ".link-title { font-weight: bold; color: #333; margin-bottom: 5px; }",
-                ".map-title { font-weight: bold; color: #2c5aa0; margin-bottom: 10px; font-size: 18px; }",
-                "a { color: #1a73e8; text-decoration: none; word-break: break-all; }",
-                "a:hover { text-decoration: underline; }",
-                ".coordinates { font-family: monospace; background: #e9ecef; padding: 5px; border-radius: 3px; }",
-                "</style>",
-                "</head>",
-                "<body>",
-                "<h2>🗺️ QMap Permalink - Interactive Map View</h2>",
-                "<div class=\"info-section\">",
-                "<div class=\"map-title\">📍 QGISマップビュー再現</div>",
-                "<p>QGISの現在の地図表示をOpenLayersで再現しています。同じ位置・ズームレベルで表示されます。</p>",
-                "</div>",
-                openlayers_map_html,
-            ]
-            
-            # 外部サービスリンクセクション
-            body_parts.append("<div class=\"info-section\">")
-            body_parts.append("<div class=\"map-title\">🔗 外部マップサービス</div>")
-            body_parts.append("<p>同じ位置を他のマップサービスでも確認できます：</p>")
-            
-            # Google Mapsリンクを追加
-            if google_maps_url:
-                escaped_maps_url = html.escape(google_maps_url)
-                body_parts.extend([
-                    "<div class=\"link-section\">",
-                    "<div class=\"link-title\">🗺️ Google Maps で表示</div>",
-                    f"<a href=\"{escaped_maps_url}\" target=\"_blank\" rel=\"noopener noreferrer\">{escaped_maps_url}</a>",
-                    "</div>"
-                ])
-            
-            # Google Earthリンクを追加
-            if google_earth_url:
-                escaped_earth_url = html.escape(google_earth_url)
-                body_parts.extend([
-                    "<div class=\"link-section\">",
-                    "<div class=\"link-title\">🌍 Google Earth で表示</div>",
-                    f"<a href=\"{escaped_earth_url}\" target=\"_blank\" rel=\"noopener noreferrer\">{escaped_earth_url}</a>",
-                    "</div>"
-                ])
-            
-            # リンクがない場合のメッセージ
-            if not google_maps_url and not google_earth_url:
-                body_parts.append("<p>外部サービス用のリンクを生成できませんでした。</p>")
-            
-            body_parts.append("</div>")  # info-section終了
-            
-            body_parts.extend([
-                "<hr>",
-                "<div class=\"info-section\">",
-                "<p><strong>📡 QMap Permalink v1.8.0</strong></p>",
-                "<p>このインタラクティブマップはQGISプラグイン「QMap Permalink」によって生成されました。</p>",
-                "<p>マップをクリックして座標を確認したり、ズーム・パンで周辺を探索できます。</p>",
-                "</div>",
-                "</body>",
-                "</html>"
-            ])
-            
-            body = "\n".join(body_parts)
-            self._send_http_response(conn, 200, "OK", body, "text/html; charset=utf-8")
 
 
         
-    def _build_navigation_data_from_params(self, params):
-        """HTTPクエリパラメータからナビゲーション用データを生成
+    # 純粋にHTTPサーバー関連のメソッドは qmap_permalink_server_manager.py に移動しました
+    # _build_google_maps_url, _build_google_earth_url, _estimate_zoom_from_scale, _convert_to_wgs84 は
+    # メインファイルでも使用されるため、こちらに残しています
 
-        scale を受け取り、ナビゲーションデータに含める。
-        zoom は明示的に指定されている場合のみ navigation_data に含まれる。
-        """
-        if 'location' in params:
-            raw_location = params['location'][0]
-            navigation_data = {
-                'type': 'location',
-                'location': raw_location,
-            }
-            try:
-                decoded = urllib.parse.unquote(raw_location)
-                data = json.loads(decoded)
-                lat = data.get('center_wgs84_lat')
-                lon = data.get('center_wgs84_lon')
-                if lat is not None and lon is not None:
-                    navigation_data['lat'] = float(lat)
-                    navigation_data['lon'] = float(lon)
-                if 'zoom_level' in data:
-                    navigation_data['zoom'] = float(data['zoom_level'])
-                navigation_data['crs'] = data.get('crs', 'EPSG:4326')
-                navigation_data['center_x'] = data.get('center_x')
-                navigation_data['center_y'] = data.get('center_y')
-                # scale は数値のまま渡す
-                navigation_data['scale'] = data.get('scale')
-                navigation_data['map_units_per_pixel'] = data.get('map_units_per_pixel')
-            except Exception:
-                pass
-            return navigation_data
 
-        crs = params.get('crs', ['EPSG:4326'])[0]
-        zoom_value = self._extract_zoom(params)
-        # scale パラメータがあればナビゲーションデータに含める
-        scale_value = None
-        # rotation パラメータがあれば含める
-        rotation_value = None
-        # theme パラメータがあれば処理
-        theme_info = None
-        if 'scale' in params:
-            try:
-                scale_value = float(params['scale'][0])
-            except Exception:
-                raise ValueError("scale パラメータは数値で指定してください")
-        if 'rotation' in params:
-            try:
-                rotation_value = float(params['rotation'][0])
-            except Exception:
-                raise ValueError("rotation パラメータは数値で指定してください")
-        if 'theme' in params:
-            try:
-                theme_encoded = params['theme'][0]
-                theme_name = urllib.parse.unquote(theme_encoded)
-                # シンプルにテーマ名を保存
-                theme_info = theme_name
-            except Exception as e:
-                print(f"テーマパラメータの解析エラー: {e}")
-                # エラーでも処理を続行
-
-        if 'll' in params:
-            lat, lon = self._parse_latlon(params['ll'][0])
-            return {
-                'type': 'coordinates',
-                'x': lon,
-                'y': lat,
-                'zoom': zoom_value,
-                'crs': crs,
-                'lat': lat,
-                'lon': lon,
-                'scale': scale_value,
-                'rotation': rotation_value,
-                'theme_info': theme_info,
-            }
-
-        if 'q' in params:
-            lat, lon = self._parse_latlon(params['q'][0])
-            return {
-                'type': 'coordinates',
-                'x': lon,
-                'y': lat,
-                'zoom': zoom_value,
-                'crs': crs,
-                'lat': lat,
-                'lon': lon,
-                'scale': scale_value,
-                'rotation': rotation_value,
-                'theme_info': theme_info,
-            }
-
-        if 'center' in params:
-            lat, lon = self._parse_latlon(params['center'][0])
-            return {
-                'type': 'coordinates',
-                'x': lon,
-                'y': lat,
-                'zoom': zoom_value,
-                'crs': crs,
-                'lat': lat,
-                'lon': lon,
-                'scale': scale_value,
-            }
-
-    # 新仕様: シンプルな x/y/scale パラメータをサポート（標準は scale）
-    # 例（緯度経度）: /qgis-map?x=139&y=35&scale=1000.0&crs=EPSG:4326 (デフォルト crs=EPSG:4326)
-    # 例（直角座標、例として EPSG:6677）: /qgis-map?x=667700.0&y=4321987.0&scale=1000.0&crs=EPSG:6677
-        if 'x' in params and 'y' in params:
-            try:
-                x_val = float(params['x'][0])
-                y_val = float(params['y'][0])
-            except Exception:
-                raise ValueError("x/y パラメータは数値で指定してください")
-            # 緯度経度として扱う場合（デフォルト CRS が EPSG:4326）には lat/lon を設定
-            lat_val = None
-            lon_val = None
-            if crs.upper().startswith('EPSG:4326'):
-                lat_val = float(y_val)
-                lon_val = float(x_val)
-            return {
-                'type': 'coordinates',
-                'x': x_val,
-                'y': y_val,
-                'zoom': zoom_value,
-                'crs': crs,
-                'lat': lat_val,
-                'lon': lon_val,
-                'scale': scale_value,
-                'rotation': rotation_value,
-                'theme_info': theme_info,
-            }
-
-        if all(key in params for key in ('lat', 'lon')):
-            try:
-                lat = float(params['lat'][0])
-                lon = float(params['lon'][0])
-            except (TypeError, ValueError):
-                raise ValueError("Invalid lat/lon parameters.")
-            return {
-                'type': 'coordinates',
-                'x': lon,
-                'y': lat,
-                'zoom': zoom_value,
-                'crs': crs,
-                'lat': lat,
-                'lon': lon,
-                'scale': scale_value,
-                'rotation': rotation_value,
-            }
-
-        if all(key in params for key in ('lat', 'lng')):
-            try:
-                lat = float(params['lat'][0])
-                lon = float(params['lng'][0])
-            except (TypeError, ValueError):
-                raise ValueError("Invalid lat/lng parameters.")
-            return {
-                'type': 'coordinates',
-                'x': lon,
-                'y': lat,
-                'zoom': zoom_value,
-                'crs': crs,
-                'lat': lat,
-                'lon': lon,
-                'scale': scale_value,
-            }
-
-        if all(key in params for key in ('x', 'y')):
-            try:
-                x_value = float(params['x'][0])
-                y_value = float(params['y'][0])
-            except (TypeError, ValueError):
-                raise ValueError("Invalid coordinate parameters.")
-            data = {
-                'type': 'coordinates',
-                'x': x_value,
-                'y': y_value,
-                'zoom': zoom_value,
-                'crs': crs,
-            }
-            if crs.upper() == 'EPSG:4326':
-                data['lat'] = y_value
-                data['lon'] = x_value
-            data['scale'] = scale_value
-            data['rotation'] = rotation_value
-            return data
-
-        raise ValueError("Missing required parameters.")
-
-    def _read_http_request(self, conn):
-        """HTTPリクエスト全体を読み取る"""
-        data = b""
-        conn.settimeout(2.0)
-
-        while True:
-            try:
-                chunk = conn.recv(1024)
-            except socket.timeout:
-                break
-
-            if not chunk:
-                break
-
-            data += chunk
-
-            if b"\r\n\r\n" in data:
-                break
-
-        return data
-
-    def _send_http_response(self, conn, status_code, reason, body, content_type="text/plain; charset=utf-8"):
-        """最小限のHTTPレスポンスを送信"""
-        if isinstance(body, str):
-            body_bytes = body.encode('utf-8')
-        else:
-            body_bytes = body
-
-        header_lines = [
-            f"HTTP/1.1 {status_code} {reason}",
-            f"Content-Length: {len(body_bytes)}",
-            f"Content-Type: {content_type}",
-            "Connection: close",
-            "",
-            "",
-        ]
-
-        header_bytes = "\r\n".join(header_lines).encode('utf-8')
-
-        try:
-            conn.sendall(header_bytes + body_bytes)
-        except OSError:
-            pass
-
-    def _extract_zoom(self, params):
-        """クエリパラメータからズームレベルを取得
-
-        明示的なズーム指定がなければ None を返す（Google 用に scale から推定する）
-        """
-        for key in ('z', 'zoom', 'level'):
-            if key in params:
-                try:
-                    return float(params[key][0])
-                except (TypeError, ValueError):
-                    raise ValueError(f"Invalid {key} parameter.")
-        return None
 
     def _build_google_maps_url(self, navigation_data):
         """ナビゲーションデータからGoogle Maps用URLを生成
@@ -1252,24 +803,7 @@ class QMapPermalink:
         except Exception:
             return None, None
 
-    def find_available_port(self, start_port, end_port):
-        """使用可能なポートを探す
-        
-        Args:
-            start_port: 開始ポート番号
-            end_port: 終了ポート番号
-            
-        Returns:
-            使用可能なポート番号
-        """
-        for port in range(start_port, end_port + 1):
-            try:
-                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                    s.bind(('localhost', port))
-                    return port
-            except OSError:
-                continue
-        raise RuntimeError(f"ポート範囲 {start_port}-{end_port} で使用可能なポートが見つかりません")
+
     
     def generate_permalink(self, include_theme=True, specific_theme=None):
         """現在の地図ビューからパーマリンクを生成
@@ -1309,8 +843,9 @@ class QMapPermalink:
             scale_val = 1000.0
         
         # 基本URL構築
+        server_port = self.server_manager.get_server_port() or 8089
         permalink_url = (
-            f"http://localhost:{self.server_port}/qgis-map?x={x_val}&y={y_val}"
+            f"http://localhost:{server_port}/qgis-map?x={x_val}&y={y_val}"
             f"&scale={scale_val:.1f}&crs={crs_id}&rotation={rotation:.2f}"
         )
         
@@ -1337,7 +872,7 @@ class QMapPermalink:
 
                 # パラメータをナビゲーションデータへ変換して処理（location または coordinates をサポート）
                 try:
-                    navigation_data = self._build_navigation_data_from_params(params)
+                    navigation_data = self.server_manager._build_navigation_data_from_params(params)
                 except ValueError as e:
                     raise
 

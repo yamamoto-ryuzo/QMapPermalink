@@ -11,6 +11,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **B**: UI changes, new plugin features, or moderate functionality additions
 - **C**: Profile/plugin fixes, minor bug fixes, and small improvements
 
+## [V1.9.0] - 2025-10-11
+
+### 🔧 HTTP SERVER ARCHITECTURE - Server Management Module Separation
+
+### Added
+- **新規モジュール**: `qmap_permalink_server_manager.py` - HTTPサーバー専用管理クラス
+- **QMapPermalinkServerManager**: HTTPサーバーの起動・停止・リクエスト処理を独立管理
+- **モジュラー設計**: サーバー機能をメインプラグインから完全分離
+
+### Refactored
+- **HTTPサーバー機能の完全分離**:
+  - `start_http_server()` → `QMapPermalinkServerManager.start_http_server()`
+  - `stop_http_server()` → `QMapPermalinkServerManager.stop_http_server()`
+  - `_handle_client_connection()` → `QMapPermalinkServerManager._handle_client_connection()`
+  - `_build_navigation_data_from_params()` → `QMapPermalinkServerManager._build_navigation_data_from_params()`
+  - `find_available_port()` → `QMapPermalinkServerManager.find_available_port()`
+- **共通ユーティリティの適切な配置**: `_build_google_maps_url()`, `_convert_to_wgs84()` などはメインクラスに残し、サーバーから参照
+- **初期化順序の最適化**: 依存関係を明確にした初期化プロセス
+
+### Improved
+- **保守性向上**: HTTPサーバー関連の修正・拡張がメインロジックに影響しない
+- **エラー処理の改善**: サーバー機能のエラーが他の機能に波及しない堅牢な設計
+- **デバッグ機能強化**: 問題箇所の特定が容易になるログ機能
+- **拡張性確保**: 今後のHTTPサーバー機能強化の基盤を構築
+
+### Technical
+- **アーキテクチャ改善**: 機能ごとに明確に分離された設計
+- **配布ファイル更新**: `create_zip.py` に新しいサーバーマネージャーファイルを追加
+- **後方互換性**: 既存の機能とAPIは変更なし
+
 ## [V1.8.0] - 2025-01-22
 
 ### 🔧 CODE MODULARIZATION - WebMap Generation Module Separation
