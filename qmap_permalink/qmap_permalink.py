@@ -32,20 +32,21 @@ except Exception:
 
 from qgis.gui import QgsMapCanvas
 
-# ユーザー関数を追加（QGIS 環境では qgsfunction デコレータで登録）
-if qgsfunction:
+# ユーザー関数定義（デコレータでの自動登録は import 時に QGIS の内部で
+# Cレベルの処理を行うため、環境によってはプロセスがクラッシュすることがある。
+# 安全性のためここではデコレータを使わず通常の関数として定義する。必要なら
+# プラグイン初期化時に明示的に登録処理を行う。
+def my_custom_function(value1, value2, feature, parent):
+    """単純なサンプル関数（登録は行わない）
+
+    NOTE: QGIS の qgsfunction デコレータでの自動登録はここでは行いません。
+    もしプラグイン実行環境でユーザー関数の登録が必要であれば、
+    initGui() 内など安全なタイミングで登録処理を追加してください。
+    """
     try:
-        @qgsfunction(args='auto', group='Custom', usesgeometry=False)
-        def my_custom_function(value1, value2, feature, parent):
-            return value1 + value2
-    except Exception:
-        # 登録失敗しても通常の関数は定義しておく
-        def my_custom_function(value1, value2, feature, parent):
-            return value1 + value2
-else:
-    # QGIS 環境でない場合はデコレータなしで定義
-    def my_custom_function(value1, value2, feature, parent):
         return value1 + value2
+    except Exception:
+        return None
 
 import os.path
 import urllib.parse
@@ -116,7 +117,13 @@ class QMapPermalink:
 
         # WebMap生成器の初期化
         if WEBMAP_AVAILABLE and QMapWebMapGenerator:
-            self.webmap_generator = QMapWebMapGenerator(self.iface)
+            # pass plugin instance (self) so the generator can reuse
+            # plugin utilities like _estimate_zoom_from_scale when available
+            try:
+                self.webmap_generator = QMapWebMapGenerator(self)
+            except Exception:
+                # fallback to passing iface if plugin instance cannot be used
+                self.webmap_generator = QMapWebMapGenerator(self.iface)
         else:
             self.webmap_generator = None
 
