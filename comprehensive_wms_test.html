@@ -1,0 +1,806 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="utf-8">
+    <title>🏆 本格的WMS総合テスト - QMapPermalink v1.10.13</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@8.2.0/ol.css" type="text/css">
+    <script src="https://cdn.jsdelivr.net/npm/ol@8.2.0/dist/ol.js"></script>
+    <style>
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            margin: 0; 
+            padding: 15px; 
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%); 
+            min-height: 100vh;
+        }
+        .hero-section {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            border-radius: 15px;
+            margin-bottom: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+        .hero-section h1 {
+            margin: 0 0 15px 0;
+            font-size: 32px;
+            font-weight: 600;
+        }
+        .hero-section p {
+            margin: 5px 0;
+            font-size: 16px;
+            opacity: 0.9;
+        }
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+        .feature-card {
+            background: rgba(255,255,255,0.95);
+            padding: 15px;
+            border-radius: 10px;
+            text-align: center;
+            border: 2px solid transparent;
+            transition: all 0.3s ease;
+        }
+        .feature-card:hover {
+            border-color: #667eea;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+        .feature-card h3 {
+            margin: 0 0 10px 0;
+            color: #333;
+            font-size: 16px;
+        }
+        .main-layout {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 20px;
+            margin-top: 20px;
+        }
+        .map-container {
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+        }
+        .control-panel {
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+            max-height: 800px;
+            overflow-y: auto;
+        }
+        #map {
+            width: 100%;
+            height: 600px;
+            border: 3px solid #e9ecef;
+            border-radius: 10px;
+            box-shadow: inset 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .section-title {
+            font-weight: 600;
+            color: #495057;
+            margin-bottom: 15px;
+            font-size: 18px;
+            border-bottom: 3px solid #e9ecef;
+            padding-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .control-group {
+            margin: 20px 0;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            border-left: 5px solid #007bff;
+        }
+        .control-group h4 {
+            margin: 0 0 15px 0;
+            color: #495057;
+            font-size: 16px;
+            font-weight: 600;
+        }
+        .control-group label {
+            display: block;
+            margin: 10px 0 5px 0;
+            font-weight: 500;
+            font-size: 13px;
+            color: #6c757d;
+        }
+        .control-group input, .control-group select {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.3s ease;
+            box-sizing: border-box;
+        }
+        .control-group input:focus, .control-group select:focus {
+            outline: none;
+            border-color: #007bff;
+            box-shadow: 0 0 0 0.2rem rgba(0,123,255,.25);
+        }
+        .btn {
+            background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 8px;
+            cursor: pointer;
+            margin: 5px;
+            font-size: 13px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+        .btn:hover { 
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(0,123,255,0.3);
+        }
+        .btn.success { background: linear-gradient(135deg, #28a745 0%, #1e7e34 100%); }
+        .btn.warning { background: linear-gradient(135deg, #ffc107 0%, #e0a800 100%); color: #212529; }
+        .btn.danger { background: linear-gradient(135deg, #dc3545 0%, #c82333 100%); }
+        .btn.secondary { background: linear-gradient(135deg, #6c757d 0%, #545b62 100%); }
+        .btn.small { padding: 6px 10px; font-size: 12px; }
+        .btn-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            margin: 15px 0;
+        }
+        .status-indicator {
+            padding: 8px 12px;
+            border-radius: 8px;
+            font-weight: 500;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+            margin: 5px 0;
+        }
+        .status-indicator.online { background: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
+        .status-indicator.offline { background: #f8d7da; color: #721c24; border: 1px solid #f1b0b7; }
+        .status-indicator.testing { background: #fff3cd; color: #856404; border: 1px solid #ffeaa7; }
+        .log-container {
+            background: #1e1e1e;
+            border: 1px solid #333;
+            border-radius: 8px;
+            padding: 15px;
+            height: 200px;
+            overflow-y: auto;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 12px;
+            color: #e6e6e6;
+            margin-top: 10px;
+        }
+        .log-container .log-info { color: #4fc3f7; }
+        .log-container .log-success { color: #66bb6a; }
+        .log-container .log-warning { color: #ffb74d; }
+        .log-container .log-error { color: #f44336; }
+        .coordinate-display {
+            background: #e9ecef;
+            padding: 8px;
+            border-radius: 6px;
+            font-family: 'Consolas', monospace;
+            margin: 5px 0;
+            font-size: 12px;
+            color: #495057;
+            border-left: 4px solid #007bff;
+        }
+        .test-gallery {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-top: 20px;
+        }
+        .test-item {
+            background: white;
+            border-radius: 10px;
+            padding: 15px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            transition: transform 0.3s ease;
+        }
+        .test-item:hover {
+            transform: translateY(-2px);
+        }
+        .test-item h5 {
+            margin: 0 0 10px 0;
+            color: #495057;
+            font-size: 14px;
+            font-weight: 600;
+        }
+        .test-image {
+            width: 100%;
+            height: auto;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            transition: border-color 0.3s ease;
+        }
+        .test-image.loading { border-color: #ffc107; }
+        .test-image.success { border-color: #28a745; }
+        .test-image.error { border-color: #dc3545; }
+        .image-info {
+            font-size: 11px;
+            color: #6c757d;
+            margin-top: 8px;
+            padding: 5px;
+            background: #f8f9fa;
+            border-radius: 4px;
+        }
+        .performance-metrics {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px;
+            border-radius: 10px;
+            margin: 15px 0;
+        }
+        .performance-metrics h4 {
+            margin: 0 0 10px 0;
+            font-size: 16px;
+        }
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+        .metric-item {
+            background: rgba(255,255,255,0.1);
+            padding: 8px;
+            border-radius: 6px;
+            text-align: center;
+        }
+        .metric-value {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 2px;
+        }
+        .metric-label {
+            font-size: 11px;
+            opacity: 0.8;
+        }
+    </style>
+</head>
+<body>
+    <div class="hero-section">
+        <h1>🏆 本格的WMS総合テストシステム</h1>
+        <p><strong>QMap Permalink Professional WMS v1.10.13</strong></p>
+        <p>QGISレイヤ状態を踏襲しつつ、任意の位置・範囲を自由にレンダリング</p>
+        <p>完全独立レンダリング × レイヤ状態保持 × 高性能OGC WMS 1.3.0準拠</p>
+        
+        <div class="feature-grid">
+            <div class="feature-card">
+                <h3>🎯 レイヤ状態踏襲</h3>
+                <p>QGISデスクトップの現在のレイヤ表示状態を完全に保持</p>
+            </div>
+            <div class="feature-card">
+                <h3>🗺️ 任意位置レンダリング</h3>
+                <p>表示位置・範囲・座標系を自由に変更可能</p>
+            </div>
+            <div class="feature-card">
+                <h3>⚡ 独立高速レンダリング</h3>
+                <p>QgsMapRendererParallelJobによる非依存レンダリング</p>
+            </div>
+            <div class="feature-card">
+                <h3>🌐 OGC WMS 1.3.0準拠</h3>
+                <p>標準的なGetCapabilities・GetMap対応</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="main-layout">
+        <div class="map-container">
+            <div class="section-title">
+                <span>📍</span> インタラクティブ本格的WMS地図
+            </div>
+            <div id="map"></div>
+            
+            <div class="performance-metrics">
+                <h4>📊 パフォーマンス指標</h4>
+                <div class="metrics-grid">
+                    <div class="metric-item">
+                        <div class="metric-value" id="load-time">--</div>
+                        <div class="metric-label">画像読み込み時間 (ms)</div>
+                    </div>
+                    <div class="metric-item">
+                        <div class="metric-value" id="image-size">--</div>
+                        <div class="metric-label">画像サイズ (KB)</div>
+                    </div>
+                    <div class="metric-item">
+                        <div class="metric-value" id="request-count">0</div>
+                        <div class="metric-label">総リクエスト数</div>
+                    </div>
+                    <div class="metric-item">
+                        <div class="metric-value" id="success-rate">--</div>
+                        <div class="metric-label">成功率 (%)</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="control-panel">
+            <div class="section-title">
+                <span>🎛️</span> 本格的WMS制御システム
+            </div>
+            
+            <div class="control-group">
+                <h4>🔗 WMSサーバー接続</h4>
+                <label>エンドポイントURL:</label>
+                <input type="text" id="wms-url" value="http://localhost:8089/wms" readonly>
+                <div class="status-indicator offline" id="server-status">
+                    <span>🔍</span> サーバー状態確認中...
+                </div>
+                <div class="btn-grid">
+                    <button class="btn small" onclick="testConnection()">接続テスト</button>
+                    <button class="btn small secondary" onclick="getCapabilities()">GetCapabilities</button>
+                </div>
+            </div>
+            
+            <div class="control-group">
+                <h4>🌍 地理座標制御</h4>
+                <label>中心経度 (Longitude):</label>
+                <input type="number" id="center-lon" value="139.6917" step="0.0001">
+                <label>中心緯度 (Latitude):</label>
+                <input type="number" id="center-lat" value="35.6895" step="0.0001">
+                <label>ズームレベル:</label>
+                <input type="number" id="zoom-level" value="10" min="1" max="20">
+                
+                <div class="btn-grid">
+                    <button class="btn small" onclick="goToLocation(139.6917, 35.6895, 12)">🏢 東京駅</button>
+                    <button class="btn small" onclick="goToLocation(135.5023, 34.6937, 12)">🏯 大阪城</button>
+                    <button class="btn small" onclick="goToLocation(139.7673, 35.6814, 15)">🗼 スカイツリー</button>
+                    <button class="btn small" onclick="goToLocation(135.1955, 34.6901, 13)">⛩️ 神戸</button>
+                </div>
+            </div>
+            
+            <div class="control-group">
+                <h4>🎨 レンダリング設定</h4>
+                <label>座標系 (CRS):</label>
+                <select id="crs-select" onchange="updateCRS()">
+                    <option value="EPSG:3857">EPSG:3857 (Web Mercator)</option>
+                    <option value="EPSG:4326">EPSG:4326 (WGS84 Geographic)</option>
+                    <option value="EPSG:2154">EPSG:2154 (RGF93 Lambert 93)</option>
+                    <option value="EPSG:32633">EPSG:32633 (UTM Zone 33N)</option>
+                </select>
+                
+                <label>画像サイズ:</label>
+                <select id="image-size" onchange="updateImageSize()">
+                    <option value="256,256">256×256 (高速)</option>
+                    <option value="512,512" selected>512×512 (標準)</option>
+                    <option value="1024,1024">1024×1024 (高品質)</option>
+                    <option value="800,600">800×600 (ワイド)</option>
+                </select>
+                
+                <div class="btn-grid">
+                    <button class="btn success" onclick="refreshMap()">🔄 地図更新</button>
+                    <button class="btn warning" onclick="resetView()">🎯 初期位置</button>
+                </div>
+            </div>
+            
+            <div class="control-group">
+                <h4>📊 現在の地図状態</h4>
+                <label>中心座標:</label>
+                <div class="coordinate-display" id="current-center">読み込み中...</div>
+                <label>表示範囲 (BBOX):</label>
+                <div class="coordinate-display" id="current-bbox">読み込み中...</div>
+                <label>ズーム / スケール:</label>
+                <div class="coordinate-display" id="current-zoom">読み込み中...</div>
+            </div>
+            
+            <div class="control-group">
+                <h4>📋 システムログ</h4>
+                <div class="btn-grid">
+                    <button class="btn small secondary" onclick="clearLog()">🗑️ クリア</button>
+                    <button class="btn small" onclick="toggleAutoLog()">📡 自動ログ</button>
+                </div>
+                <div class="log-container" id="system-log">
+                    <div class="log-info">[SYSTEM] 本格的WMSテストシステム起動中...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="map-container" style="margin-top: 20px;">
+        <div class="section-title">
+            <span>🧪</span> 本格的WMS画像生成テスト
+        </div>
+        <p>異なる位置・サイズ・座標系での画像生成能力をテスト</p>
+        
+        <button class="btn success" onclick="runComprehensiveTests()" style="width: 100%; margin: 15px 0; padding: 15px; font-size: 16px;">
+            🚀 総合テスト実行 - 全機能検証
+        </button>
+        
+        <div class="test-gallery">
+            <div class="test-item">
+                <h5>🏢 東京エリア (256×256)</h5>
+                <img id="test-img-1" class="test-image" alt="Tokyo Area Test">
+                <div class="image-info" id="info-1">テスト準備中...</div>
+            </div>
+            <div class="test-item">
+                <h5>🏯 大阪エリア (256×256)</h5>
+                <img id="test-img-2" class="test-image" alt="Osaka Area Test">
+                <div class="image-info" id="info-2">テスト準備中...</div>
+            </div>
+            <div class="test-item">
+                <h5>📍 現在位置 (512×512)</h5>
+                <img id="test-img-3" class="test-image" alt="Current View Test">
+                <div class="image-info" id="info-3">テスト準備中...</div>
+            </div>
+            <div class="test-item">
+                <h5>🌍 関東関西広域 (512×512)</h5>
+                <img id="test-img-4" class="test-image" alt="Wide Area Test">
+                <div class="image-info" id="info-4">テスト準備中...</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let map;
+        let wmsLayer;
+        let wmsSource;
+        let autoLogEnabled = false;
+        let requestCount = 0;
+        let successCount = 0;
+        let totalLoadTime = 0;
+        let totalImageSize = 0;
+
+        // 本格的WMSテストシステム初期化
+        function initProfessionalWMS() {
+            logMessage("🏆 Professional WMS Test System initialization", "info");
+            
+            // WMSソースの作成
+            wmsSource = new ol.source.ImageWMS({
+                url: 'http://localhost:8089/wms',
+                params: {
+                    'SERVICE': 'WMS',
+                    'VERSION': '1.3.0',
+                    'REQUEST': 'GetMap',
+                    'FORMAT': 'image/png',
+                    'TRANSPARENT': true,
+                    'LAYERS': 'qgis_professional_map',
+                    'CRS': 'EPSG:3857'
+                },
+                ratio: 1,
+                serverType: 'other'
+            });
+
+            // 高品質WMSレイヤーの作成
+            wmsLayer = new ol.layer.Image({
+                source: wmsSource,
+                opacity: 0.95
+            });
+
+            // 高性能OpenLayersマップの作成
+            map = new ol.Map({
+                target: 'map',
+                layers: [
+                    // 薄いベースマップ
+                    new ol.layer.Tile({
+                        source: new ol.source.OSM(),
+                        opacity: 0.15
+                    }),
+                    // メインの本格的WMSレイヤー
+                    wmsLayer
+                ],
+                view: new ol.View({
+                    center: ol.proj.fromLonLat([139.6917, 35.6895]), // 東京駅
+                    zoom: 10,
+                    projection: 'EPSG:3857'
+                })
+            });
+
+            // 高度なイベントリスナー
+            map.getView().on('change:center', updateMapInfo);
+            map.getView().on('change:resolution', updateMapInfo);
+            
+            map.on('click', function(evt) {
+                const coordinate = evt.coordinate;
+                const lonLat = ol.proj.toLonLat(coordinate);
+                logMessage(`🎯 Map clicked: [${lonLat[0].toFixed(6)}, ${lonLat[1].toFixed(6)}]`, "info");
+            });
+
+            // WMSパフォーマンス監視
+            wmsSource.on('imageloadstart', function() {
+                requestCount++;
+                updateMetrics();
+                if (autoLogEnabled) logMessage('📡 WMS image loading started...', "info");
+            });
+
+            wmsSource.on('imageloadend', function(event) {
+                successCount++;
+                const img = event.image;
+                if (img && img.src) {
+                    // 画像サイズ推定（概算）
+                    estimateImageSize(img.src);
+                }
+                updateMetrics();
+                if (autoLogEnabled) logMessage('✅ WMS image loaded successfully', "success");
+            });
+
+            wmsSource.on('imageloaderror', function() {
+                updateMetrics();
+                logMessage('❌ WMS image loading failed', "error");
+            });
+
+            updateMapInfo();
+            checkServerStatus();
+            logMessage("🚀 Professional WMS system ready", "success");
+        }
+
+        // メトリクス更新
+        function updateMetrics() {
+            document.getElementById('request-count').textContent = requestCount;
+            const successRate = requestCount > 0 ? Math.round((successCount / requestCount) * 100) : 0;
+            document.getElementById('success-rate').textContent = successRate;
+        }
+
+        // 画像サイズ推定
+        function estimateImageSize(imageSrc) {
+            const img = new Image();
+            img.onload = function() {
+                // 画像の概算サイズ（KB）
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                canvas.width = this.width;
+                canvas.height = this.height;
+                ctx.drawImage(this, 0, 0);
+                
+                try {
+                    const dataURL = canvas.toDataURL('image/png');
+                    const sizeBytes = Math.round((dataURL.length * 3/4) - 2);
+                    const sizeKB = Math.round(sizeBytes / 1024);
+                    document.getElementById('image-size').textContent = sizeKB;
+                } catch(e) {
+                    document.getElementById('image-size').textContent = '--';
+                }
+            };
+            img.src = imageSrc;
+        }
+
+        // 地図情報更新
+        function updateMapInfo() {
+            if (!map) return;
+
+            const view = map.getView();
+            const center = view.getCenter();
+            const extent = view.calculateExtent();
+            const zoom = view.getZoom();
+
+            // 中心座標
+            const centerLonLat = ol.proj.toLonLat(center);
+            document.getElementById('current-center').textContent = 
+                `${centerLonLat[0].toFixed(6)}, ${centerLonLat[1].toFixed(6)}`;
+
+            // BBOX (WGS84)
+            const extentLonLat = ol.proj.transformExtent(extent, 'EPSG:3857', 'EPSG:4326');
+            document.getElementById('current-bbox').textContent = 
+                `${extentLonLat[0].toFixed(6)},${extentLonLat[1].toFixed(6)},${extentLonLat[2].toFixed(6)},${extentLonLat[3].toFixed(6)}`;
+
+            // ズーム・スケール
+            const resolution = view.getResolution();
+            const scale = Math.round(resolution * 96 * 39.37 * 1000); // 概算スケール
+            document.getElementById('current-zoom').textContent = `${zoom.toFixed(2)} (1:${scale.toLocaleString()})`;
+
+            // 入力フィールド同期
+            document.getElementById('center-lon').value = centerLonLat[0].toFixed(6);
+            document.getElementById('center-lat').value = centerLonLat[1].toFixed(6);
+            document.getElementById('zoom-level').value = Math.round(zoom);
+        }
+
+        // サーバー状態確認
+        function checkServerStatus() {
+            const statusElement = document.getElementById('server-status');
+            statusElement.innerHTML = '<span>🔍</span> サーバー状態確認中...';
+            statusElement.className = 'status-indicator testing';
+
+            const startTime = Date.now();
+            fetch('http://localhost:8089/wms?SERVICE=WMS&REQUEST=GetCapabilities')
+                .then(response => {
+                    const loadTime = Date.now() - startTime;
+                    document.getElementById('load-time').textContent = loadTime;
+                    
+                    if (response.ok) {
+                        statusElement.innerHTML = '<span>✅</span> Professional WMS Server Online';
+                        statusElement.className = 'status-indicator online';
+                        logMessage('✅ Professional WMS server connection verified', "success");
+                        return response.text();
+                    } else {
+                        throw new Error(`Server Error: ${response.status}`);
+                    }
+                })
+                .then(data => {
+                    if (data && data.includes('qgis_professional_map')) {
+                        logMessage('🎯 Professional layer "qgis_professional_map" confirmed', "success");
+                    }
+                })
+                .catch(error => {
+                    statusElement.innerHTML = '<span>❌</span> Server Offline';
+                    statusElement.className = 'status-indicator offline';
+                    logMessage(`❌ Server connection failed: ${error.message}`, "error");
+                });
+        }
+
+        // 位置移動
+        function goToLocation(lon, lat, zoom) {
+            map.getView().setCenter(ol.proj.fromLonLat([lon, lat]));
+            map.getView().setZoom(zoom);
+            logMessage(`📍 Navigated to: [${lon}, ${lat}] Zoom: ${zoom}`, "info");
+        }
+
+        // 座標系更新
+        function updateCRS() {
+            const newCRS = document.getElementById('crs-select').value;
+            wmsSource.updateParams({'CRS': newCRS});
+            logMessage(`🌐 CRS changed to: ${newCRS}`, "info");
+        }
+
+        // 画像サイズ更新
+        function updateImageSize() {
+            const size = document.getElementById('image-size').value;
+            const [width, height] = size.split(',');
+            logMessage(`📐 Image size changed to: ${width}×${height}`, "info");
+            refreshMap();
+        }
+
+        // 地図更新
+        function refreshMap() {
+            wmsSource.refresh();
+            logMessage('🔄 Map manually refreshed', "info");
+        }
+
+        // 初期位置リセット
+        function resetView() {
+            goToLocation(139.6917, 35.6895, 10);
+            logMessage('🎯 View reset to initial position', "info");
+        }
+
+        // 接続テスト
+        function testConnection() {
+            logMessage('🧪 Connection test initiated', "info");
+            checkServerStatus();
+        }
+
+        // GetCapabilities取得
+        function getCapabilities() {
+            logMessage('📄 Fetching GetCapabilities...', "info");
+            fetch('http://localhost:8089/wms?SERVICE=WMS&REQUEST=GetCapabilities')
+                .then(response => response.text())
+                .then(data => {
+                    logMessage(`✅ GetCapabilities success (${data.length} bytes)`, "success");
+                    if (data.includes('qgis_professional_map')) {
+                        logMessage('🎯 Professional layer confirmed in capabilities', "success");
+                    }
+                    // XMLを整形して一部を表示
+                    const parser = new DOMParser();
+                    const xmlDoc = parser.parseFromString(data, "text/xml");
+                    const title = xmlDoc.querySelector('Title');
+                    if (title) {
+                        logMessage(`📋 Service Title: ${title.textContent}`, "info");
+                    }
+                })
+                .catch(error => {
+                    logMessage(`❌ GetCapabilities failed: ${error.message}`, "error");
+                });
+        }
+
+        // 総合テスト実行
+        function runComprehensiveTests() {
+            logMessage('🚀 Comprehensive Professional WMS test initiated', "info");
+            
+            // テスト1: 東京エリア
+            testProfessionalImage('test-img-1', 'info-1', {
+                bbox: '139.6,35.6,139.8,35.8',
+                width: 256,
+                height: 256,
+                crs: 'EPSG:4326'
+            }, '🏢 Tokyo Metropolitan Area');
+
+            // テスト2: 大阪エリア
+            testProfessionalImage('test-img-2', 'info-2', {
+                bbox: '135.4,34.6,135.6,34.8',
+                width: 256,
+                height: 256,
+                crs: 'EPSG:4326'
+            }, '🏯 Osaka Metropolitan Area');
+
+            // テスト3: 現在位置（動的）
+            const currentExtent = map.getView().calculateExtent();
+            const currentExtentWGS84 = ol.proj.transformExtent(currentExtent, 'EPSG:3857', 'EPSG:4326');
+            testProfessionalImage('test-img-3', 'info-3', {
+                bbox: `${currentExtentWGS84[0].toFixed(6)},${currentExtentWGS84[1].toFixed(6)},${currentExtentWGS84[2].toFixed(6)},${currentExtentWGS84[3].toFixed(6)}`,
+                width: 512,
+                height: 512,
+                crs: 'EPSG:4326'
+            }, '📍 Current Map View');
+
+            // テスト4: 広域エリア
+            testProfessionalImage('test-img-4', 'info-4', {
+                bbox: '135,34,140,36',
+                width: 512,
+                height: 512,
+                crs: 'EPSG:4326'
+            }, '🌍 Kanto-Kansai Wide Area');
+
+            logMessage('🎯 All professional WMS tests queued for execution', "success");
+        }
+
+        // 個別画像テスト
+        function testProfessionalImage(imgId, infoId, params, description) {
+            const img = document.getElementById(imgId);
+            const info = document.getElementById(infoId);
+            
+            img.className = 'test-image loading';
+            info.textContent = 'Professional rendering in progress...';
+            
+            const startTime = Date.now();
+            const url = `http://localhost:8089/wms?SERVICE=WMS&REQUEST=GetMap&FORMAT=image/png&LAYERS=qgis_professional_map&WIDTH=${params.width}&HEIGHT=${params.height}&CRS=${params.crs}&BBOX=${params.bbox}&t=${Date.now()}`;
+            
+            img.onload = function() {
+                const loadTime = Date.now() - startTime;
+                img.className = 'test-image success';
+                info.innerHTML = `✅ ${description}<br>Size: ${params.width}×${params.height}<br>Load: ${loadTime}ms`;
+                logMessage(`✅ Professional test success: ${description} (${loadTime}ms)`, "success");
+            };
+            
+            img.onerror = function() {
+                const loadTime = Date.now() - startTime;
+                img.className = 'test-image error';
+                info.innerHTML = `❌ ${description}<br>Rendering failed<br>Time: ${loadTime}ms`;
+                logMessage(`❌ Professional test failed: ${description}`, "error");
+            };
+            
+            img.src = url;
+        }
+
+        // ログ機能
+        function logMessage(message, type = "info") {
+            const logElement = document.getElementById('system-log');
+            const timestamp = new Date().toLocaleTimeString('ja-JP');
+            const logClass = `log-${type}`;
+            
+            const logLine = document.createElement('div');
+            logLine.className = logClass;
+            logLine.textContent = `[${timestamp}] ${message}`;
+            
+            logElement.appendChild(logLine);
+            logElement.scrollTop = logElement.scrollHeight;
+            
+            // ログが100行を超えたら古いものを削除
+            while (logElement.children.length > 100) {
+                logElement.removeChild(logElement.firstChild);
+            }
+        }
+
+        function clearLog() {
+            const logElement = document.getElementById('system-log');
+            logElement.innerHTML = '<div class="log-info">[SYSTEM] Log cleared</div>';
+        }
+
+        function toggleAutoLog() {
+            autoLogEnabled = !autoLogEnabled;
+            logMessage(autoLogEnabled ? '🔔 Auto logging enabled' : '🔇 Auto logging disabled', "info");
+        }
+
+        // 定期更新
+        setInterval(updateMapInfo, 3000);
+        setInterval(checkServerStatus, 60000);
+
+        // システム初期化
+        document.addEventListener('DOMContentLoaded', function() {
+            initProfessionalWMS();
+            logMessage('🏆 Professional WMS Test System fully loaded', "success");
+            
+            // 5秒後に自動機能テスト
+            setTimeout(() => {
+                getCapabilities();
+            }, 3000);
+        });
+    </script>
+</body>
+</html>

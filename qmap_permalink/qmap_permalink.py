@@ -122,6 +122,11 @@ class QMapPermalink:
 
         # HTTPサーバーマネージャー
         from .qmap_permalink_server_manager import QMapPermalinkServerManager
+        from .professional_wms_server import ProfessionalWMSServer
+        
+        # 本格的WMSサーバーを初期化
+        self.professional_wms = ProfessionalWMSServer(self.iface)
+        
         self.server_manager = QMapPermalinkServerManager(
             self.iface, 
             self.navigation_signals, 
@@ -376,6 +381,10 @@ class QMapPermalink:
         """プラグインのアンロード時の処理"""
         # HTTPサーバーを停止
         self.server_manager.stop_http_server()
+        
+        # 本格的WMSサーバーを停止
+        if hasattr(self, 'professional_wms'):
+            self.professional_wms.stop_server()
         
         # パネルを削除
         if self.panel is not None:
