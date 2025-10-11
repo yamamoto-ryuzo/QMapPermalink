@@ -202,6 +202,41 @@ V1.6.0では、実際のGoogle Earthの動作を詳細に分析し、実測デ�
 - **⚡ 高い安定性**: 複雑な現在状態取得を避け、信頼性の高い動作を保証
 - **🚀 自動復元**: テーマ付きパーマリンクからナビゲーション時に、レイヤー状態も自動的に復元
 
+## 🧪 デモンストレーション
+
+プラグインの機能を確認するためのデモファイルが `demo/` フォルダに用意されています：
+
+### 📁 デモコンテンツ
+- **`qgis_wms_demo.html`** - WMS配信機能のインタラクティブデモページ
+- **`test_wms_simple.py`** - WMS機能の自動テストスクリプト
+- **`WMS_ENHANCEMENT_README.md`** - WMS機能の詳細ガイド
+
+### 🚀 WMS配信機能（拡張機能）
+QMapPermalinkは標準のパーマリンク機能に加えて、**WMS（Web Map Service）1.3.0標準**に準拠した配信機能も提供します：
+
+#### 利用可能なエンドポイント
+```bash
+# WMS GetCapabilities - サービス情報取得
+http://localhost:8089/wms?SERVICE=WMS&REQUEST=GetCapabilities
+
+# WMS GetMap - 地図画像取得  
+http://localhost:8089/wms?SERVICE=WMS&REQUEST=GetMap&BBOX=139.5,35.5,139.9,35.9&WIDTH=400&HEIGHT=400&CRS=EPSG:4326&FORMAT=image/png
+
+# タイル配信 - XYZ形式
+http://localhost:8089/tiles/{z}/{x}/{y}.png
+```
+
+#### デモの実行方法
+```bash
+# デモページをブラウザで開く
+start demo/qgis_wms_demo.html
+
+# テストスクリプトで機能確認
+python demo/test_wms_simple.py
+```
+
+詳細は `demo/README.md` をご覧ください。
+
 ## 開発情報
 
 ### ファイル構成

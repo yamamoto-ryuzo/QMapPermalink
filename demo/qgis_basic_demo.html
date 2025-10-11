@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QGIS パーマリンク機能デモ（既存機能版）</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #2c5aa0;
+            text-align: center;
+        }
+        h2 {
+            color: #4a4a4a;
+            border-bottom: 2px solid #2c5aa0;
+            padding-bottom: 5px;
+        }
+        .endpoint {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 6px;
+            padding: 15px;
+            margin: 15px 0;
+        }
+        .endpoint h3 {
+            margin-top: 0;
+            color: #2c5aa0;
+        }
+        .url {
+            background-color: #e9ecef;
+            padding: 8px;
+            border-radius: 4px;
+            font-family: monospace;
+            word-break: break-all;
+            margin: 5px 0;
+        }
+        .button {
+            background-color: #2c5aa0;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-block;
+            margin: 5px;
+        }
+        .button:hover {
+            background-color: #1e3d72;
+        }
+        .status {
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .status.success {
+            background-color: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+        .status.error {
+            background-color: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+        .status.warning {
+            background-color: #fff3cd;
+            border: 1px solid #ffeaa7;
+            color: #856404;
+        }
+        .image-preview {
+            text-align: center;
+            margin: 20px 0;
+        }
+        .image-preview img {
+            max-width: 100%;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🗺️ QGIS パーマリンク機能デモ</h1>
+        
+        <div id="server-status" class="status">
+            <strong>サーバー状態:</strong> <span id="status-text">確認中...</span>
+        </div>
+
+        <div class="status warning">
+            <strong>⚠️ WMS機能について:</strong><br>
+            WMS機能を利用するには、QGISでプラグインを最新バージョンに更新し、再起動してください。<br>
+            現在は既存のパーマリンク機能のみが利用可能です。
+        </div>
+
+        <h2>🌐 利用可能なエンドポイント（既存機能）</h2>
+
+        <!-- QGIS Map エンドポイント -->
+        <div class="endpoint">
+            <h3>1. インタラクティブ地図</h3>
+            <p>OpenLayersを使用したインタラクティブなウェブマップを表示します。</p>
+            <div class="url">
+                <a href="http://localhost:8089/qgis-map?lat=35.681&lon=139.767&scale=25000" target="_blank">
+                    http://localhost:8089/qgis-map?lat=35.681&lon=139.767&scale=25000
+                </a>
+            </div>
+            <button class="button" onclick="testQgisMap()">地図を開く</button>
+            <div id="qgis-map-result"></div>
+        </div>
+
+        <!-- QGIS PNG エンドポイント -->
+        <div class="endpoint">
+            <h3>2. PNG画像直接配信</h3>
+            <p>指定された座標とスケールで地図画像をPNG形式で直接取得します。</p>
+            <div class="url">
+                <a href="http://localhost:8089/qgis-png?lat=35.681&lon=139.767&scale=25000&width=800&height=600" target="_blank">
+                    http://localhost:8089/qgis-png?lat=35.681&lon=139.767&scale=25000&width=800&height=600
+                </a>
+            </div>
+            <div class="image-preview">
+                <h4>地図画像プレビュー:</h4>
+                <img id="png-preview" src="http://localhost:8089/qgis-png?lat=35.681&lon=139.767&scale=25000&width=400&height=300" 
+                     alt="QGIS地図画像" onerror="this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAwIiBoZWlnaHQ9IjMwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZGRkIi8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxNiIgZmlsbD0iIzk5OSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iPuOCteODvOODkOODvOOBq+aOpee2muOBp+OBjeOBvuOBm+OCiTwvdGV4dD48L3N2Zz4='; this.alt='サーバーに接続できません';" />
+            </div>
+            <button class="button" onclick="refreshPngImage()">画像を更新</button>
+        </div>
+
+        <!-- QGIS Image エンドポイント -->
+        <div class="endpoint">
+            <h3>3. 画像埋め込みHTML</h3>
+            <p>地図画像が埋め込まれたHTMLページを表示します。</p>
+            <div class="url">
+                <a href="http://localhost:8089/qgis-image?lat=35.681&lon=139.767&scale=25000" target="_blank">
+                    http://localhost:8089/qgis-image?lat=35.681&lon=139.767&scale=25000
+                </a>
+            </div>
+            <button class="button" onclick="testQgisImage()">画像ページを開く</button>
+        </div>
+
+        <h2>📋 パラメータ説明</h2>
+        <table style="width: 100%; border-collapse: collapse;">
+            <tr style="background-color: #f2f2f2;">
+                <th style="border: 1px solid #ddd; padding: 8px;">パラメータ</th>
+                <th style="border: 1px solid #ddd; padding: 8px;">説明</th>
+                <th style="border: 1px solid #ddd; padding: 8px;">例</th>
+            </tr>
+            <tr>
+                <td style="border: 1px solid #ddd; padding: 8px;">lat</td>
+                <td style="border: 1px solid #ddd; padding: 8px;">緯度（WGS84）</td>
+                <td style="border: 1px solid #ddd; padding: 8px;">35.681</td>
+            </tr>
+            <tr>
+                <td style="border: 1px solid #ddd; padding: 8px;">lon</td>
+                <td style="border: 1px solid #ddd; padding: 8px;">経度（WGS84）</td>
+                <td style="border: 1px solid #ddd; padding: 8px;">139.767</td>
+            </tr>
+            <tr>
+                <td style="border: 1px solid #ddd; padding: 8px;">scale</td>
+                <td style="border: 1px solid #ddd; padding: 8px;">地図スケール</td>
+                <td style="border: 1px solid #ddd; padding: 8px;">25000</td>
+            </tr>
+            <tr>
+                <td style="border: 1px solid #ddd; padding: 8px;">width</td>
+                <td style="border: 1px solid #ddd; padding: 8px;">画像幅（PNG用）</td>
+                <td style="border: 1px solid #ddd; padding: 8px;">800</td>
+            </tr>
+            <tr>
+                <td style="border: 1px solid #ddd; padding: 8px;">height</td>
+                <td style="border: 1px solid #ddd; padding: 8px;">画像高さ（PNG用）</td>
+                <td style="border: 1px solid #ddd; padding: 8px;">600</td>
+            </tr>
+        </table>
+
+        <h2>🔧 WMS機能を有効化する方法</h2>
+        <ol>
+            <li><strong>QGISを完全に終了</strong>してください</li>
+            <li><strong>QGISを再起動</strong>してください</li>
+            <li><strong>QMapPermalinkプラグインを有効化</strong>してください</li>
+            <li><strong>HTTPサーバーが起動</strong>することを確認してください</li>
+            <li>このページを再読み込みして、WMS機能をテストしてください</li>
+        </ol>
+
+        <h2>📊 サーバーテスト</h2>
+        <button class="button" onclick="runAllTests()">全エンドポイントテスト</button>
+        <div id="test-results"></div>
+    </div>
+
+    <script>
+        // サーバー状態チェック
+        async function checkServerStatus() {
+            try {
+                const response = await fetch('http://localhost:8089/qgis-map?lat=35.681&lon=139.767&scale=25000');
+                if (response.ok) {
+                    document.getElementById('status-text').textContent = 'オンライン ✅（既存機能のみ）';
+                    document.getElementById('server-status').className = 'status success';
+                } else {
+                    throw new Error('Server responded with error');
+                }
+            } catch (error) {
+                document.getElementById('status-text').textContent = 'オフライン ❌';
+                document.getElementById('server-status').className = 'status error';
+            }
+        }
+
+        // QGIS Mapテスト
+        function testQgisMap() {
+            window.open('http://localhost:8089/qgis-map?lat=35.681&lon=139.767&scale=25000', '_blank');
+        }
+
+        // QGIS Imageテスト
+        function testQgisImage() {
+            window.open('http://localhost:8089/qgis-image?lat=35.681&lon=139.767&scale=25000', '_blank');
+        }
+
+        // PNG画像を更新
+        function refreshPngImage() {
+            const img = document.getElementById('png-preview');
+            const timestamp = new Date().getTime();
+            const baseUrl = 'http://localhost:8089/qgis-png?lat=35.681&lon=139.767&scale=25000&width=400&height=300';
+            img.src = `${baseUrl}&_t=${timestamp}`;
+        }
+
+        // 全エンドポイントテスト
+        async function runAllTests() {
+            const resultDiv = document.getElementById('test-results');
+            resultDiv.innerHTML = '<h3>テスト実行中...</h3>';
+            
+            const tests = [
+                {
+                    name: 'QGIS Map',
+                    url: 'http://localhost:8089/qgis-map?lat=35.681&lon=139.767&scale=25000'
+                },
+                {
+                    name: 'QGIS PNG',
+                    url: 'http://localhost:8089/qgis-png?lat=35.681&lon=139.767&scale=25000&width=100&height=100'
+                },
+                {
+                    name: 'QGIS Image',
+                    url: 'http://localhost:8089/qgis-image?lat=35.681&lon=139.767&scale=25000'
+                }
+            ];
+
+            let results = [];
+            
+            for (const test of tests) {
+                try {
+                    const response = await fetch(test.url);
+                    const status = response.ok ? '✅ 成功' : `❌ 失敗 (${response.status})`;
+                    results.push(`<li><strong>${test.name}</strong>: ${status}</li>`);
+                } catch (error) {
+                    results.push(`<li><strong>${test.name}</strong>: ❌ エラー (${error.message})</li>`);
+                }
+            }
+
+            resultDiv.innerHTML = `
+                <h3>📊 テスト結果</h3>
+                <ul>${results.join('')}</ul>
+                <p><em>WMS機能をテストするには、QGISでプラグインを更新・再起動してください。</em></p>
+            `;
+        }
+
+        // ページ読み込み時の初期化
+        document.addEventListener('DOMContentLoaded', function() {
+            checkServerStatus();
+            
+            // 30秒ごとにサーバー状態をチェック
+            setInterval(checkServerStatus, 30000);
+        });
+    </script>
+</body>
+</html>
