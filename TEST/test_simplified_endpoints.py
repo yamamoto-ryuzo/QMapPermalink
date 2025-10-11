@@ -26,15 +26,23 @@ def discover_qmap_server():
             sock.close()
             
             if result == 0:
-                # HTTPリクエストで確認
-                url = f"http://localhost:{port}/qgis-map"
-                req = urllib.request.Request(url)
+                print(f"🔍 ポート {port} が使用中 - QMapサーバーかテスト中...")
+                
+                # パラメータ付きでHTTPリクエストで確認（400エラーでも接続できればOK）
+                test_url = f"http://localhost:{port}/qgis-map?lat=35.681236&lon=139.767125&z=16"
+                req = urllib.request.Request(test_url)
                 try:
-                    with urllib.request.urlopen(req, timeout=3) as response:
+                    with urllib.request.urlopen(req, timeout=5) as response:
                         if response.getcode() == 200:
                             print(f"✅ QMapPermalinkサーバー発見: ポート {port}")
                             return port
-                except Exception:
+                except urllib.error.HTTPError as e:
+                    # 400エラーでもQMapサーバーの可能性がある
+                    if e.code in [400, 404]:
+                        print(f"✅ QMapPermalinkサーバー発見 (HTTP {e.code}): ポート {port}")
+                        return port
+                except Exception as ex:
+                    print(f"  ❌ ポート {port}: 接続エラー - {ex}")
                     continue
         except Exception:
             continue
