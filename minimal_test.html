@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>OpenLayers 最小テスト</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@v8.2.0/ol.css">
+    <script src="https://cdn.jsdelivr.net/npm/ol@v8.2.0/dist/ol.js"></script>
+    <style>
+        body { margin: 0; padding: 10px; font-family: Arial, sans-serif; }
+        #map { width: 100%; height: 600px; border: 2px solid red; }
+        .debug { background: yellow; padding: 10px; margin: 10px 0; }
+    </style>
+</head>
+<body>
+    <div class="debug">
+        <h2>🧪 OpenLayers 最小動作テスト</h2>
+        <p>OpenLayersバージョン: <span id="ol-version">読み込み中...</span></p>
+        <p>マップ状態: <span id="map-status">初期化中...</span></p>
+    </div>
+    
+    <div id="map"></div>
+    
+    <script>
+        console.log('🚀 OpenLayers最小テスト開始');
+        
+        // OpenLayersバージョン表示
+        document.getElementById('ol-version').textContent = ol.VERSION_ || 'unknown';
+        
+        try {
+            // 日本の座標（東京駅）
+            const tokyo = [139.7671, 35.6812];
+            
+            console.log('📍 使用座標:', tokyo);
+            
+            const map = new ol.Map({
+                target: 'map',
+                layers: [
+                    new ol.layer.Tile({
+                        source: new ol.source.OSM()
+                    })
+                ],
+                view: new ol.View({
+                    center: ol.proj.fromLonLat(tokyo),
+                    zoom: 12
+                })
+            });
+            
+            // マーカー追加
+            const marker = new ol.Feature({
+                geometry: new ol.geom.Point(ol.proj.fromLonLat(tokyo))
+            });
+            
+            marker.setStyle(new ol.style.Style({
+                image: new ol.style.Circle({
+                    radius: 10,
+                    fill: new ol.style.Fill({color: 'red'}),
+                    stroke: new ol.style.Stroke({color: 'white', width: 2})
+                }),
+                text: new ol.style.Text({
+                    text: '東京駅',
+                    font: '14px Arial',
+                    fill: new ol.style.Fill({color: 'black'}),
+                    offsetY: -20
+                })
+            }));
+            
+            const vectorLayer = new ol.layer.Vector({
+                source: new ol.source.Vector({
+                    features: [marker]
+                })
+            });
+            
+            map.addLayer(vectorLayer);
+            
+            document.getElementById('map-status').textContent = '✅ 初期化成功';
+            document.getElementById('map-status').style.color = 'green';
+            
+            console.log('✅ OpenLayersマップ初期化成功');
+            
+            // クリックイベント
+            map.on('click', function(evt) {
+                const coord = ol.proj.toLonLat(evt.coordinate);
+                console.log('🖱️ クリック座標:', coord);
+                alert('クリック位置: ' + coord[1].toFixed(6) + ', ' + coord[0].toFixed(6));
+            });
+            
+        } catch (error) {
+            console.error('❌ マップ初期化エラー:', error);
+            document.getElementById('map-status').textContent = '❌ エラー: ' + error.message;
+            document.getElementById('map-status').style.color = 'red';
+            document.getElementById('map').innerHTML = '<div style="color: red; padding: 20px; text-align: center;">マップ初期化に失敗しました: ' + error.message + '</div>';
+        }
+    </script>
+</body>
+</html>
