@@ -851,8 +851,9 @@ class QMapPermalink:
             # ここでは推定値として 1000 を入れておく
             scale_val = 1000.0
         
-        # 基本URL構築
+        # 基本URL構築（OpenLayersページ生成用）
         server_port = self.server_manager.get_server_port() or 8089
+        
         permalink_url = (
             f"http://localhost:{server_port}/qgis-map?x={x_val}&y={y_val}"
             f"&scale={scale_val:.1f}&crs={crs_id}&rotation={rotation:.2f}"
@@ -873,8 +874,8 @@ class QMapPermalink:
             permalink_url: パーマリンクURL
         """
         try:
-            # HTTP形式のURLを処理
-            if permalink_url.startswith('http://localhost:') and '/qgis-map' in permalink_url:
+            # HTTP形式のURLを処理（新しいWMS形式と古い形式の両方をサポート）
+            if permalink_url.startswith('http://localhost:') and ('/wms' in permalink_url or '/qgis-map' in permalink_url):
                 # HTTP URLから直接実行（ブラウザを経由しない）
                 parsed_url = urllib.parse.urlparse(permalink_url)
                 params = urllib.parse.parse_qs(parsed_url.query)
