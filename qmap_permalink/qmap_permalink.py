@@ -74,6 +74,8 @@ except ImportError:
 class NavigationSignals(QObject):
     """QGIS APIへの安全なアクセスのためのシグナル"""
     navigate_requested = pyqtSignal(dict)  # 地図ナビゲーション要求
+    # ブラウザから送られてきた完全なURLを通知するシグナル
+    request_origin_changed = pyqtSignal(str)
 
 
 class QMapPermalink:
@@ -110,6 +112,11 @@ class QMapPermalink:
         # ナビゲーション用シグナル
         self.navigation_signals = NavigationSignals()
         self.navigation_signals.navigate_requested.connect(self.handle_navigation_request)
+        # 要求元URLを受け取ってUIを更新するハンドラを接続
+        try:
+            self.navigation_signals.request_origin_changed.connect(self.handle_request_origin_changed)
+        except Exception:
+            pass
 
         # WebMap生成器の初期化
         if WEBMAP_AVAILABLE and QMapWebMapGenerator:
@@ -143,6 +150,25 @@ class QMapPermalink:
 
         # ツールバーの確認（初回実行時にツールバーが存在するかチェック）
         self.first_start = None
+
+        # 最終的に受信した要求元のURLを保持（パネル未生成時のフォールバック用）
+        self._last_request_origin = None
+
+    def handle_request_origin_changed(self, origin):
+        """サーバから受け取った完全URLをパネルのlineEdit_navigateにセットする
+
+        origin (str): 例: 'http://localhost:8089/qgis-map?x=...'
+        """
+        try:
+            # 最終値を保持
+            self._last_request_origin = origin
+            if self.panel and hasattr(self.panel, 'lineEdit_navigate'):
+                try:
+                    self.panel.lineEdit_navigate.setText(origin)
+                except Exception:
+                    pass
+        except Exception:
+            pass
 
     def tr(self, message):
         """翻訳を取得
