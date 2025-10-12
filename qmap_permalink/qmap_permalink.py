@@ -53,18 +53,14 @@ import urllib.parse
 import json
 import math
 
-# パネルファイルのインポート
+# パネルファイルのインポート（フォールバックを削除）
 try:
     from .qmap_permalink_panel import QMapPermalinkPanel
     PANEL_AVAILABLE = True
 except ImportError:
-    try:
-        # 簡易版をバックアップとして試行
-        from .qmap_permalink_panel_simple import SimpleQMapPermalinkPanel as QMapPermalinkPanel
-        PANEL_AVAILABLE = True
-    except ImportError:
-        PANEL_AVAILABLE = False
-        QMapPermalinkPanel = None
+    # シンプル版へのフォールバックは廃止。パネル機能は利用不可とする。
+    PANEL_AVAILABLE = False
+    QMapPermalinkPanel = None
 
 # WebMap生成モジュールのインポート
 try:
