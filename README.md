@@ -207,74 +207,68 @@ V1.6.0では、実際のGoogle Earthの動作を詳細に分析し、実測デ�
 - **🚀 自動復元**: テーマ付きパーマリンクからナビゲーション時に、レイヤー状態も自動的に復元
 
 ## 🧪 デモンストレーション
+プラグインの機能を確認するためのデモは過去の配布で提供されていましたが、
+このリポジトリの現行ブランチには `demo/` ディレクトリは含まれていません。
+配布用 ZIP にデモが同梱されている場合があります。ローカルで動作確認するには
+プラグインを QGIS にインストールしてサーバーを起動し、以下のようなエンドポイントをブラウザで確認してください。
 
-プラグインの機能を確認するためのデモファイルが `demo/` フォルダに用意されています：
-
-### 📁 デモコンテンツ
-- **`qgis_wms_demo.html`** - WMS配信機能のインタラクティブデモページ
-- **`test_wms_simple.py`** - WMS機能の自動テストスクリプト
-- **`WMS_ENHANCEMENT_README.md`** - WMS機能の詳細ガイド
-
-### 🚀 WMS配信機能（拡張機能）
-QMapPermalinkは標準のパーマリンク機能に加えて、**WMS（Web Map Service）1.3.0標準**に準拠した配信機能も提供します：
-
-#### 利用可能なエンドポイント
-```bash
-# WMS GetCapabilities - サービス情報取得
+```
 http://localhost:8089/wms?SERVICE=WMS&REQUEST=GetCapabilities
-
-# WMS GetMap - 地図画像取得  
 http://localhost:8089/wms?SERVICE=WMS&REQUEST=GetMap&BBOX=139.5,35.5,139.9,35.9&WIDTH=400&HEIGHT=400&CRS=EPSG:4326&FORMAT=image/png
-
-# タイル配信 - XYZ形式
-http://localhost:8089/tiles/{z}/{x}/{y}.png
+http://localhost:8089/qgis-map?x=139&y=35&scale=1000.0
 ```
 
-#### デモの実行方法
-```bash
-# デモページをブラウザで開く
-start demo/qgis_wms_demo.html
-
-# テストスクリプトで機能確認
-python demo/test_wms_simple.py
-```
-
-詳細は `demo/README.md` をご覧ください。
+（注）デモや追加ドキュメントが必要な場合は、配布 ZIP を確認するか Issue を立ててください。
 
 ## 開発情報
 
-### ファイル構成
+### ファイル構成（現状）
+
+主要なファイルはリポジトリ内の `qmap_permalink/` ディレクトリに含まれています。現行ブランチにある代表的なファイルは以下の通りです:
 
 ```
 qmap_permalink/
-├── __init__.py                        # プラグイン初期化
-├── qmap_permalink.py                 # メインプラグインロジック
-├── qmap_permalink_panel.py           # パネルクラス
-├── qmap_permalink_panel_base.ui      # パネル用Qt Designer UIファイル
-├── qmap_permalink_panel_simple.py    # 簡易版パネル（フォールバック）
-├── metadata.txt                      # プラグインメタデータ
-├── icon.png                         # プラグインアイコン
-└── i18n/                            # 多言語対応ファイル
-   ├── QMapPermalink_de.ts / .qm     # ドイツ語
-   ├── QMapPermalink_fr.ts / .qm     # フランス語
-   └── QMapPermalink_ja.ts / .qm     # 日本語（完全対応）
+├── __init__.py
+├── qmap_permalink.py
+├── qmap_permalink_original.py
+├── qmap_permalink_panel.py
+├── qmap_permalink_panel_base.ui
+├── qmap_permalink_server_manager.py
+├── qmap_webmap_generator.py
+├── professional_wms_server.py
+├── pyqgis_independent_renderer.py
+├── metadata.txt
+├── icon.png
+└── i18n/    (翻訳ファイル: .ts / .qm)
 ```
+
+※ 以前の README に含まれていた `qmap_permalink_dialog.py` や `qmap_permalink_panel_simple.py` 等のファイルは現行ブランチには含まれていません（CHANGELOG にも廃止が記載されています）。
 
 ### 翻訳ファイルのコンパイル
 
-```bash
-python compile_translations.py
+このリポジトリには `.ts` / `.qm` の翻訳ファイルが `qmap_permalink/i18n/` に含まれています。専用の `compile_translations.py` スクリプトは存在しないため、Qt の標準ツールを使ってコンパイルしてください。
+
+例（Qt の lrelease を利用する場合）:
+
+```
+lrelease qmap_permalink/i18n/QMapPermalink_ja.ts -qm qmap_permalink/i18n/QMapPermalink_ja.qm
 ```
 
-### 配布用ZIPの作成
+または `lupdate` / `pylupdate5` と `lrelease` の組み合わせを利用してください。
 
-```bash
+### 配布用 ZIP の作成
+
+配布用 ZIP はトップレベルの `create_zip.py` で作成できます。実行すると `dist/` ディレクトリが作成され、ZIP が出力されます。
+
+```
 python create_zip.py
 ```
 
+注意: `create_zip.py` は include リストに基づいてファイル存在チェックを行います。README に記載の古いファイルが含まれている場合、スクリプトは該当ファイルが見つからない旨を出力します。実行前に `create_zip.py` の `include_files` リストを確認してください。
+
 ### 対応言語
 
-- 英語 (English) - デフォルト
+- 英語 (English)
 - 日本語 (Japanese)
 - フランス語 (French)
 - ドイツ語 (German)
@@ -288,20 +282,9 @@ python create_zip.py
 - **UI設計**: Qt Designer (.ui ファイル)
 - **翻訳システム**: Qt Linguist (.ts/.qm ファイル)
 - **HTTPサーバー**: 内蔵軽量サーバー（ポート8089-8099自動選択）
-- **サーバー管理**: 独立したHTTPサーバーマネージャーモジュール（V1.9.0新規）
-- **Google Maps/Earth統合**: 実測データに基づく高精度な外部サービス連携
-- **現在バージョン**: V2.0.0（WMS配信対応・外部アクセス改善）
-
-### ファイル構成 (V2.0.0)
-
-主要なプラグインファイル:
-- `qmap_permalink.py` - メインプラグインクラス
-- `qmap_permalink_server_manager.py` - HTTPサーバー専用管理クラス（V1.9.0新規追加）
-- `qmap_permalink_panel.py` - パネルUI実装
-- `qmap_webmap_generator.py` - OpenLayersマップ生成クラス
-- `qmap_permalink_dialog.py` - ダイアログUI実装
-- UIファイル: `.ui`ファイル群（Qt Designer形式）
-- 多言語対応: `i18n/` ディレクトリ内の翻訳ファイル
+- **サーバー管理**: 独立した HTTP サーバーマネージャーモジュール
+- **Google Maps/Earth 統合**: 外部マップサービスへのリンク生成
+- **現在バージョン**: V2.0.0（README の記述に基づく）
 
 ## ライセンス
 
