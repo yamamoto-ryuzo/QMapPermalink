@@ -9,6 +9,12 @@ QGISの地図ビューを外部から直接ナビゲートするパーマリン�
 
 QMapPermalinkは、QGISのマップ位置や状態（レイヤー、テーマ、スタイル）を固定リンク化し復元可能にするパネル型プラグイン。  
 内蔵HTTPサーバでWMSとOpenLayers地図を公開し、外部から直接ナビゲーション可能。
+<table>
+   <tr>
+      <td><img src="images/image001.png" alt="Screenshot 1" style="height:600px;"></td>
+      <td><img src="images/image002.png" alt="Screenshot 2" style="height:600px;"></td>
+   </tr>
+</table>
 
 ## 主な特徴
 
