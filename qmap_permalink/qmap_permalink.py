@@ -904,9 +904,15 @@ class QMapPermalink:
         """
         try:
             # HTTP形式のURLを処理（新しいWMS形式と古い形式の両方をサポート）
-            if permalink_url.startswith('http://localhost:') and ('/wms' in permalink_url or '/qgis-map' in permalink_url):
+            # NOTE: 以前は 'http://localhost:' で始まるURLのみ内部ナビゲーションと見なしていましたが
+            # ローカルネットワークのIPやホスト名から来る場合も利用されるため、ホスト名に依存せず
+            # スキームが http(s) でパスに /wms または /qgis-map を含む場合は内部ナビゲーションとして扱います。
+            parsed_url = urllib.parse.urlparse(permalink_url)
+            scheme = (parsed_url.scheme or '').lower()
+            path = parsed_url.path or ''
+
+            if scheme in ('http', 'https') and ('/wms' in path or '/qgis-map' in path):
                 # HTTP URLから直接実行（ブラウザを経由しない）
-                parsed_url = urllib.parse.urlparse(permalink_url)
                 params = urllib.parse.parse_qs(parsed_url.query)
 
                 # パラメータをナビゲーションデータへ変換して処理（location または coordinates をサポート）
@@ -1187,20 +1193,28 @@ class QMapPermalink:
         try:
             parsed = urllib.parse.urlparse(permalink_url)
             scheme = (parsed.scheme or '').lower()
-            hostname = (parsed.hostname or '').lower()
             path = parsed.path or ''
 
-            is_local_http = scheme in ('http', 'https') and (
-                hostname in ('localhost', '127.0.0.1') or (parsed.netloc and parsed.netloc.startswith('localhost:'))
-            )
+            # Treat any http(s) URL whose path or full URL contains /wms or /qgis-map as internal navigation
+            # This covers IP addresses, hostnames, and cases where path may be empty but the pattern appears elsewhere.
+            lowered = permalink_url.lower()
+            is_internal_http = scheme in ('http', 'https') and ('/wms' in path or '/qgis-map' in path or '/wms' in lowered or '/qgis-map' in lowered)
 
-            if is_local_http and ('/wms' in path or '/qgis-map' in path):
+            if is_internal_http:
                 # Internal navigation: let existing handler parse and apply
                 self.navigate_to_permalink(permalink_url)
                 return
 
             if scheme in ('http', 'https'):
-                # External http(s) — open in browser
+                # External http(s) — but avoid opening browser if this is actually an internal navigation URL
+                if is_internal_http:
+                    # already handled above, but guard defensively
+                    try:
+                        self.navigate_to_permalink(permalink_url)
+                        return
+                    except Exception:
+                        pass
+
                 try:
                     QDesktopServices.openUrl(QUrl(permalink_url))
                     self.iface.messageBar().pushMessage(

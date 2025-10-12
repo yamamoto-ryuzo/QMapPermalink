@@ -69,6 +69,8 @@ QMapPermalinkは、**「QGIS上で地図の特定表示状態を固定的に示�
 - **統合パネルUI**: QGISの左側に常時表示されるドッキングパネル
 - **自動タブ化**: レイヤーパネルなど既存パネルと自動的にタブ化
 - **HTTPサーバー**: QGIS起動時に自動起動、`/qgis-map` エンドポイントで地図移動
+
+Note: If you access the plugin's endpoints from a different host/IP (for example http://192.168.0.5:8089/qgis-map...), the plugin will now treat any http(s) URL whose path contains `/qgis-map` or `/wms` as an internal navigation request and will apply the navigation in QGIS. Previously only `localhost` URLs were considered internal. Ensure firewall and network settings allow access to the plugin port when using remote hosts.
 - **🗺️ OpenLayersマップ**: HTTPレスポンスにインタラクティブなWebマップを埋め込み（地理院地図+OSM）
 - **座標パラメータ**: `ll`・`lat/lon`・`x/y` などの座標パラメータ対応（`crs` と `scale`/`rotation` 併用可能）
 - **🗺️ Google Maps連携**: 応答ページに同じ地点のGoogle Mapsリンクを含む（小数点ズーム対応）
