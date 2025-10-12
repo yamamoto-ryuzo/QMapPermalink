@@ -11,6 +11,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **B**: UI changes, new plugin features, or moderate functionality additions
 - **C**: Profile/plugin fixes, minor bug fixes, and small improvements
 
+## [V2.0.0] - 2025-10-12 🎉 WMS SUPPORT & EXTERNAL ACCESS
+
+### 🗺️ WMS配信機能の追加と外部アクセス改善
+
+### Added
+- **WMS (Web Map Service) 1.3.0 準拠のエンドポイント**: `/wms` により GetCapabilities / GetMap を提供
+- **外部アクセス対応**: サーバーが全インターフェース (0.0.0.0) にバインドされ、同一ネットワーク内の別ホストからのアクセスが可能
+
+### Changed
+- **OpenLayers HTML の相対パス化**: `/qgis-map` で生成されるページは WMS リクエストをページ起点の相対 URL `/wms` を使用するよう変更し、外部ブラウザからも正常に WMS を参照できるようにしました
+
+### Notes
+- セキュリティはデフォルトで簡素化しています。公開環境での運用時はファイアウォールやプロキシで適切にアクセス制御してください。
+
+---
+
 ## [V1.10.0] - 2025-10-11 🎉 MAJOR MILESTONE RELEASE
 
 ### 🗺️ OPENLAYERS WEB MAP INTEGRATION - Interactive Browser Map Display
