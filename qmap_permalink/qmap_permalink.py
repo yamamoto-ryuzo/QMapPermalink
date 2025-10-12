@@ -1154,7 +1154,44 @@ class QMapPermalink:
                 self.tr("Please enter a permalink URL.")
             )
             return
-            
+        # Parse URL and decide:
+        # - If it's an http(s) URL pointing to localhost and contains
+        #   internal endpoints (/wms or /qgis-map), route to internal navigation.
+        # - Otherwise, open external http(s) URLs in the default browser.
+        try:
+            parsed = urllib.parse.urlparse(permalink_url)
+            scheme = (parsed.scheme or '').lower()
+            hostname = (parsed.hostname or '').lower()
+            path = parsed.path or ''
+
+            is_local_http = scheme in ('http', 'https') and (
+                hostname in ('localhost', '127.0.0.1') or (parsed.netloc and parsed.netloc.startswith('localhost:'))
+            )
+
+            if is_local_http and ('/wms' in path or '/qgis-map' in path):
+                # Internal navigation: let existing handler parse and apply
+                self.navigate_to_permalink(permalink_url)
+                return
+
+            if scheme in ('http', 'https'):
+                # External http(s) — open in browser
+                try:
+                    QDesktopServices.openUrl(QUrl(permalink_url))
+                    self.iface.messageBar().pushMessage(
+                        self.tr("QMap Permalink"),
+                        self.tr("URL opened in browser."),
+                        duration=3
+                    )
+                    return
+                except Exception:
+                    # If opening fails, fall back to internal navigation attempt
+                    pass
+
+        except Exception:
+            # Parsing failed — fall back to internal navigation
+            pass
+
+        # Fallback: perform internal navigation using the existing handler
         self.navigate_to_permalink(permalink_url)
 
     def on_copy_clicked_panel(self):
