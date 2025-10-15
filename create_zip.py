@@ -308,8 +308,8 @@ class QMapPermalinkZipCreator:
             # 現在のバージョンを読み取り
             current_version, config = self.read_metadata()
             print(f"現在のバージョン: {current_version}")
-            
-            # バージョンをインクリメント
+
+            # バージョンの決定: インクリメントまたは外部指定
             new_version = self.increment_version(current_version)
             print(f"新しいバージョン: {new_version}")
             
@@ -333,8 +333,41 @@ class QMapPermalinkZipCreator:
 
 def main():
     """メイン実行関数"""
+    import argparse
+
+    parser = argparse.ArgumentParser(description='Create distribution ZIP for QMapPermalink')
+    parser.add_argument('--set-version', help='Set the version explicitly (do not increment)')
+    parser.add_argument('--no-increment', action='store_true', help='Do not auto-increment the version')
+    args = parser.parse_args()
+
     creator = QMapPermalinkZipCreator()
-    creator.create_distribution()
+
+    # Read current metadata
+    current_version, config = creator.read_metadata()
+
+    # Determine version to use
+    if args.set_version:
+        target_version = args.set_version
+    elif args.no_increment:
+        target_version = current_version
+    else:
+        target_version = creator.increment_version(current_version)
+
+    try:
+        print(f"Using version: {target_version}")
+
+        # Update metadata only if different
+        if target_version != current_version:
+            creator.update_metadata(target_version, config)
+
+        zip_path = creator.create_zip(target_version)
+        print('\n=== 作成完了 ===')
+        print(f"配布用ZIPファイル: {zip_path}")
+        print(f"ファイルサイズ: {zip_path.stat().st_size / 1024:.1f} KB")
+
+    except Exception as e:
+        print(f"エラーが発生しました: {e}")
+        sys.exit(1)
 
 
 if __name__ == "__main__":

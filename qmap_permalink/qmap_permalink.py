@@ -304,6 +304,26 @@ class QMapPermalink:
                 print(f"サーバー状態: running={server_running}, port={server_port}")
                 print("パネル更新開始...")
                 self.panel.update_server_status(server_port, server_running)
+                # パネルのトグルチェックボックスをサーバー制御に接続
+                try:
+                    def _toggle_server(checked: bool):
+                        try:
+                            if checked:
+                                self.server_manager.start_http_server()
+                            else:
+                                self.server_manager.stop_http_server()
+                            # 更新後の状態をラベルに反映
+                            pr = self.server_manager.get_server_port() or 8089
+                            self.panel.update_server_status(pr, self.server_manager.is_server_running())
+                        except Exception as e:
+                            print(f"サーバートグルエラー: {e}")
+
+                    # set_server_toggle_handler はパネル側で提供
+                    if hasattr(self.panel, 'set_server_toggle_handler'):
+                        self.panel.set_server_toggle_handler(_toggle_server)
+                        # 初期状態を反映（checkbox自体は update_server_status で同期済み）
+                except Exception:
+                    pass
                 print("パネル更新完了")
                 
                 # テーマ一覧を更新
