@@ -43,6 +43,7 @@ class QMapPermalinkZipCreator:
             "qmap_permalink_dialog.py",  # ダイアログファイル
             "qmap_permalink_dialog_base.ui",  # ダイアログUIファイル
             "qmap_webmap_generator.py",  # WebMap生成器
+            "http_server.py",  # 共通HTTPユーティリティ（新規追加）
             "metadata.txt",
             "icon.png",
             "LICENSE",
