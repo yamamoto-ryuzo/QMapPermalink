@@ -356,6 +356,13 @@ def main():
     try:
         print(f"Using version: {target_version}")
 
+        # cleanup old zip files from previous runs (restore old behavior)
+        try:
+            creator.cleanup_old_zips(current_version)
+        except Exception as _:
+            # non-fatal: continue even if cleanup fails
+            pass
+
         # Update metadata only if different
         if target_version != current_version:
             creator.update_metadata(target_version, config)
