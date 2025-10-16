@@ -35,6 +35,7 @@ class QMapPermalinkZipCreator:
             "__init__.py",
             "qmap_permalink.py", 
             "qmap_permalink_server_manager.py",  # 新しく分離したHTTPサーバーマネージャー
+            "qmap_wms_service.py",  # WMSサービスクラス（新規追加）
             "professional_wms_server.py",  # 本格的WMSサーバー
             "qmap_permalink_panel.py",
             "qmap_permalink_panel_base.ui",
