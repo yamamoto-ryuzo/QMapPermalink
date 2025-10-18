@@ -1,0 +1,251 @@
+<!doctype html>
+<html lang="ja">
+<head>  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@8.2.0/ol.css" type="text/css">  <script src="https://cdn.jsdelivr.net/npm/ol@8.2.0/dist/ol.js"></script>
+  <style>html,body{height:100%;margin:0;padding:0}#map{width:100vw;height:100vh}#qmp-left-controls{position:absolute;left:72px;top:10px;z-index:999;display:flex;flex-direction:column;gap:8px} #qmp-right-controls{position:absolute;right:35px;top:10px;z-index:999;display:flex;flex-direction:column;gap:6px} .qmp-control{background:#fff;border-radius:4px;padding:6px 8px;box-shadow:0 2px 6px rgba(0,0,0,0.15);font-size:13px;border:1px solid rgba(0,0,0,0.06)} /* coords box on bottom-right */ #qmp-coords{position:absolute;right:10px;bottom:10px;z-index:1000;background:rgba(255,255,255,0.95);padding:6px 8px;border-radius:4px;font-size:13px;border:1px solid rgba(0,0,0,0.08)} /* CORS warning */ #qmp-cors-warning{position:absolute;left:50%;top:20px;transform:translateX(-50%);z-index:1100;background:#fff5f5;border:1px solid #ffcccc;color:#660000;padding:10px 14px;border-radius:6px;display:none;max-width:80%;font-size:13px;box-shadow:0 2px 8px rgba(0,0,0,0.12)} </style>
+</head>
+<body>
+  <div id="map"></div>
+  <div id="qmp-left-controls">
+    <select id="qmp-themes" class="qmp-control" title="Themes"><option value="__prompt" selected>Select theme</option>
+</select>
+    <select id="qmp-bookmarks" class="qmp-control" title="Bookmarks"><option value="__prompt" selected>Select bookmark</option><option value="__home">Home</option>
+</select>
+  </div>
+  <div id="qmp-right-controls">
+    <button id="qmp-open-googlemaps" class="qmp-control" title="Open Google Maps">MAPS</button>
+    <button id="qmp-open-googleearth" class="qmp-control" title="Open Google Earth">EARTH</button>
+  </div>
+  <div id="qmp-coords" class="qmp-control" aria-live="polite" role="status"></div>
+  <div id="qmp-cors-warning">WMS の読み込み時に CORS エラーが発生しました。<br>HTML を直接 file:// で開いている場合は、簡易 HTTP サーバで配布するか、WMS 側で Access-Control-Allow-Origin ヘッダを設定してください。</div>
+  <script>
+    const serverPort = 8089;
+    
+    const inputX = -21550.369052;
+    const inputY = -10063.519083;
+    let inputCRS = 'EPSG:3857';
+    try{ var __urlParams = (typeof URLSearchParams !== 'undefined') ? new URLSearchParams(window.location.search) : null; if(__urlParams){ var __p = (__urlParams.get('crs') || __urlParams.get('epsg') || null); if(__p){ __p = String(__p).trim(); try{ if(/^[0-9]+$/.test(__p)){ inputCRS = 'EPSG:' + __p; } else { inputCRS = __p; } }catch(e){} } } }catch(e){}
+    // expose server-side proj4 defs and metadata to the client as objects
+    const serverProjDefs = {};
+    const serverProjMeta = {};
+    var displayCRS_global = null; try{ if(typeof __urlParams !== 'undefined' && __urlParams){ var dp = __urlParams.get('display_crs') || __urlParams.get('displayCRS') || __urlParams.get('display_epsg') || __urlParams.get('epsg'); if(dp){ dp = String(dp).trim(); displayCRS_global = (/^[0-9]+$/.test(dp) ? ('EPSG:' + dp) : dp); } } }catch(e){}
+    // fallback: if no explicit displayCRS provided, use inputCRS (URL 'crs' param) when it's not web mercator
+    try{ if(!displayCRS_global && typeof inputCRS !== 'undefined' && inputCRS && inputCRS !== 'EPSG:3857'){ displayCRS_global = inputCRS; } }catch(e){}
+    // debug: expose serverProjDefs and displayCRS to console for troubleshooting
+    try{ if(typeof console !== 'undefined' && console.log){ console.log('[QMapPermalink] serverProjDefs=', serverProjDefs); console.log('[QMapPermalink] displayCRS_global=', displayCRS_global); } }catch(e){}
+    // if server provided a proj4 for displayCRS, register it (load proj4.js if needed)
+    try{ if(displayCRS_global && serverProjDefs && serverProjDefs[displayCRS_global]){
+      (function(){
+        function _reg(){
+          try{
+            if(typeof proj4 === 'undefined'){
+              var s=document.createElement('script');
+              s.src='https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.8.0/proj4.js';
+              s.onload=_reg;
+              document.head.appendChild(s);
+              return;
+            }
+          }catch(e){}
+          try{ if(typeof console !== 'undefined' && console.log){ console.log('[QMapPermalink] registering displayCRS_global=' + displayCRS_global); console.log('[QMapPermalink] def=', serverProjDefs[displayCRS_global]); } }catch(e){}
+          try{ proj4.defs(displayCRS_global, serverProjDefs[displayCRS_global]); }catch(e){}
+          try{ if(typeof ol !== 'undefined' && ol.proj){ try{ if(ol.proj.proj4 && typeof ol.proj.proj4.register === 'function'){ ol.proj.proj4.register(proj4); } else if(typeof ol.proj.setProj4 === 'function'){ ol.proj.setProj4(proj4); } }catch(e){} } }catch(e){}
+        }
+        _reg();
+      })();
+    } }catch(e){}
+    const mapScale = 502.6;
+    const rotationRad = (0 || 0) * Math.PI / 180;
+    const bookmarks = [];
+    const themes = [];
+    const serverGoogleMapsUrl = null;
+    const serverGoogleEarthUrl = null;
+    // prefer the configured server port (useful for testing). Use explicit IPv4 (127.0.0.1) to avoid IPv6 (::1) resolution issues.
+        // Determine wms base URL: prefer page origin when usable, but when opened via file://
+        // or when origin is not available, fall back to the configured serverPort on 127.0.0.1.
+        const wmsBase = (function(){
+            try{
+                if(typeof window !== 'undefined' && window.location){
+                    try{
+                        var proto = window.location.protocol || '';
+                        if(proto === 'file:'){
+                            if(typeof serverPort !== 'undefined' && serverPort) return 'http://127.0.0.1:' + serverPort;
+                        } else if(window.location.origin){
+                            return window.location.origin;
+                        }
+                    }catch(e){}
+                }
+            }catch(e){}
+            try{ if(typeof serverPort !== 'undefined' && serverPort) return 'http://127.0.0.1:' + serverPort; }catch(e){}
+            return 'http://127.0.0.1:8089';
+        })();
+    const wmsSource = new ol.source.ImageWMS({ url: wmsBase + '/wms', params: { 'x': inputX, 'y': inputY, 'scale': mapScale, 'crs': inputCRS, 'ANGLE': rotationRad * 180 / Math.PI }, serverType: 'qgis', crossOrigin: 'anonymous' });
+    const mapLayer = new ol.layer.Image({ source: wmsSource });
+    const map = new ol.Map({ target: 'map', layers: [ mapLayer ], view: new ol.View({ center: [inputX, inputY], projection: 'EPSG:3857', zoom: 20, rotation: rotationRad }) });
+    map.addControl(new ol.control.Rotate({ tipLabel: '北向きに回転', resetNorthLabel: '北向きにリセット' }));
+    // 地図の回転に合わせてWMSパラメータも更新
+    map.getView().on('change:rotation', function() {
+        const rotation = map.getView().getRotation();
+        const angleDeg = rotation * 180 / Math.PI;
+        if(window.wmsSource && typeof window.wmsSource.updateParams === 'function'){
+            window.wmsSource.updateParams({ 'ANGLE': angleDeg });
+            window.wmsSource.refresh();
+        }
+    });
+    window.map = map; window.wmsSource = wmsSource;
+        // Add ScaleLine and realtime coords display (XY in map projection + Lat/Lon)
+        try{ map.addControl(new ol.control.ScaleLine({ units: 'metric' })); }catch(e){}
+        (function(){
+            try{
+                var coordsEl = null;
+                try{ coordsEl = document.getElementById('qmp-coords'); }catch(e){ coordsEl = null; }
+                map.on('pointermove', function(evt){
+                    try{
+                        if(evt.dragging) return;
+                        var c = evt.coordinate;
+                        if(!c) return;
+                        var ix = (c[0]||0).toFixed(3);
+                        var iy = (c[1]||0).toFixed(3);
+                        var ll = ol.proj.toLonLat(c, 'EPSG:3857');
+                        var lat = (ll && ll[1]) ? ll[1].toFixed(6) : '';
+                        var lon = (ll && ll[0]) ? ll[0].toFixed(6) : '';
+                        var scaleText = '';
+                        try{
+                            var view = map.getView();
+                            var res = (view && typeof view.getResolution === 'function') ? view.getResolution() : null;
+                            if(res !== null){
+                                var mpu = (view && view.getProjection && view.getProjection().getMetersPerUnit) ? view.getProjection().getMetersPerUnit() : 1;
+                                var dpi = 96;
+                                var scaleDen = Math.round(res * mpu * dpi / 0.0254);
+                                scaleText = '1:' + (scaleDen.toString());
+                            } else if(typeof mapScale !== 'undefined' && mapScale){
+                                scaleText = '1:' + mapScale;
+                            }
+                        }catch(e){}
+                        if(coordsEl){
+                            var crsLabel = (function(){ try{ var v = map.getView(); if(v && v.getProjection && typeof v.getProjection().getCode === 'function') return v.getProjection().getCode(); if(v && v.getProjection && v.getProjection().getCode) return v.getProjection().getCode(); }catch(e){} return 'EPSG:3857'; })();
+                            var displayPart = '';
+                            try{
+                                if(typeof displayCRS_global !== 'undefined' && displayCRS_global && typeof ol !== 'undefined' && ol.proj){
+                                    try{
+                                        var viewp = map.getView();
+                                        var viewProj = (viewp && viewp.getProjection && typeof viewp.getProjection().getCode === 'function') ? viewp.getProjection().getCode() : 'EPSG:3857';
+                                        var t = null;
+                                        try{ t = ol.proj.transform(c, viewProj, displayCRS_global); }catch(e){ try{ t = ol.proj.transform(c, 'EPSG:3857', displayCRS_global); }catch(e){ t = null; } }
+                                        if(t && t.length>=2){
+                                            try{
+                                                var rawX = (t[0]||0);
+                                                var rawY = (t[1]||0);
+                                                // If the display CRS is geographic (degrees), show as Lat Lon (y x) with higher precision.
+                                                var isGeographic = false;
+                                                var serverAxisOrder = null;
+                                                try{ if(typeof serverProjMeta !== 'undefined' && serverProjMeta && serverProjMeta[displayCRS_global] && serverProjMeta[displayCRS_global].axis_order){ serverAxisOrder = serverProjMeta[displayCRS_global].axis_order; } }catch(e){}
+                                                try{
+                                                    if(typeof ol !== 'undefined' && ol.proj && typeof ol.proj.get === 'function'){
+                                                        try{ var pdef = ol.proj.get(displayCRS_global); if(pdef && typeof pdef.getUnits === 'function'){ var u = pdef.getUnits(); if(u === 'degrees') isGeographic = true; } }catch(e){}
+                                                    }
+                                                }catch(e){}
+                                                // fallback: treat EPSG:4326 as geographic if detection failed
+                                                try{ if(!isGeographic && String(displayCRS_global).toUpperCase().indexOf('4326') !== -1) isGeographic = true; }catch(e){}
+                                                // if server provided axis_order info and it's 'yx' we should present Lat/Lon order
+                                                var forceYX = (serverAxisOrder === 'yx');
+                                                if(isGeographic || forceYX){
+                                                    var latv = rawY.toFixed(6);
+                                                    var lonv = rawX.toFixed(6);
+                                                    displayPart = ' / LatLon(' + displayCRS_global + '): Lat:' + latv + ' Lon:' + lonv;
+                                                } else {
+                                                    var dx = rawX.toFixed(3);
+                                                    var dy = rawY.toFixed(3);
+                                                    displayPart = ' / XY(' + displayCRS_global + '): X:' + dx + ' Y:' + dy;
+                                                }
+                                            }catch(e){}
+                                        }
+                                    }catch(e){}
+                                }
+                            }catch(e){}
+                            coordsEl.textContent = 'XY (' + crsLabel + '): X:' + ix + ' Y:' + iy + displayPart + ' / LatLon(EPSG:4326): Lat:' + lat + ' Lon:' + lon + ' / Scale: ' + scaleText;
+                        }
+                    }catch(e){}
+                });
+            }catch(e){}
+        })();
+            (function(){
+  try{
+    var themeSel = document.getElementById('qmp-themes');
+    try{ var urlParams = (typeof URLSearchParams !== 'undefined') ? new URLSearchParams(window.location.search) : null; }catch(e){ urlParams = null; }
+    if(themeSel && Array.isArray(themes) && themes.length){
+      themes.forEach(function(t){ try{ var opt = document.createElement('option'); opt.value = t; opt.text = t; themeSel.appendChild(opt);}catch(e){} });
+      try{ var initialTheme = urlParams ? urlParams.get('theme') : null; if(initialTheme && Array.isArray(themes) && themes.indexOf(initialTheme) !== -1){ themeSel.value = initialTheme; if(window.wmsSource && typeof window.wmsSource.updateParams === 'function'){ window.wmsSource.updateParams({ 'theme': initialTheme }); } } }catch(e){}
+      themeSel.addEventListener('change', function(){
+        try{
+          var sel = this.value;
+          if(window.wmsSource && typeof window.wmsSource.updateParams === 'function'){
+            if(sel && sel !== '__prompt'){
+              window.wmsSource.updateParams({ 'theme': sel });
+            } else {
+              window.wmsSource.updateParams({});
+            }
+            window.wmsSource.refresh();
+          }
+          try{
+            if(urlParams){
+              if(sel && sel !== '__prompt') urlParams.set('theme', sel);
+              else urlParams.delete('theme');
+              var search = urlParams.toString();
+              var newUrl = window.location.origin + window.location.pathname + (search ? ('?' + search) : '') + window.location.hash;
+              if(window.history && typeof window.history.replaceState === 'function'){
+                window.history.replaceState(null, '', newUrl);
+              }
+            }
+          }catch(e){}
+        }catch(e){}
+      });
+    }
+    var sel = document.getElementById('qmp-bookmarks');
+    if(sel && Array.isArray(bookmarks) && bookmarks.length){
+      bookmarks.forEach(function(b,i){ try{ var opt = document.createElement('option'); opt.value = i; opt.text = b.name || ('Bookmark ' + (i+1)); sel.appendChild(opt);}catch(e){} });
+      sel.addEventListener('change', function(){ try{ if(this.value === '__home' || this.value === '__prompt'){ map.getView().animate({ center: [inputX, inputY], duration: 600 }); } else { var idx = parseInt(this.value); var b = bookmarks[idx]; if(b){ var bx = parseFloat(b.x || b.orig_x || b.lon || b.lng || 0); var by = parseFloat(b.y || b.orig_y || b.lat || 0); if(isFinite(bx) && isFinite(by)){ map.getView().animate({ center: [bx, by], duration: 600 }); try{ if(window.wmsSource && typeof window.wmsSource.updateParams === 'function'){ var up = { 'x': bx, 'y': by, 'crs': 'EPSG:3857' }; try{ if(typeof mapScale !== 'undefined' && mapScale !== null) up.scale = mapScale; }catch(e){} try{ var currentTheme = (document.getElementById('qmp-themes') ? document.getElementById('qmp-themes').value : null); if(currentTheme && currentTheme !== '__prompt'){ up.theme = currentTheme; } }catch(e){} window.wmsSource.updateParams(up); window.wmsSource.refresh(); } }catch(e){} } } } }catch(e){} try{ this.value = '__prompt'; }catch(e){} });
+    }
+  }catch(e){}
+})();
+(function(){
+  try{
+    var btnMap = document.getElementById('qmp-open-googlemaps');
+    if(btnMap){
+      btnMap.addEventListener('click', function(){
+        try{
+          var view = map.getView(); var c = view.getCenter(); var x=c[0], y=c[1];
+          var lon = (x / 20037508.34) * 180.0; var lat = (y / 20037508.34) * 180.0;
+          lat = 180.0 / Math.PI * (2.0 * Math.atan(Math.exp(lat * Math.PI / 180.0)) - Math.PI / 2.0);
+          var zoom = view.getZoom ? Math.round(view.getZoom()) : 12;
+          // prefer server-computed URL if available
+          if(typeof serverGoogleMapsUrl !== 'undefined' && serverGoogleMapsUrl){ var w = window.open(serverGoogleMapsUrl, '_blank'); if(!w){ alert('ポップアップブロック'); } return; }
+          var url = 'https://www.google.com/maps/@' + encodeURIComponent(lat) + ',' + encodeURIComponent(lon) + ',' + encodeURIComponent(zoom) + 'z';
+          var w = window.open(url, '_blank'); if(!w){ alert('ポップアップブロック'); }
+        }catch(e){ console.error(e); }
+      });
+    }
+  }catch(e){}
+})();
+(function(){
+  try{
+    var btnEarth = document.getElementById('qmp-open-googleearth');
+    if(btnEarth){
+      btnEarth.addEventListener('click', function(){
+        try{
+          var view = map.getView(); var c = view.getCenter(); var x=c[0], y=c[1];
+          var lon = (x / 20037508.34) * 180.0; var lat = (y / 20037508.34) * 180.0;
+          lat = 180.0 / Math.PI * (2.0 * Math.atan(Math.exp(lat * Math.PI / 180.0)) - Math.PI / 2.0);
+          // prefer server-computed URL if available
+          if(typeof serverGoogleEarthUrl !== 'undefined' && serverGoogleEarthUrl){ var w = window.open(serverGoogleEarthUrl, '_blank'); if(!w){ alert('ポップアップブロック'); } return; }
+          // Use Google Earth Web search link (best-effort)
+          var url = 'https://earth.google.com/web/search/' + encodeURIComponent(lat) + ',' + encodeURIComponent(lon);
+          var w = window.open(url, '_blank'); if(!w){ alert('ポップアップブロック'); }
+        }catch(e){ console.error(e); }
+      });
+    }
+  }catch(e){}
+})();
+
+    try{ /* show CORS warning if page loaded via file: */ if(typeof window !== "undefined" && window.location && window.location.protocol === 'file:'){ try{ var el=document.getElementById("qmp-cors-warning"); if(el) el.style.display='block'; }catch(e){} } }catch(e){}
+  </script>
+</body>
+</html>

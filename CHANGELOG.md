@@ -11,6 +11,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **B**: UI changes, new plugin features, or moderate functionality additions
 - **C**: Profile/plugin fixes, minor bug fixes, and small improvements
 
+## [V2.6.0] - 2025-10-18
+
+### 🧭 座標管理の改善
+
+### Added
+- サーバー側で利用可能な場合に PyQGIS から投影定義（proj4/WKT）および軸順情報を収集し、生成する OpenLayers HTML に埋め込む機能を追加しました。クライアントは埋め込まれた情報を利用して座標表示の軸順（X/Y or Lat/Lon）を自動判定します。
+- OpenLayers 表示の右下にリアルタイム座標表示（投影座標と緯度経度）およびスケール表示を追加しました。
+---
+
 ## [V2.0.0] - 2025-10-12 🎉 WMS SUPPORT & EXTERNAL ACCESS
 
 ### 🗺️ WMS配信機能の追加と外部アクセス改善
