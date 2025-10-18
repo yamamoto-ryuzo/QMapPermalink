@@ -354,6 +354,16 @@ class QMapPermalink:
                 self.tr("Failed to create panel: {error}").format(error=str(e))
             )
 
+    def on_open_clicked_panel(self):
+        """パネルの 'Open' ボタンが押されたときに /web-ui/ を開く"""
+        try:
+            port = self.server_manager.get_server_port() or 8089
+            url = QUrl(f'http://localhost:{port}/web-ui/')
+            if not QDesktopServices.openUrl(url):
+                QMessageBox.warning(self.iface.mainWindow(), self.tr('QMap Permalink'), self.tr('Failed to open web UI in browser.'))
+        except Exception as e:
+            QMessageBox.warning(self.iface.mainWindow(), self.tr('QMap Permalink'), self.tr(f'Error opening web UI: {e}'))
+
     def _try_tabify_with_existing_panels(self):
         """既存の左側パネルがあればタブ化を試行"""
         try:
