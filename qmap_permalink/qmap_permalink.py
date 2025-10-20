@@ -163,6 +163,19 @@ class QMapPermalink:
                     self.panel.lineEdit_navigate.setText(origin)
                 except Exception:
                     pass
+            # If external control is enabled, automatically navigate to the origin URL
+            try:
+                if self.panel and getattr(self.panel, 'checkBox_external_control', None) is not None:
+                    try:
+                        if self.panel.checkBox_external_control.isChecked():
+                            # perform navigation automatically
+                            if origin:
+                                self.navigate_to_permalink(origin)
+                    except Exception:
+                        # defensive: ignore any navigation errors here
+                        pass
+            except Exception:
+                pass
         except Exception:
             pass
 
@@ -318,6 +331,31 @@ class QMapPermalink:
                     if hasattr(self.panel, 'set_server_toggle_handler'):
                         self.panel.set_server_toggle_handler(_toggle_server)
                         # 初期状態を反映（checkbox自体は update_server_status で同期済み）
+                except Exception:
+                    pass
+                # External control handler: when enabled, apply last received origin (if any)
+                try:
+                    def _external_control_toggled(checked: bool):
+                        try:
+                            if checked and self._last_request_origin:
+                                # Navigate to the last origin when external control is turned on
+                                self.navigate_to_permalink(self._last_request_origin)
+                        except Exception as e:
+                            print(f"External control handler error: {e}")
+
+                    if hasattr(self.panel, 'set_external_control_handler'):
+                        self.panel.set_external_control_handler(_external_control_toggled)
+                except Exception:
+                    pass
+
+                # If external control is already checked at panel creation, apply last origin
+                try:
+                    if getattr(self.panel, 'checkBox_external_control', None) is not None and self.panel.checkBox_external_control.isChecked():
+                        if self._last_request_origin:
+                            try:
+                                self.navigate_to_permalink(self._last_request_origin)
+                            except Exception:
+                                pass
                 except Exception:
                     pass
                 print("パネル更新完了")
