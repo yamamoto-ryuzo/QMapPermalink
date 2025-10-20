@@ -1,9 +1,9 @@
 # QMapPermalink
 
 QGISの地図ビューを外部から直接ナビゲートするパーマリンクプラグイン  
-最新のZIPはこちらから　https://github.com/yamamoto-ryuzo/QMapPermalink/tree/main/dist
+最新のZIPはこちらから	https://github.com/yamamoto-ryuzo/QMapPermalink/tree/main/dist
 
-**Version 2.6.0** - 座標管理の改善を含むリリース
+**Version 2.7.0** - 座標管理と回転対応の改善を含むリリース
 
 ## 概要
 
@@ -345,7 +345,7 @@ python create_zip.py
 - **HTTPサーバー**: 内蔵軽量サーバー（ポート8089-8099自動選択）
 - **サーバー管理**: 独立した HTTP サーバーマネージャーモジュール
 - **Google Maps/Earth 統合**: 外部マップサービスへのリンク生成
-- **現在バージョン**: V2.6.0（README の記述に基づく）
+- **現在バージョン**: V2.7.0（README の記述に基づく）
 
 ## ライセンス
 
