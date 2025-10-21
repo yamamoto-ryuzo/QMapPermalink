@@ -52,6 +52,7 @@ import os.path
 import urllib.parse
 import json
 import math
+import re
 
 # パネルファイルのインポート（フォールバックを削除）
 try:
@@ -817,6 +818,92 @@ class QMapPermalink:
         except (ValueError, TypeError):
             return 5000
 
+    def _parse_google_maps_at_url(self, url):
+        """Google Maps の @lat,lon,XXXm または @lat,lon,ZZz 形式を解析する
+
+        戻り値: {'lat': float, 'lon': float, 'zoom': float or None, 'scale': float or None}
+        解析できなければ None を返す。
+        """
+        try:
+            parsed = urllib.parse.urlparse(url)
+            path = parsed.path or ''
+
+            # Quick direct match: @lat,lon,NNNm (common simple form). This handles
+            # cases like '/@35.6778996,139.6960404,883m/' quickly without token-splitting.
+            try:
+                m_quick = re.search(r'@([-0-9.]+),([-0-9.]+),([0-9.]+)m(?=[/,%s]|$)' % (r'\s'), url)
+                if m_quick:
+                    lat = float(m_quick.group(1))
+                    lon = float(m_quick.group(2))
+                    map_width_m = float(m_quick.group(3))
+                    return {'lat': lat, 'lon': lon, 'zoom': None, 'scale': None, 'map_width_m': map_width_m}
+            except Exception:
+                # ignore and continue with the more flexible parser below
+                pass
+
+            # パス中の @lat,lon[,rest] を探す（rest は省略可能）
+            m = re.search(r'@([-0-9.]+),([-0-9.]+)(?:,([^/\s]+))?', path)
+            if not m:
+                # 一部の Google URL はパスではなく完全URLに @ を含むことがある
+                # その場合は raw URL 全体を検索する
+                m = re.search(r'@([-0-9.]+),([-0-9.]+)(?:,([^/\s]+))?', url)
+            if not m:
+                return None
+
+            lat = float(m.group(1))
+            lon = float(m.group(2))
+            rest = m.group(3) if m.lastindex and m.lastindex >= 3 else None
+
+            zoom = None
+            scale = None
+            map_width_m = None
+
+            # rest の例: '220m', '16z', '16.00z', '15.5z', '220m,15z' など
+            # 複数トークンがある場合は順序に依存せず 'm' と 'z' を探索する
+            if rest:
+                # split by comma and inspect each token
+                tokens = [t.strip() for t in rest.split(',') if t.strip()]
+                for tok in tokens:
+                    m2 = re.match(r'^([0-9.]+)(m|z)?', tok, re.IGNORECASE)
+                    if not m2:
+                        continue
+                    try:
+                        val = float(m2.group(1))
+                    except Exception:
+                        continue
+                    suf = (m2.group(2) or '').lower()
+
+                    # if suffix is 'z' or absent, treat as zoom
+                    if suf == 'z' or suf == '':
+                        # prefer first zoom seen
+                        if zoom is None:
+                            try:
+                                zoom = float(val)
+                                try:
+                                    scale = self._estimate_scale_from_zoom(zoom)
+                                except Exception:
+                                    scale = None
+                            except Exception:
+                                zoom = None
+                    elif suf == 'm':
+                        # prefer first map_width_m seen
+                        if map_width_m is None:
+                            try:
+                                map_width_m = float(val)
+                            except Exception:
+                                map_width_m = None
+
+            result = {'lat': lat, 'lon': lon, 'zoom': zoom, 'scale': scale}
+            # attach map_width_m if set
+            try:
+                if 'map_width_m' in locals() and map_width_m is not None:
+                    result['map_width_m'] = map_width_m
+            except Exception:
+                pass
+            return result
+        except Exception:
+            return None
+
     def _estimate_scale_from_zoom(self, zoom_level):
         """ズームレベルからスケール値を逆算（小数点対応版）
         
@@ -901,6 +988,274 @@ class QMapPermalink:
         except Exception:
             return None, None
 
+    def _convert_wgs84_to_crs(self, lat, lon, target_crs_authid):
+        """WGS84 座標 (lat, lon) を target CRS の座標に変換して返す (x, y) 形式
+
+        Returns (x, y) or (None, None) on error.
+        """
+        try:
+            source_crs = QgsCoordinateReferenceSystem('EPSG:4326')
+            target_crs = QgsCoordinateReferenceSystem(str(target_crs_authid))
+            if not target_crs.isValid():
+                return None, None
+            transform = QgsCoordinateTransform(source_crs, target_crs, QgsProject.instance())
+            pt = transform.transform(QgsPointXY(float(lon), float(lat)))
+            return float(pt.x()), float(pt.y())
+        except Exception:
+            return None, None
+
+    def _compute_scale_from_map_width(self, center_lat, map_width_m, target_crs_authid=None):
+        """地球上の map_width_m (表示横幅メートル) を QGIS の scale に換算する簡易計算
+
+        アプローチ:
+        - WGS84 の中心緯度から経度方向の地球上の長さ（1度あたりのメートル）を計算
+        - 表示横幅 map_width_m を度に変換し、目的座標系での地図単位とピクセル幅からスケールを推定
+        - ここでは簡易的に: scale = (map_width_map_units) / (map_units_per_pixel) を目標とするが、
+          map_units_per_pixel は実行時のキャンバスから取得する必要があるため、呼び出し側で最終換算を行う。
+
+        Returns estimated_scale_meters_per_map_unit (approx) or None.
+        """
+        try:
+            # Earth radius approximation
+            R = 6378137.0
+            # length of one degree longitude at given latitude
+            lat_rad = math.radians(float(center_lat))
+            meters_per_deg_lon = (math.pi / 180.0) * R * math.cos(lat_rad)
+            # map_width_m divided by meters_per_deg_lon -> degrees of longitude
+            deg_width = float(map_width_m) / meters_per_deg_lon if meters_per_deg_lon != 0 else None
+            return {'deg_width': deg_width, 'meters_per_deg_lon': meters_per_deg_lon}
+        except Exception:
+            return None
+
+    def _compute_scale_from_map_width_with_dpi(self, center_lat, map_width_m, canvas, dpi=96):
+        """Compute map scale denominator (approx) from desired map width in meters, using canvas size and DPI.
+
+        Returns scale_denominator (e.g. 10000 for 1:10000) or None.
+        """
+        try:
+            dest_crs = canvas.mapSettings().destinationCrs()
+            # compute deg width and meters per degree at center
+            info = self._compute_scale_from_map_width(center_lat, map_width_m, dest_crs.authid())
+            if not info or not info.get('deg_width'):
+                return None
+            deg_width = info['deg_width']
+            # convert deg left/right to destination CRS map units
+            try:
+                # get canvas center in dest CRS and transform to WGS84
+                center_map = canvas.extent().center()
+                wgs_lat, wgs_lon = self._convert_to_wgs84(center_map.x(), center_map.y(), dest_crs.authid())
+                if wgs_lat is None or wgs_lon is None:
+                    return None
+            except Exception:
+                return None
+
+            lon_center = wgs_lon
+            lon_left = lon_center - deg_width / 2.0
+            lon_right = lon_center + deg_width / 2.0
+            x_left, y_left = self._convert_wgs84_to_crs(wgs_lat, lon_left, dest_crs.authid())
+            x_right, y_right = self._convert_wgs84_to_crs(wgs_lat, lon_right, dest_crs.authid())
+            if x_left is None or x_right is None:
+                return None
+            map_width_map_units = abs(x_right - x_left)
+
+            canvas_width_px = canvas.size().width()
+            if canvas_width_px <= 0:
+                return None
+
+            desired_map_units_per_pixel = map_width_map_units / float(canvas_width_px)
+
+            # Preferred method: use current canvas.mapUnitsPerPixel() and canvas.scale() to compute new scale
+            try:
+                current_map_units_per_pixel = canvas.mapUnitsPerPixel()
+                current_scale = canvas.scale()
+                if current_map_units_per_pixel and current_scale:
+                    # scale is proportional to mapUnitsPerPixel, so we can scale by the ratio
+                    scale_denominator = float(current_scale) * (desired_map_units_per_pixel / float(current_map_units_per_pixel))
+                    if scale_denominator > 0:
+                        return float(scale_denominator)
+            except Exception:
+                # Fall back to DPI-based conversion below
+                pass
+
+            # Fallback: Convert meters per pixel to scale denominator using DPI
+            meters_per_pixel = map_width_map_units / float(canvas_width_px)
+            scale_denominator = meters_per_pixel * float(dpi) / 0.0254
+            if scale_denominator <= 0:
+                return None
+            return float(scale_denominator)
+        except Exception:
+            return None
+
+
+    def _get_screen_dpi(self):
+        """Attempt to obtain the current screen DPI via Qt (logical or physical DPI).
+
+        Returns a float DPI value. Falls back to 96.0 if no reliable value can be obtained.
+        """
+        try:
+            # Prefer the QApplication primary screen if available
+            app = QApplication.instance()
+            screen = None
+            if app:
+                try:
+                    screen = app.primaryScreen()
+                except Exception:
+                    screen = None
+
+            # Fallback: try to get the main window's screen
+            if not screen:
+                try:
+                    mw = getattr(self, 'iface', None) and self.iface.mainWindow()
+                    if mw:
+                        screen = mw.screen()
+                except Exception:
+                    screen = None
+
+            if screen:
+                # Prefer logical DPI (accounts for OS scaling). Try several getters defensively.
+                try:
+                    dpi = screen.logicalDotsPerInch()
+                    if dpi and dpi > 0:
+                        return float(dpi)
+                except Exception:
+                    pass
+                try:
+                    dpi = screen.logicalDotsPerInchX()
+                    if dpi and dpi > 0:
+                        return float(dpi)
+                except Exception:
+                    pass
+                try:
+                    dpi = screen.physicalDotsPerInch()
+                    if dpi and dpi > 0:
+                        return float(dpi)
+                except Exception:
+                    pass
+        except Exception:
+            pass
+        # final fallback
+        return 96.0
+
+
+    def _set_extent_for_map_width(self, center_lat, center_lon, map_width_m, canvas):
+        """Set the canvas extent so that the horizontal map width (in meters) is approximately map_width_m.
+
+        Approach:
+        - Compute degree longitude width at center latitude from map_width_m.
+        - Convert left/right WGS84 points to destination CRS (map units) and compute map width in map units.
+        - Use canvas aspect ratio to compute map height in map units.
+        - Build QgsRectangle around center in destination CRS and setExtent.
+
+        Returns True on success, False on failure.
+        """
+        try:
+            # destination CRS of canvas
+            dest_crs = canvas.mapSettings().destinationCrs()
+
+            # meters per degree longitude at latitude
+            R = 6378137.0
+            lat_rad = math.radians(float(center_lat))
+            meters_per_deg_lon = (math.pi / 180.0) * R * math.cos(lat_rad)
+            if meters_per_deg_lon == 0:
+                return False
+
+            deg_width = float(map_width_m) / meters_per_deg_lon
+
+            lon_left = float(center_lon) - deg_width / 2.0
+            lon_right = float(center_lon) + deg_width / 2.0
+
+            # convert center and left/right to destination CRS
+            cx, cy = self._convert_wgs84_to_crs(float(center_lat), float(center_lon), dest_crs.authid())
+            lx, ly = self._convert_wgs84_to_crs(float(center_lat), lon_left, dest_crs.authid())
+            rx, ry = self._convert_wgs84_to_crs(float(center_lat), lon_right, dest_crs.authid())
+            if cx is None or lx is None or rx is None:
+                return False
+
+            map_width_map_units = abs(rx - lx)
+            # Diagnostic logging
+            try:
+                print(f"_set_extent_for_map_width diagnostics: center=({center_lat},{center_lon}), deg_width={deg_width}, meters_per_deg_lon={meters_per_deg_lon}, x_left={lx}, x_right={rx}, map_width_map_units={map_width_map_units}")
+                try:
+                    self.iface.messageBar().pushMessage("QMap Permalink", f"set_extent diagnostics: map_width_map_units={map_width_map_units}, cw={cw}, ch={ch}", duration=6)
+                except Exception:
+                    pass
+            except Exception:
+                pass
+            if map_width_map_units <= 0:
+                return False
+
+            # use canvas aspect ratio to compute map height in map units
+            cw = float(canvas.size().width())
+            ch = float(canvas.size().height())
+            if cw <= 0 or ch <= 0:
+                return False
+            aspect = ch / cw
+            map_height_map_units = map_width_map_units * aspect
+
+            half_w = map_width_map_units / 2.0
+            half_h = map_height_map_units / 2.0
+
+            extent = QgsRectangle(cx - half_w, cy - half_h, cx + half_w, cy + half_h)
+
+            canvas.setDestinationCrs(dest_crs)
+            canvas.setExtent(extent)
+            canvas.refresh()
+            return True
+        except Exception:
+            return False
+
+    def _compute_scale_from_map_width_at_center(self, center_lat, center_lon, map_width_m, canvas):
+        """Estimate a scale denominator by computing target map units width around center and
+        using current canvas.mapUnitsPerPixel() or fallback to meters-per-pixel + DPI method.
+
+        Returns scale_denominator (float) or None.
+        """
+        try:
+            dest_crs = canvas.mapSettings().destinationCrs()
+            # meters per degree lon at latitude
+            R = 6378137.0
+            lat_rad = math.radians(float(center_lat))
+            meters_per_deg_lon = (math.pi / 180.0) * R * math.cos(lat_rad)
+            if meters_per_deg_lon == 0:
+                return None
+
+            deg_width = float(map_width_m) / meters_per_deg_lon
+
+            lon_left = float(center_lon) - deg_width / 2.0
+            lon_right = float(center_lon) + deg_width / 2.0
+
+            x_left, y_left = self._convert_wgs84_to_crs(float(center_lat), lon_left, dest_crs.authid())
+            x_right, y_right = self._convert_wgs84_to_crs(float(center_lat), lon_right, dest_crs.authid())
+            if x_left is None or x_right is None:
+                return None
+
+            map_width_map_units = abs(x_right - x_left)
+
+            # prefer to use current mapUnitsPerPixel and current scale
+            try:
+                current_map_units_per_pixel = canvas.mapUnitsPerPixel()
+                current_scale = canvas.scale()
+                if current_map_units_per_pixel and current_scale:
+                    target_map_units_per_pixel = map_width_map_units / float(canvas.size().width())
+                    scale_denominator = float(current_scale) * (target_map_units_per_pixel / float(current_map_units_per_pixel))
+                    if scale_denominator > 0:
+                        return float(scale_denominator)
+            except Exception:
+                pass
+
+            # fallback to DPI method
+            try:
+                dpi = float(self._get_screen_dpi())
+            except Exception:
+                dpi = 96.0
+            meters_per_pixel = map_width_map_units / float(canvas.size().width())
+            scale_denominator = meters_per_pixel * dpi / 0.0254
+            if scale_denominator > 0:
+                return float(scale_denominator)
+            return None
+        except Exception:
+            return None
+
 
     
     def generate_permalink(self, include_theme=True, specific_theme=None):
@@ -963,16 +1318,118 @@ class QMapPermalink:
             permalink_url: パーマリンクURL
         """
         try:
+            # Normalize: if the input lacks a URL scheme but looks like a host/path (e.g. "google.co.jp/.." or "www.google.co.jp/.."),
+            # try to prepend https:// so urllib.parse can parse netloc/path correctly. This also allows handling inputs
+            # like 'google.co.jp/maps/@lat,lon,...' which users may paste without scheme.
+            parsed_temp = urllib.parse.urlparse(permalink_url)
+            # If the input lacks a URL scheme, only auto-prepend 'https://' when it appears to be an
+            # internal qgis-map request (contains 'qgis-map?'). Otherwise keep the raw string and
+            # allow Google @-style detection below to run. This avoids accidentally treating arbitrary
+            # host/path strings as full URLs and respects the user's instruction.
+            if not parsed_temp.scheme:
+                if 'qgis-map?' in permalink_url:
+                    try:
+                        permalink_url_with_scheme = 'https://' + permalink_url
+                        parsed_url = urllib.parse.urlparse(permalink_url_with_scheme)
+                    except Exception:
+                        parsed_url = parsed_temp
+                else:
+                    parsed_url = parsed_temp
+            else:
+                parsed_url = parsed_temp
+
+            # If still no recognizable scheme but the string contains a Google @-format, try parsing it directly
+            if (not parsed_url.scheme) and self._parse_google_maps_at_url(permalink_url):
+                parsed_google = self._parse_google_maps_at_url(permalink_url)
+                if parsed_google:
+                    try:
+                        self.navigate_to_coordinates(parsed_google['lon'], parsed_google['lat'], parsed_google.get('scale'), parsed_google.get('zoom'), 'EPSG:4326')
+                        return
+                    except Exception as e:
+                        raise
+
             # HTTP形式のURLを処理（新しいWMS形式と古い形式の両方をサポート）
             # NOTE: 以前は 'http://localhost:' で始まるURLのみ内部ナビゲーションと見なしていましたが
             # ローカルネットワークのIPやホスト名から来る場合も利用されるため、ホスト名に依存せず
             # スキームが http(s) でパスに /wms または /qgis-map を含む場合は内部ナビゲーションとして扱います。
-            parsed_url = urllib.parse.urlparse(permalink_url)
+            scheme = (parsed_url.scheme or '').lower()
             scheme = (parsed_url.scheme or '').lower()
             path = parsed_url.path or ''
 
-            if scheme in ('http', 'https') and ('/wms' in path or '/qgis-map' in path):
+            # If the URL is an HTTP(S) URL that targets internal endpoints OR contains a Google @lat,lon pattern,
+            # handle it internally (do not require opening a browser).
+            contains_google_at = False
+            try:
+                if '@' in path or '@' in parsed_url.query:
+                    contains_google_at = True
+            except Exception:
+                contains_google_at = False
+
+            if scheme in ('http', 'https') and (('/wms' in path or '/qgis-map' in path) or contains_google_at):
                 # HTTP URLから直接実行（ブラウザを経由しない）
+                # If this is a Google @ style URL, try parsing coordinates first
+                if contains_google_at:
+                    parsed_google = self._parse_google_maps_at_url(permalink_url)
+                    # Debug: inform if parser found a map_width_m
+                    try:
+                        if parsed_google and parsed_google.get('map_width_m') is not None:
+                            dbg = f"Detected map_width_m: {parsed_google.get('map_width_m')} (lat={parsed_google.get('lat')}, lon={parsed_google.get('lon')})"
+                            print(dbg)
+                            try:
+                                self.iface.messageBar().pushMessage("QMap Permalink", dbg, duration=5)
+                            except Exception:
+                                pass
+                        else:
+                            # also print parsed_google for visibility
+                            dbg = f"Parsed Google @ data: {parsed_google}"
+                            print(dbg)
+                    except Exception:
+                        pass
+                    if parsed_google:
+                        # If map_width_m was provided (e.g. '1763m'), use a single, reliable path:
+                        # compute a scale based on center and apply it via navigate_to_coordinates.
+                        map_width_m = parsed_google.get('map_width_m')
+                        if map_width_m:
+                            try:
+                                canvas = self.iface.mapCanvas()
+                                self.iface.messageBar().pushMessage("QMap Permalink", "試行: 中心ベースでスケールを計算します...", duration=3)
+                                computed_scale = self._compute_scale_from_map_width_at_center(parsed_google['lat'], parsed_google['lon'], map_width_m, canvas)
+                                print(f"computed_scale from center: {computed_scale}")
+                                if computed_scale:
+                                    try:
+                                        self.navigate_to_coordinates(parsed_google['lon'], parsed_google['lat'], computed_scale, None, 'EPSG:4326')
+                                        self.iface.messageBar().pushMessage(
+                                            "QMap Permalink",
+                                            f"計算したスケールを適用しました（幅約 {map_width_m}m、1:{int(computed_scale)}）。",
+                                            duration=3
+                                        )
+                                        return
+                                    except Exception as e:
+                                        print(f"navigate_to_coordinates with computed scale failed: {e}")
+                                else:
+                                    # Could not compute scale: fall back to center-only move and inform user
+                                    try:
+                                        canvas = self.iface.mapCanvas()
+                                        dest_crs = canvas.mapSettings().destinationCrs()
+                                        cx, cy = self._convert_wgs84_to_crs(parsed_google['lat'], parsed_google['lon'], dest_crs.authid())
+                                        if cx is not None and cy is not None:
+                                            canvas.setCenter(QgsPointXY(float(cx), float(cy)))
+                                            canvas.refresh()
+                                            self.iface.messageBar().pushMessage(
+                                                "QMap Permalink",
+                                                f"座標 ({parsed_google['lon']:.6f}, {parsed_google['lat']:.6f}) に移動しました（スケールは維持されました）。",
+                                                duration=3
+                                            )
+                                            return
+                                    except Exception:
+                                        pass
+                            except Exception as e:
+                                print(f"map_width handling failed: {e}")
+
+                        # Fallback: Use parsed scale/zoom if map_width_m wasn't provided or handling failed
+                        self.navigate_to_coordinates(parsed_google['lon'], parsed_google['lat'], parsed_google.get('scale'), parsed_google.get('zoom'), 'EPSG:4326')
+                        return
+
                 params = urllib.parse.parse_qs(parsed_url.query)
 
                 # パラメータをナビゲーションデータへ変換して処理（location または coordinates をサポート）
@@ -1093,17 +1550,26 @@ class QMapPermalink:
                 except Exception:
                     scale_val = None
 
-            # scale が無ければ zoom から簡易推定する（従来の互換用）
+            # scale が無ければ zoom から推定する（より精度の高い推定を使用）
             if scale_val is None and zoom is not None:
                 try:
                     zoom_val = float(zoom)
-                    scale_val = 1000.0 / (2 ** (zoom_val - 10))
+                    scale_val = self._estimate_scale_from_zoom(zoom_val)
                 except Exception:
                     scale_val = None
 
-            # 最終フォールバック
+            # 最終フォールバック: 明示的な scale/zoom が与えられない場合は
+            # 現在のキャンバスの scale を維持する（存在しない場合のみ 1000 を使用）
             if scale_val is None:
-                scale_val = 1000.0
+                try:
+                    canvas_tmp = self.iface.mapCanvas()
+                    current_scale = canvas_tmp.scale()
+                    if current_scale and current_scale > 0:
+                        scale_val = float(current_scale)
+                    else:
+                        scale_val = 1000.0
+                except Exception:
+                    scale_val = 1000.0
 
             # マップキャンバスに適用
             canvas = self.iface.mapCanvas()
@@ -1246,53 +1712,83 @@ class QMapPermalink:
                 self.tr("Please enter a permalink URL.")
             )
             return
+        # If the user pasted a raw Google @-style path like '/@lat,lon,1763m/' or
+        # '@lat,lon,1763m' (possibly without scheme), prefer to treat it as an
+        # internal Google-style navigation and pass directly to the internal
+        # parser/navigator. This avoids panel-level heuristics opening a browser
+        # or rejecting the input before the plugin can parse map_width (m) etc.
+        try:
+            if '@' in permalink_url and self._parse_google_maps_at_url(permalink_url):
+                # Delegate to the central navigate_to_permalink which contains the
+                # canonical handling for Google @-style strings (including map_width -> scale).
+                try:
+                    self.navigate_to_permalink(permalink_url)
+                    return
+                except Exception:
+                    # Fall through to the normal handling below on error
+                    pass
+        except Exception:
+            # Be defensive: ignore parser errors here and continue with regular flow
+            pass
         # Parse URL and decide:
         # - If it's an http(s) URL pointing to localhost and contains
         #   internal endpoints (/wms or /qgis-map), route to internal navigation.
         # - Otherwise, open external http(s) URLs in the default browser.
         try:
             parsed = urllib.parse.urlparse(permalink_url)
-            scheme = (parsed.scheme or '').lower()
             path = parsed.path or ''
 
-            # Treat any http(s) URL whose path or full URL contains /wms or /qgis-map as internal navigation
-            # This covers IP addresses, hostnames, and cases where path may be empty but the pattern appears elsewhere.
+            # Prioritize internal qgis-map regardless of scheme: if the input contains '/qgis-map' or 'qgis-map?'
+            # treat it as an internal request and hand off to navigate_to_permalink.
             lowered = permalink_url.lower()
-            is_internal_http = scheme in ('http', 'https') and ('/wms' in path or '/qgis-map' in path or '/wms' in lowered or '/qgis-map' in lowered)
-
-            if is_internal_http:
-                # Internal navigation: let existing handler parse and apply
+            if '/qgis-map' in lowered or 'qgis-map?' in lowered:
                 self.navigate_to_permalink(permalink_url)
                 return
 
-            if scheme in ('http', 'https'):
-                # External http(s) — but avoid opening browser if this is actually an internal navigation URL
-                if is_internal_http:
-                    # already handled above, but guard defensively
-                    try:
-                        self.navigate_to_permalink(permalink_url)
-                        return
-                    except Exception:
-                        pass
-
+            # If the URL is a Google Maps URL, try to parse the @lat,lon,... form and navigate internally
+            lowered_url = permalink_url.lower()
+            # Simplified Google detection: if the input contains a coordinate-style '/@' path,
+            # a '/maps/' path segment, or the string 'google.' treat it as a Google Maps URL.
+            # This keeps the logic simple and ensures inputs like 'maps/@35.8080979,...' are
+            # correctly routed.
+            # Simplify Google detection: only treat strings that contain an @lat,lon pattern
+            # (e.g. @35.8080979,139.5289801) as Google @-style input.
+            if re.search(r'@[-0-9.]+,[-0-9.]+', lowered_url):
                 try:
-                    QDesktopServices.openUrl(QUrl(permalink_url))
-                    self.iface.messageBar().pushMessage(
+                    self.navigate_to_permalink(permalink_url)
+                    return
+                except Exception as e:
+                    QMessageBox.critical(
+                        self.iface.mainWindow(),
                         self.tr("QMap Permalink"),
-                        self.tr("URL opened in browser."),
-                        duration=3
+                        self.tr("Failed to navigate to Google Maps URL: {error}").format(error=str(e))
                     )
                     return
-                except Exception:
-                    # If opening fails, fall back to internal navigation attempt
-                    pass
+
+            # (Old HTTP-specific handling removed: navigation now prioritizes '/qgis-map' earlier,
+            # and Google @-style URLs are handled above. External HTTP(S) links are not opened by
+            # Navigate; use the Open button.)
 
         except Exception:
-            # Parsing failed — fall back to internal navigation
-            pass
+            # Parsing failed — do NOT fallback to internal navigation for HTTP(S).
+            # If the user provided an http(s) URL we should stop and show an error.
+            lowered = permalink_url.lower()
+            if lowered.startswith('http://') or lowered.startswith('https://'):
+                QMessageBox.critical(
+                    self.iface.mainWindow(),
+                    self.tr("QMap Permalink"),
+                    self.tr("Failed to parse or handle the provided HTTP(S) URL.")
+                )
+                return
+            # Otherwise allow non-http schemes to be handled by the existing fallback
 
-        # Fallback: perform internal navigation using the existing handler
-        self.navigate_to_permalink(permalink_url)
+        # Strict mode: if the input was not recognized as qgis-map or Google @-style,
+        # show an error and do not attempt fallback navigation.
+        QMessageBox.critical(
+            self.iface.mainWindow(),
+            self.tr("QMap Permalink"),
+            self.tr("Navigate supports only internal 'qgis-map' links or Google @-style URLs (e.g. /@lat,lon,220m/).")
+        )
 
     def on_copy_clicked_panel(self):
         """パネル版：コピーボタンがクリックされた時の処理"""
