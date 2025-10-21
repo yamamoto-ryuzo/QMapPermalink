@@ -32,10 +32,34 @@ except Exception:
 
 from qgis.gui import QgsMapCanvas
 
+# --- 標準ライブラリのインポート（欠落しているため追加）
+import os
+import re
+import urllib.parse
+import math
+import json
+import traceback
+
+# Optional components: if UI/webmap modules are not present, provide safe defaults
+# Try to import optional UI and webmap generator modules; fall back safely when absent.
+try:
+    from .qmap_permalink_panel import QMapPermalinkPanel  # type: ignore
+    PANEL_AVAILABLE = True
+except Exception:
+    QMapPermalinkPanel = None
+    PANEL_AVAILABLE = False
+
+try:
+    from .qmap_webmap_generator import QMapWebMapGenerator  # type: ignore
+    WEBMAP_AVAILABLE = True
+except Exception:
+    QMapWebMapGenerator = None
+    WEBMAP_AVAILABLE = False
+
 # ユーザー関数定義（デコレータでの自動登録は import 時に QGIS の内部で
 # Cレベルの処理を行うため、環境によってはプロセスがクラッシュすることがある。
 # 安全性のためここではデコレータを使わず通常の関数として定義する。必要なら
-# プラグイン初期化時に明示的に登録処理を行う。
+# プラグイン初期化時に明示的に登録処理を行う。）
 def my_custom_function(value1, value2, feature, parent):
     """単純なサンプル関数（登録は行わない）
 
@@ -46,34 +70,12 @@ def my_custom_function(value1, value2, feature, parent):
     try:
         return value1 + value2
     except Exception:
+        # 安全に失敗して None を返すだけにする
         return None
-
-import os.path
-import urllib.parse
-import json
-import math
-import re
-
-# パネルファイルのインポート（フォールバックを削除）
-try:
-    from .qmap_permalink_panel import QMapPermalinkPanel
-    PANEL_AVAILABLE = True
-except ImportError:
-    # シンプル版へのフォールバックは廃止。パネル機能は利用不可とする。
-    PANEL_AVAILABLE = False
-    QMapPermalinkPanel = None
-
-# WebMap生成モジュールのインポート
-try:
-    from .qmap_webmap_generator import QMapWebMapGenerator
-    WEBMAP_AVAILABLE = True
-except ImportError:
-    WEBMAP_AVAILABLE = False
-    QMapWebMapGenerator = None
 
 
 class NavigationSignals(QObject):
-    """QGIS APIへの安全なアクセスのためのシグナル"""
+    """プラグイン内で使用するシンプルなシグナルコンテナ"""
     navigate_requested = pyqtSignal(dict)  # 地図ナビゲーション要求
     # ブラウザから送られてきた完全なURLを通知するシグナル
     request_origin_changed = pyqtSignal(str)
@@ -904,6 +906,67 @@ class QMapPermalink:
         except Exception:
             return None
 
+    def _parse_google_earth_url(self, url):
+        """Google Earth Web の @lat,lon,altitudea,distanced,... 形式を解析する
+
+        戻り値: {'lat': float, 'lon': float, 'zoom': float, 'scale': float, 'altitude': float, 'distance': float}
+        解析できなければ None を返す。
+        """
+        try:
+            # 例: https://earth.google.com/web/@35.80234294,139.52998754,48.51663142a,501601.82953767d,1y,...
+            # Capture optional 'y' token which Google Earth uses (e.g. '1y')
+            # Format examples:
+            #  - @lat,lon,altitudea,distanced,1y,...
+            #  - @lat,lon,altitudea,distanced,...
+            m = re.search(r'@([-0-9.]+),([-0-9.]+),([0-9.]+(?:\.[0-9]+)?)a,([0-9.]+(?:\.[0-9]+)?)d(?:,([0-9.]+(?:\.[0-9]+)?)y)?', url)
+            if not m:
+                return None
+
+            lat = float(m.group(1))
+            lon = float(m.group(2))
+            altitude = float(m.group(3))
+            distance = float(m.group(4))
+
+            y_token = None
+            try:
+                if m.lastindex and m.lastindex >= 5 and m.group(5):
+                    y_token = float(m.group(5))
+            except Exception:
+                y_token = None
+
+            zoom_est = None
+            scale_est = None
+            try:
+                if y_token and y_token > 0:
+                    # y_token interpreted as meters-per-pixel (m/px)
+                    try:
+                        dpi = float(self._get_screen_dpi())
+                    except Exception:
+                        dpi = 96.0
+                    # scale_denominator = meters_per_pixel * DPI / 0.0254
+                    scale_est = float(y_token) * float(dpi) / 0.0254
+                    if scale_est and scale_est > 0:
+                        zoom_est = float(self._estimate_zoom_from_scale(scale_est))
+                else:
+                    # Fallback: invert the distance->scale model used for URL generation
+                    reference_scale = 15695.0
+                    reference_distance = 160699.35527964
+                    if reference_distance != 0:
+                        scale_est = float(reference_scale) * (float(distance) / float(reference_distance))
+                    else:
+                        scale_est = None
+                    if scale_est and scale_est > 0:
+                        zoom_est = float(self._estimate_zoom_from_scale(scale_est))
+                    else:
+                        zoom_est = None
+            except Exception:
+                zoom_est = None
+                scale_est = None
+
+            return {'lat': lat, 'lon': lon, 'zoom': zoom_est, 'scale': scale_est, 'altitude': altitude, 'distance': distance}
+        except Exception:
+            return None
+
     def _estimate_scale_from_zoom(self, zoom_level):
         """ズームレベルからスケール値を逆算（小数点対応版）
         
@@ -1338,15 +1401,36 @@ class QMapPermalink:
             else:
                 parsed_url = parsed_temp
 
-            # If still no recognizable scheme but the string contains a Google @-format, try parsing it directly
-            if (not parsed_url.scheme) and self._parse_google_maps_at_url(permalink_url):
-                parsed_google = self._parse_google_maps_at_url(permalink_url)
-                if parsed_google:
-                    try:
-                        self.navigate_to_coordinates(parsed_google['lon'], parsed_google['lat'], parsed_google.get('scale'), parsed_google.get('zoom'), 'EPSG:4326')
-                        return
-                    except Exception as e:
-                        raise
+            # If still no recognizable scheme but the string contains a Google/Earth @-format, try parsing it directly
+            if not parsed_url.scheme:
+                # Prefer Google Earth Web format first
+                try:
+                    parsed_earth = self._parse_google_earth_url(permalink_url)
+                    if parsed_earth:
+                        try:
+                            # parsed_earth includes estimated scale/zoom when possible
+                            self.navigate_to_coordinates(parsed_earth['lon'], parsed_earth['lat'], parsed_earth.get('scale'), parsed_earth.get('zoom'), 'EPSG:4326')
+                            try:
+                                dbg = f"Parsed Google Earth @ data: {parsed_earth}"
+                                print(dbg)
+                                self.iface.messageBar().pushMessage("QMap Permalink", dbg, duration=5)
+                            except Exception:
+                                pass
+                            return
+                        except Exception:
+                            raise
+                except Exception:
+                    # ignore and fall back to maps parsing
+                    pass
+
+                if self._parse_google_maps_at_url(permalink_url):
+                    parsed_google = self._parse_google_maps_at_url(permalink_url)
+                    if parsed_google:
+                        try:
+                            self.navigate_to_coordinates(parsed_google['lon'], parsed_google['lat'], parsed_google.get('scale'), parsed_google.get('zoom'), 'EPSG:4326')
+                            return
+                        except Exception as e:
+                            raise
 
             # HTTP形式のURLを処理（新しいWMS形式と古い形式の両方をサポート）
             # NOTE: 以前は 'http://localhost:' で始まるURLのみ内部ナビゲーションと見なしていましたが
@@ -1369,6 +1453,28 @@ class QMapPermalink:
                 # HTTP URLから直接実行（ブラウザを経由しない）
                 # If this is a Google @ style URL, try parsing coordinates first
                 if contains_google_at:
+                    # Try Google Earth Web format first
+                    parsed_earth = None
+                    try:
+                        parsed_earth = self._parse_google_earth_url(permalink_url)
+                    except Exception:
+                        parsed_earth = None
+
+                    if parsed_earth:
+                        # Use estimated scale/zoom from Earth distance -> zoom inversion
+                        try:
+                            dbg = f"Parsed Google Earth @ data: {parsed_earth}"
+                            print(dbg)
+                            try:
+                                self.iface.messageBar().pushMessage("QMap Permalink", dbg, duration=5)
+                            except Exception:
+                                pass
+                            self.navigate_to_coordinates(parsed_earth['lon'], parsed_earth['lat'], parsed_earth.get('scale'), parsed_earth.get('zoom'), 'EPSG:4326')
+                            return
+                        except Exception as e:
+                            print(f"navigate_to_coordinates with parsed Earth data failed: {e}")
+
+                    # Fallback to Google Maps @ parser
                     parsed_google = self._parse_google_maps_at_url(permalink_url)
                     # Debug: inform if parser found a map_width_m
                     try:

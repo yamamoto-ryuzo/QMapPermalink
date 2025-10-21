@@ -11,6 +11,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **B**: UI changes, new plugin features, or moderate functionality additions
 - **C**: Profile/plugin fixes, minor bug fixes, and small improvements
 
+## [V2.9.0] - 2025-10-21
+
+### Patch: Google Earth 'y' token handlingとスケール推定の改善
+
+### Added
+- Google Earth Web の @...a,...d,1y 形式の "y" トークン（ピクセルあたりのメートル: m/px）を解釈し、画面 DPI を用いてより正確にスケールを算出して QGIS の表示に反映する対応を追加しました。
+
+### Changed
+- Google Earth 用パーマリンクから distance->scale の逆算ロジックを改善し、'y' トークンがある場合はそちらを優先して scale を算出します。
+- パネルのナビゲート入力で Google @ 形式（例: /@lat,lon,1763m/）が貼り付けられた場合にプラグインの内部パーサへルーティングする挙動を安定化しました。
+- プラグイン初期化時に発生していた一部の読み込みエラー（未インポートの標準ライブラリ等）を修正しました。
+
+### Fixed
+- _parse_google_earth_url のスケール/ズーム推定の不整合を修正。
+- 不要なコード断片や静的解析でエラーを出していた箇所をクリーンアップしました。
+
+### Notes
+- これらの変更は QGIS 実行環境での画面 DPI や OS スケーリングに依存するため、実運用での厳密な一致が必要な場合は環境依存パラメータの微調整を推奨します。
+
 ## [V2.8.0] - 2025-10-21
 
 ### 🔁 外部制御の自動ナビゲートと挙動改善

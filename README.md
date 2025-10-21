@@ -3,7 +3,7 @@
 QGISの地図ビューを外部から直接ナビゲートするパーマリンクプラグイン  
 最新のZIPはこちらから	https://github.com/yamamoto-ryuzo/QMapPermalink/tree/main/dist
 
-**Version 2.8.0** - 外部制御の自動ナビゲート対応と小さな改善を含むリリース
+**Version 2.9.0** - 外部制御の自動ナビゲート対応と小さな改善を含むリリース
 
 ## 概要
 
@@ -171,8 +171,6 @@ http://localhost:8089/qgis-map?x=139&y=35&scale=1000.0
    テストは QGIS を起動してプラグインを読み込んだ環境で実行してください。CI/静的解析環境では `qgis.core` と `PyQt5` が存在しないため import エラーが発生します。
 
 
-
-
 ### 🌍 Google Earth統合機能（V1.6.0新機能）
 
 パーマリンクにアクセスすると、応答ページにGoogle Maps・Google Earthの両方のリンクが自動生成されます：
@@ -211,6 +209,35 @@ V1.6.0では、実際のGoogle Earthの動作を詳細に分析し、実測デ�
 | 現場B  | http://localhost:8089/qgis-map?x=139.8&y=35.7&scale=5000.0 | 🗺️ 自動生成 | 🌍 自動生成 |
 
 生成したURLをそのまま貼り付ければ、ブラウザ経由でQGISが該当ビューへ移動し、同時にGoogle Maps・Google Earthのリンクも表示されます。社内資料やメール、チャットでの共有が容易です。
+
+## External Control（外部制御） — 詳細
+
+QMapPermalink の **External Control** 機能は、外部から受信した HTTP リクエスト（`/qgis-map` や `/wms` を含むパス）を自動的にプラグイン内で解釈し、QGIS の地図ビューを更新する仕組みです。ここでは挙動、設定、セキュリティ上の注意点、パースと優先度、デバッグ方法、テスト手順を明示します。
+
+### パースの優先度
+1. Google Earth Web の `@lat,lon,altitudea,distanced,...` 形式（`y` トークンを含む場合はそれを優先してスケールを算出）
+2. Google Maps の `@lat,lon,XXXm` / `@lat,lon,ZZz` 形式（`m` トークンは地表幅を表すため、キャンバス横幅に基づいてスケール推定を行う）
+3. 内部 HTTP パラメータ形式（`/qgis-map?x=...&y=...&scale=...` 等）および `/wms` リクエスト
+4. 旧来の `qgis-permalink://` カスタムスキーム
+
+### 外部制御で処理されるナビゲーション形式の概要
+
+以下は External Control 下で受け付ける代表的なナビゲーション形式と、その処理方針の概要です。
+
+- 通常の内部 HTTP ナビゲーション (`/qgis-map`, `/wms`)
+   - 形式: `http://<host>:<port>/qgis-map?x=<x>&y=<y>&scale=<scale>&crs=EPSG:...`
+   - 処理: クエリパラメータをサーバ側でデコードし、`navigate_from_http` / `navigate_to_coordinates` の経路で適用します。`scale` が与えられていれば優先して適用し、無ければ `zoom` や現在のキャンバス情報から推定します。
+   - 利用例: `http://localhost:8089/qgis-map?x=139.7594&y=35.6837&scale=1000.0`
+
+- Google Maps の `@lat,lon,...` 形式
+   - 形式: `https://www.google.co.jp/maps/@<lat>,<lon>,<rest>`（`<rest>` に `NNNm` や `ZZz` などが入る）
+   - 処理: `@` 部分を抽出して緯度/経度と `map_width_m`（例: `883m`）や `zoom` を取り出します。`map_width_m` がある場合はキャンバス中心を基準に横幅からスケールを推定して適用します。`zoom` のみの場合は `_estimate_scale_from_zoom` を使って変換します。
+   - 利用例: `https://www.google.co.jp/maps/@35.683709,139.759407,883m/`
+
+- Google Earth Web の `@lat,lon,altitudea,distanced,...` 形式
+   - 形式: `https://earth.google.com/web/@<lat>,<lon>,<altitude>a,<distance>d[,<y>y],...`（`y` トークンはオプション）
+   - 処理: 可能なら `y` トークン（m/px）を優先してスケールを算出（スクリーン DPI を用いる）。`y` がない場合は `distance` を用いて内部の基準値（reference_distance/reference_scale）からスケールを逆算し、`_estimate_zoom_from_scale` でズームを得て適用します。altitude は補足情報として扱いますが、QGIS 側では scale/extent を優先して設定します。
+   - 利用例: `https://earth.google.com/web/@35.683709,139.759407,32.0367a,160699.3553d,1y,0h,0t,0r`
 
 ## 🔧 V1.9.0の主要な改良点
 
@@ -345,7 +372,7 @@ python create_zip.py
 - **HTTPサーバー**: 内蔵軽量サーバー（ポート8089-8099自動選択）
 - **サーバー管理**: 独立した HTTP サーバーマネージャーモジュール
 - **Google Maps/Earth 統合**: 外部マップサービスへのリンク生成
-- **現在バージョン**: V2.7.0（README の記述に基づく）
+- **現在バージョン**: V2.9.0（README の記述に基づく）
 
 ## ライセンス
 
