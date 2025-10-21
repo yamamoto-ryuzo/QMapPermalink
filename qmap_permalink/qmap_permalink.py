@@ -937,33 +937,99 @@ class QMapPermalink:
             zoom_est = None
             scale_est = None
             try:
-                if y_token and y_token > 0:
-                    # y_token interpreted as meters-per-pixel (m/px)
+                # If an explicit distance token is present, invert the same model
+                # used in _build_google_earth_url. That builder uses a sqrt scaling
+                # (distance = reference_distance * sqrt(scale / reference_scale)),
+                # so the algebraic inverse is: scale = reference_scale * (distance / reference_distance) ** 2
+                if distance is not None and float(distance) > 0:
+                    try:
+                        d = float(distance)
+                        reference_scale = 15695.0
+                        reference_distance = 160699.35527964
+                        if reference_distance != 0:
+                            scale_est = float(reference_scale * (d / reference_distance) ** 2)
+                        else:
+                            scale_est = None
+                        if scale_est and scale_est > 0:
+                            zoom_est = float(self._estimate_zoom_from_scale(scale_est))
+                        else:
+                            zoom_est = None
+                    except Exception:
+                        scale_est = None
+                        zoom_est = None
+                elif y_token and y_token > 0:
+                    # Defensive fallback: interpret y_token as meters-per-pixel (m/px)
                     try:
                         dpi = float(self._get_screen_dpi())
                     except Exception:
                         dpi = 96.0
-                    # scale_denominator = meters_per_pixel * DPI / 0.0254
-                    scale_est = float(y_token) * float(dpi) / 0.0254
-                    if scale_est and scale_est > 0:
+                    scale_candidate = float(y_token) * float(dpi) / 0.0254
+                    if scale_candidate > 50.0 and scale_candidate < 100000000.0:
+                        scale_est = float(scale_candidate)
                         zoom_est = float(self._estimate_zoom_from_scale(scale_est))
-                else:
-                    # Fallback: invert the distance->scale model used for URL generation
-                    reference_scale = 15695.0
-                    reference_distance = 160699.35527964
-                    if reference_distance != 0:
-                        scale_est = float(reference_scale) * (float(distance) / float(reference_distance))
                     else:
                         scale_est = None
-                    if scale_est and scale_est > 0:
-                        zoom_est = float(self._estimate_zoom_from_scale(scale_est))
-                    else:
                         zoom_est = None
+                else:
+                    zoom_est = None
+                    scale_est = None
             except Exception:
                 zoom_est = None
                 scale_est = None
 
             return {'lat': lat, 'lon': lon, 'zoom': zoom_est, 'scale': scale_est, 'altitude': altitude, 'distance': distance}
+        except Exception:
+            return None
+
+    def _extract_altitude_from_earth_url(self, url):
+        """Google Earth Web の URL から altitude（高度, メートル）を抽出するヘルパー。
+
+        Google Earth の URL では高度と距離が `...,{altitude}a,{distance}d,...` のように表現されることが多いです。
+        この関数は altitude 部分を見つけて float で返します。
+
+        Args:
+            url (str): Google Earth の @... 形式を含む URL
+
+        Returns:
+            float: altitude（メートル）
+
+        Raises:
+            ValueError: 高度が見つからない場合
+        """
+        try:
+            # よくある形式: @lat,lon,altitudea,distanced,...
+            m = re.search(r'@[-0-9.]+,[-0-9.]+,(-?[0-9.]+)a,([0-9.]+)d', url)
+            if not m:
+                # 別の形式やマイナスゼロなども考慮して柔軟に検索
+                m2 = re.search(r',(-?[0-9.]+)a,([0-9.]+)d', url)
+                if not m2:
+                    raise ValueError("Altitude not found in URL")
+                return float(m2.group(1))
+            return float(m.group(1))
+        except Exception as e:
+            raise ValueError(f"Altitude extraction failed: {e}")
+
+    def _estimate_ground_resolution_from_altitude(self, altitude_meters, latitude_deg, pixel_angle_deg=0.00028):
+        """与えられた高度（m）と中心緯度（度）から概算の地上解像度（メートル/ピクセル）を計算する。
+
+        注記: この計算はおおよその概算であり、実際の表示スケールはモニタ解像度、表示領域のピクセル数、投影
+        の影響などに依存します。ここでは単純化した幾何学モデルを用いて m/px の見積もりを返します。
+
+        Args:
+            altitude_meters (float): カメラ/観測点の高度（メートル）
+            latitude_deg (float): 地表の中心緯度（度）
+            pixel_angle_deg (float): 画面上1ピクセルが占める角度（度）。デフォルトは 0.00028deg（概算）
+
+        Returns:
+            float: 推定される地上解像度（メートル/ピクセル）
+        """
+        try:
+            earth_radius = 6371000.0
+            r = float(earth_radius) + float(altitude_meters)
+            pixel_angle_rad = math.radians(float(pixel_angle_deg))
+            lat_correction = math.cos(math.radians(float(latitude_deg)))
+            ground_resolution = r * pixel_angle_rad * lat_correction
+            return float(ground_resolution)
         except Exception:
             return None
 
@@ -1679,29 +1745,98 @@ class QMapPermalink:
 
             # マップキャンバスに適用
             canvas = self.iface.mapCanvas()
-            canvas.setDestinationCrs(crs)
 
+            # 保存: 元の destination CRS を退避
             try:
-                # 中心点を設定してからスケールを適用する（QGIS 側で正しい表示範囲が計算される）
-                canvas.setCenter(QgsPointXY(float(x), float(y)))
-                canvas.zoomScale(float(scale_val))
-                # 回転が指定されていれば適用
+                original_dest_crs = canvas.mapSettings().destinationCrs()
+            except Exception:
+                original_dest_crs = None
+
+
+            # キャンバスの destination CRS を切り替えずに適用する実装
+            # 手順:
+            # 1) 入力座標 (x,y) は crs (crs_auth_id) にあると仮定。これを現在の canvas の destination CRS に変換する
+            # 2) 変換した座標を canvas.setCenter に渡す
+            # 3) scale の適用は現在のキャンバスの mapUnitsPerPixel を利用して行う（canvas.zoomScale を使用）
+            try:
+                dest_crs = canvas.mapSettings().destinationCrs()
+
+                # transform request point -> canvas CRS
+                try:
+                    if crs.authid() == dest_crs.authid():
+                        tx = float(x)
+                        ty = float(y)
+                    else:
+                        transform_req_to_dest = QgsCoordinateTransform(crs, dest_crs, QgsProject.instance())
+                        pt_dest = transform_req_to_dest.transform(QgsPointXY(float(x), float(y)))
+                        tx = float(pt_dest.x())
+                        ty = float(pt_dest.y())
+                except Exception:
+                    # 変換失敗: フォールバックとして入力をそのまま使う（可能性は低い）
+                    tx = float(x)
+                    ty = float(y)
+
+                # 中心を設定
+                try:
+                    canvas.setCenter(QgsPointXY(tx, ty))
+                except Exception:
+                    # setCenter が使えない場合は extent を直接設定する（scale_val をビューワ単位として使用）
+                    try:
+                        half_width = float(scale_val) / 2.0
+                        half_height = float(scale_val) / 2.0
+                        extent = QgsRectangle(
+                            tx - half_width,
+                            ty - half_height,
+                            tx + half_width,
+                            ty + half_height
+                        )
+                        canvas.setExtent(extent)
+                    except Exception:
+                        pass
+
+                # scale 適用: canvas.zoomScale はキャンバスCRS単位のスケール分母を期待する
+                # scale_val はリクエスト由来（メートルベースの場合がある）なので、可能なら map_width->scale を正確に算出する
+                try:
+                    # 最も簡潔に適用: canvas.zoomScale に scale_val を渡す
+                    canvas.zoomScale(float(scale_val))
+                except Exception:
+                    # フォールバック: mapUnitsPerPixel の比率を使って現在の scale を調整
+                    try:
+                        current_map_units_per_px = canvas.mapUnitsPerPixel()
+                        current_scale = canvas.scale()
+                        if current_map_units_per_px and current_scale and float(current_map_units_per_px) > 0:
+                            # desired_map_units_per_px を求めるため、まずリクエストされた scale_val が 'scale denominator' であるかを想定
+                            # scale_val がすでに分母 (1:scale_val) であれば、canvas.zoomScale に直接渡すのが正しい。
+                            # ここでは安全のため、現在の scale を維持する手順を試みる（大きな変更を避ける）
+                            canvas.zoomScale(float(scale_val))
+                    except Exception:
+                        pass
+
+                # rotation があれば適用
                 if rotation is not None:
                     try:
                         canvas.setRotation(float(rotation))
                     except Exception:
                         pass
+
+                # 最後にリフレッシュ
+                canvas.refresh()
+
+
             except Exception:
-                # 万が一 canvas の API が使えない/失敗した場合は従来の範囲設定にフォールバック
-                half_width = float(scale_val) / 2.0
-                half_height = float(scale_val) / 2.0
-                extent = QgsRectangle(
-                    float(x) - half_width,
-                    float(y) - half_height,
-                    float(x) + half_width,
-                    float(y) + half_height
-                )
-                canvas.setExtent(extent)
+                # 最後のフォールバック: 直接 extent を設定
+                try:
+                    half_width = float(scale_val) / 2.0
+                    half_height = float(scale_val) / 2.0
+                    extent = QgsRectangle(
+                        float(x) - half_width,
+                        float(y) - half_height,
+                        float(x) + half_width,
+                        float(y) + half_height
+                    )
+                    canvas.setExtent(extent)
+                except Exception:
+                    pass
 
             # テーマ情報がある場合は適用
             theme_applied = False

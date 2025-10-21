@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **B**: UI changes, new plugin features, or moderate functionality additions
 - **C**: Profile/plugin fixes, minor bug fixes, and small improvements
 
-## [V2.9.0] - 2025-10-21
+## [V2.10.0] - 2025-10-21
 
 ### Patch: Google Earth 'y' token handlingとスケール推定の改善
 
