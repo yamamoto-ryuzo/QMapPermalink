@@ -739,70 +739,17 @@ class QMapPermalink:
         固定テーブル方式をベースに、テーブル間の中間値を線形補間で計算し、
         小数点レベルでの詳細なズームレベル推定を可能にします。
         """
-        if not scale:
-            return 16.0
+        # Delegate to the pure-Python utility to avoid duplicating logic.
         try:
-            s = float(scale)
-            if s <= 0:
-                return 16.0
-
-            # QGIS実スケール対応の改良版固定スケールテーブル
-            # 詳細スケール（1:500〜1:25000）で+1〜2ズームレベル上げて調整
-            scale_table = {
-                0: 400_000_000.0, 1: 200_000_000.0, 2: 100_000_000.0, 3: 60_000_000.0, 4: 30_000_000.0,
-                5: 15_000_000.0, 6: 8_000_000.0, 7: 4_000_000.0, 8: 2_000_000.0, 9: 1_000_000.0,
-                # 中〜詳細スケールを高ズーム方向に調整
-                10: 600_000.0,    # 元: 400_000.0 → より詳細に
-                11: 300_000.0,    # 元: 200_000.0 → より詳細に
-                12: 150_000.0,    # 元: 100_000.0 → より詳細に
-                13: 75_000.0,     # 元: 40_000.0 → 大幅に詳細化
-                14: 40_000.0,     # 元: 20_000.0 → 2倍詳細
-                15: 20_000.0,     # 元: 10_000.0 → 2倍詳細
-                16: 10_000.0,     # 元: 5_000.0 → 2倍詳細
-                17: 5_000.0,      # 元: 2_500.0 → 2倍詳細
-                18: 2_500.0,      # 元: 1_250.0 → 2倍詳細
-                19: 1_250.0,      # 元: 600.0 → 大幅に詳細化
-                20: 600.0,        # 元: 300.0 → 2倍詳細
-                21: 300.0,        # 元: 150.0 → 2倍詳細
-                22: 150.0,        # 元: 75.0 → 2倍詳細
-                23: 75.0,         # 元: 40.0 → やや詳細に
-            }
-
-            # 外挿: 24-30 は 23 の値を半分ずつ外挿
-            for z in range(24, 31):
-                scale_table[z] = scale_table[23] / (2 ** (z - 23))
-
-            # 対数空間での線形補間によるズームレベル推定
-            target_log = math.log(s)
-            
-            # ソートされたズームレベルのリストを作成
-            zoom_levels = sorted(scale_table.keys())
-            
-            # 範囲外の処理
-            if s >= scale_table[zoom_levels[0]]:
-                return float(zoom_levels[0])  # 最小ズームレベル
-            if s <= scale_table[zoom_levels[-1]]:
-                return float(zoom_levels[-1])  # 最大ズームレベル
-            
-            # 線形補間で中間値を計算
-            for i in range(len(zoom_levels) - 1):
-                z1, z2 = zoom_levels[i], zoom_levels[i + 1]
-                s1, s2 = scale_table[z1], scale_table[z2]
-                
-                # 対象スケールが2つのテーブル値の間にある場合
-                if s1 >= s >= s2:
-                    # 対数空間での線形補間
-                    log_s1, log_s2 = math.log(s1), math.log(s2)
-                    # 補間係数を計算（0.0〜1.0）
-                    t = (target_log - log_s1) / (log_s2 - log_s1) if log_s2 != log_s1 else 0.0
-                    # ズームレベルを線形補間
-                    interpolated_zoom = z1 + t * (z2 - z1)
-                    return max(0.0, min(30.0, interpolated_zoom))
-            
-            # フォールバック（理論的には到達しないはず）
-            return 16.0
-            
-        except (ValueError, TypeError, OverflowError):
+            from .scale_zoom import estimate_zoom_from_scale
+            return float(estimate_zoom_from_scale(scale))
+        except Exception:
+            # Fallback default if for some reason the utility cannot be used
+            try:
+                if not scale:
+                    return 16.0
+            except Exception:
+                pass
             return 16.0
 
     def _zoom_to_earth_distance(self, zoom_level):
@@ -1058,64 +1005,10 @@ class QMapPermalink:
         Returns:
             推定スケール値
         """
-        if zoom_level is None:
-            return 20000.0  # デフォルトスケール
-            
         try:
-            z = float(zoom_level)
-            
-            # _estimate_zoom_from_scale と同じテーブル
-            scale_table = {
-                0: 400_000_000.0, 1: 200_000_000.0, 2: 100_000_000.0, 3: 60_000_000.0, 4: 30_000_000.0,
-                5: 15_000_000.0, 6: 8_000_000.0, 7: 4_000_000.0, 8: 2_000_000.0, 9: 1_000_000.0,
-                10: 600_000.0, 11: 300_000.0, 12: 150_000.0, 13: 75_000.0, 14: 40_000.0,
-                15: 20_000.0, 16: 10_000.0, 17: 5_000.0, 18: 2_500.0, 19: 1_250.0,
-                20: 600.0, 21: 300.0, 22: 150.0, 23: 75.0,
-            }
-            
-            # 外挿値も計算
-            for zoom in range(24, 31):
-                scale_table[zoom] = scale_table[23] / (2 ** (zoom - 23))
-            
-            # 範囲チェック
-            z = max(0.0, min(30.0, z))
-            
-            # 整数ズームレベルの場合はテーブルから直接取得
-            if z == int(z) and int(z) in scale_table:
-                return scale_table[int(z)]
-            
-            # 小数点ズームレベルの場合は線形補間
-            z_floor = int(math.floor(z))
-            z_ceil = int(math.ceil(z))
-            
-            # 範囲内チェック
-            if z_floor < 0:
-                z_floor = 0
-            if z_ceil > 30:
-                z_ceil = 30
-            if z_floor not in scale_table:
-                z_floor = max([k for k in scale_table.keys() if k <= z_floor], default=0)
-            if z_ceil not in scale_table:
-                z_ceil = min([k for k in scale_table.keys() if k >= z_ceil], default=30)
-                
-            # 同じ値の場合
-            if z_floor == z_ceil:
-                return scale_table.get(z_floor, 20000.0)
-            
-            # 線形補間（対数空間）
-            s1, s2 = scale_table[z_floor], scale_table[z_ceil]
-            log_s1, log_s2 = math.log(s1), math.log(s2)
-            
-            # 補間係数
-            t = (z - z_floor) / (z_ceil - z_floor) if z_ceil != z_floor else 0.0
-            
-            # 対数空間で補間してから指数に戻す
-            interpolated_log_scale = log_s1 + t * (log_s2 - log_s1)
-            interpolated_scale = math.exp(interpolated_log_scale)
-            
-            return interpolated_scale
-            
-        except (ValueError, TypeError, OverflowError):
+            from .scale_zoom import estimate_scale_from_zoom
+            return float(estimate_scale_from_zoom(zoom_level))
+        except Exception:
             return 20000.0
 
     def _convert_to_wgs84(self, x, y, source_crs_authid):
