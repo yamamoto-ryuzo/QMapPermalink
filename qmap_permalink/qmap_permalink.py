@@ -45,9 +45,16 @@ import traceback
 try:
     from .qmap_permalink_panel import QMapPermalinkPanel  # type: ignore
     PANEL_AVAILABLE = True
+    PANEL_IMPORT_ERROR = None
 except Exception:
     QMapPermalinkPanel = None
     PANEL_AVAILABLE = False
+    import traceback as _tb
+    # Capture the import error details for diagnostics in QGIS Python Console
+    try:
+        PANEL_IMPORT_ERROR = _tb.format_exc()
+    except Exception:
+        PANEL_IMPORT_ERROR = 'Failed to capture panel import error.'
 
 try:
     from .qmap_webmap_generator import QMapWebMapGenerator  # type: ignore
@@ -263,6 +270,13 @@ class QMapPermalink:
                 level=2,  # WARNING
                 duration=10
             )
+            # Print diagnostic details to the Python Console so users/developers
+            # can see the underlying import error (if available).
+            try:
+                if 'PANEL_IMPORT_ERROR' in globals() and PANEL_IMPORT_ERROR:
+                    print(f"QMapPermalink: panel import error details:\n{PANEL_IMPORT_ERROR}")
+            except Exception:
+                pass
 
         # HTTPサーバーを起動
         self.server_manager.start_http_server()

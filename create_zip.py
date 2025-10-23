@@ -39,6 +39,7 @@ class QMapPermalinkZipCreator:
             "professional_wms_server.py",  # 本格的WMSサーバー
             "qmap_permalink_panel.py",
             "qmap_permalink_panel_base.ui",
+            "qmap_maplibre_generator.py",
             "qmap_permalink_panel_simple.py",
             "qmap_permalink_dialog.py",  # ダイアログファイル
             "qmap_permalink_dialog_base.ui",  # ダイアログUIファイル
@@ -48,6 +49,13 @@ class QMapPermalinkZipCreator:
             "icon.png",
             "LICENSE",
             "i18n/"  # ディレクトリ全体
+        ]
+
+        # 最低限必須とみなすファイル（存在しない場合は警告／失敗の対象）
+        self.required_files = [
+            "__init__.py",
+            "qmap_permalink.py",
+            "metadata.txt",
         ]
         
         # 配布から除外するファイル/パターン
@@ -245,34 +253,20 @@ class QMapPermalinkZipCreator:
         zip_path = self.dist_dir / zip_filename
         
         print(f"ZIPファイルを作成中: {zip_filename}")
-        
+
+        # Include everything under the plugin directory except excluded patterns.
         with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
-            for item in self.include_files:
-                item_path = self.plugin_dir / item
-                
-                if item_path.is_file():
-                    # ファイルの場合（除外チェック）
-                    if self.should_exclude(item_path):
-                        print(f"  除外: {item}")
-                        continue
-                    arcname = f"qmap_permalink/{item}"
-                    zipf.write(item_path, arcname)
-                    print(f"  追加: {item}")
-                    
-                elif item_path.is_dir():
-                    # ディレクトリの場合（再帰的に追加）
-                    for file_path in item_path.rglob('*'):
-                        if file_path.is_file() and not self.should_exclude(file_path):
-                            # 相対パスを計算
-                            rel_path = file_path.relative_to(self.plugin_dir)
-                            arcname = f"qmap_permalink/{rel_path}"
-                            zipf.write(file_path, arcname)
-                            print(f"  追加: {rel_path}")
-                        elif file_path.is_file():
-                            rel_path = file_path.relative_to(self.plugin_dir)
-                            print(f"  除外: {rel_path}")
-                else:
-                    print(f"  警告: {item} が見つかりません")
+            for file_path in self.plugin_dir.rglob('*'):
+                if not file_path.is_file():
+                    continue
+                if self.should_exclude(file_path):
+                    rel_path = file_path.relative_to(self.plugin_dir)
+                    print(f"  除外: {rel_path}")
+                    continue
+                rel_path = file_path.relative_to(self.plugin_dir)
+                arcname = f"qmap_permalink/{rel_path}"
+                zipf.write(file_path, arcname)
+                print(f"  追加: {rel_path}")
                     
         print(f"ZIPファイルを作成しました: {zip_path}")
         return zip_path
@@ -363,11 +357,15 @@ def main():
             # non-fatal: continue even if cleanup fails
             pass
 
-        # Update metadata only if different
-        if target_version != current_version:
-            creator.update_metadata(target_version, config)
-
         zip_path = creator.create_zip(target_version)
+
+        # Update metadata only after successful ZIP creation
+        if target_version != current_version:
+            try:
+                creator.update_metadata(target_version, config)
+            except Exception as e:
+                print(f"metadata.txt の更新に失敗しました: {e}")
+
         print('\n=== 作成完了 ===')
         print(f"配布用ZIPファイル: {zip_path}")
         print(f"ファイルサイズ: {zip_path.stat().st_size / 1024:.1f} KB")
