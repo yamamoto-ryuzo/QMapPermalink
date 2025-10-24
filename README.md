@@ -3,7 +3,7 @@
 QGISの地図ビューを外部から直接ナビゲートするパーマリンクプラグイン  
 最新のZIPはこちらから	https://github.com/yamamoto-ryuzo/QMapPermalink/tree/main/dist
 
-**Version 2.12.0 (テーマ実装版)** - テーマ対応のWMS出力（仮想マップビューでのテーマ適用）を含むリリース
+**Version 2.13.0** - WMTS endpoint, MapLibre improvements (ズーム上限解除、斜め禁止ボタン等)
 
 ## 概要
 

@@ -34,6 +34,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [V2.12.0] - 2025-10-22
 
+## [V2.13.0] - 2025-10-24
+
+### Added
+- WMTS-like tile endpoint (`/wmts/{z}/{x}/{y}.png`) that proxies existing WMS rendering to provide XYZ tiles for MapLibre and other tile clients.
+- MapLibre HTML generator: prefer local WMTS tiles when running inside QGIS and allow supplying a tile template via `generate_maplibre_html`.
+- UI: a pitch-toggle button in MapLibre pages to disable oblique (tilt) views (初期状態は「斜め禁止」)。回転は引き続き許可されます。
+
+### Changed
+- MapLibre HTML generation no longer clamps zoom to 19.0 by default; generated styles no longer include a hard `maxzoom: 19` so higher zoom levels may be requested by the client. (Server capability to render such zooms depends on environment and project data.)
+
+### Fixed
+- Prevented a Python f-string formatting error in the MapLibre HTML template by escaping JS object braces correctly.
+
+### Notes
+- The new WMTS endpoint is a lightweight on-the-fly tile proxy that reuses the plugin's WMS rendering. For production or high-load usage, consider adding more robust caching or pre-rendering strategies.
+- High zoom values rely on the server's ability to render at finer scales; test high-zoom behavior in a QGIS runtime.
+
+
 ### Added
 - 右上の回転コントロールに小さな回転サイクルボタン（0/90/180/270）を追加。ボタンをクリックするたびに角度を巡回し、WMS に `ANGLE` パラメータを送信して高画質の画像再取得を行えるようにしました。
 - OpenLayers テンプレート内のイベントアタッチロジックを簡素化し、DOM 生存性に起因する未登録問題を軽減しました。
