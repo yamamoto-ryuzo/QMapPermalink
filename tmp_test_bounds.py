@@ -1,4 +1,4 @@
-from qmap_permalink import qmap_maplibre_generator as g
+from qmap_permalink import qmap_maplibre as g
 
 # bbox example in EPSG:3857 roughly covering central Tokyo area
 permalink = 'http://localhost:8089/qgis-map?x_min=15550000&y_min=4256000&x_max=15551000&y_max=4257000&crs=EPSG:3857'

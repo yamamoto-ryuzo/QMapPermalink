@@ -1,4 +1,4 @@
-from qmap_permalink import qmap_maplibre_generator as g
+from qmap_permalink import qmap_maplibre as g
 
 # Example with x/y/crs in query for EPSG:3857 (WebMercator center for Tokyo approx)
 permalink = 'http://localhost:8089/qgis-map?x=15550418.0&y=4256678.0&crs=EPSG:3857&zoom=12'
