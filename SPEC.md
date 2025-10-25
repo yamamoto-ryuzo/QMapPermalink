@@ -190,8 +190,6 @@ WMTS-like タイル (`/wmts/{z}/{x}/{y}.png`):
 - `qmap_wmts_service.py` / `qmap_wms_service.py` — WMS/WMTS 関連のヘルパー（タイル変換、BBOX 計算など）。
 - `qmap_permalink_panel.py` から `navigate_from_http` / `navigate_to_coordinates` を呼び出す流れ。
 
-（実際のファイル名はリポジトリに合わせて参照してください。`README.md` に一覧あり。）
-
 ---
 ## 14. 変更履歴の要約（V2 系ハイライト）
 - V2.0.0: WMS サポートと外部アクセス（0.0.0.0 バインド）を追加。
@@ -216,8 +214,3 @@ WMTS-like タイル (`/wmts/{z}/{x}/{y}.png`):
 ## 完了条件 / 次のステップ
 - この `SPEC.md` をレビューして承認を得る。
 - 承認後、必要に応じて `qmap_permalink` の各モジュールに単体テストを追加する（特に URL パーサと WMTS タイル計算）。
-
----
-
-作成日: 2025-10-25
-元資料: `README.md`, `CHANGELOG.md`
