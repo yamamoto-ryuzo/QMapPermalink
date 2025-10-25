@@ -64,7 +64,7 @@ QMapPermalink は QGIS の表示状態（中心位置・ズーム・レイヤ設
    - QMapPermalink のパネルを常時表示しておくことで、複数のパーマリンクを素早く生成・管理可能
    - 必要に応じて Google Maps / Google Earth と連携してブラウザでの確認をワンクリックで実施
 
-## Office（Excel / PowerPoint）・PDF 連携ガイド（初心者向け）
+## Office（Excel / PowerPoint）・PDF 連携ガイド
 
 以下は「パーマリンクを軸にした」簡単なワークフロー例です。
 
