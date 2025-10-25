@@ -1,11 +1,11 @@
 # QMapPermalink — 社内（LAN）で安全に使える、かんたん地図共有ツール
 
-> あなたが『今見ている地図』を、そのまま社内資料（Excel / PowerPoint / PDF）の共有リンクに変えるためのツール。
-> OpenLayers / MapLibre / Google Maps / Google Earth　との連携も簡単に行えます。
+> あなたが『今見ている地図』を、そのまま社内資料（Excel / PowerPoint / PDF）の共有リンクに変えるためのツール。  
+> OpenLayers / MapLibre / Google Maps / Google Earth　との連携も簡単に行えます。  
 
 ## ざっくり説明（ワンセンテンス）
 
-QMapPermalink は QGIS の表示状態（中心位置・ズーム・レイヤ設定など）を“パーマリンク”として固定し、社内 LAN 上で安全に共有したり、Excel / PowerPoint / PDF / OpenLayers / MapLibre / Google Maps / Google Earth と簡単に連携できるツールです。
+QMapPermalink は QGIS の表示状態（中心位置・ズーム・レイヤ設定など）を“パーマリンク”として固定し、社内 LAN 上で安全に共有したり、Excel / PowerPoint / PDF / OpenLayers / MapLibre / Google Maps / Google Earth と簡単に連携できるツールです。  
 
    ![alt text](images/image01.png)
 
