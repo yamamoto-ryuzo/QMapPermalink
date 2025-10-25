@@ -84,7 +84,7 @@ QMapPermalink は QGIS の表示状態（中心位置・ズーム・レイヤ設
 
 - 生成物フォルダ構成の例：
   - /exports/2025-10-25/map_001.png
-  - /exports/2025-10-25/map_001_link.txt  （短縮された内部 URL）
+  - /exports/2025-10-25/map_001_link.txt
 
 - PowerPoint の作成手順（短縮）
   1. `map_001.png` をスライドに挿入
