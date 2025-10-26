@@ -162,6 +162,9 @@ curl "http://localhost:8089/wfs?SERVICE=WFS&REQUEST=DescribeFeatureType&TYPENAME
 
 このツールは便利ですが、機密データを含む場合は外部公開を絶対に避けてください。外部公開が必要な場合は必ず組織の承認を得て、安全な公開手順（認証・アクセス制御・最小データ）を整備してください。
 
+## あきらめた開発
+ VectorTileサーバーの導入は標準のPYだけでは困難と判断、当面は開発保留とし、再開する場合は、本格的なサーバー化と合わせて実施とするが、それらは他のサービスを利用がよいため基本しない方向。  
+
 ## ライセンス
 
 本プロジェクトは GNU General Public License version 3 (GPLv3) の下で配布されています。詳細はリポジトリルートの `LICENSE` ファイルを参照してください（https://www.gnu.org/licenses/gpl-3.0.html）　。
