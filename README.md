@@ -30,6 +30,7 @@ QMapPermalink は QGIS の表示状態（中心位置・ズーム・レイヤ設
 - ローカル（LAN）ホスティング：付属の軽量 HTTP サーバーで社内ネットワークだけに公開可能
 - Office 連携：地図の静止画像（高解像度 PNG）やリンクを Excel/PowerPoint に簡単に埋め込める形式で配布資料作成可能
 - PDF レポート化（手動ワークフロー）：地図スナップショット（PNG）とメタデータを出力し、PowerPoint 等から PDF に書き出すことで配布資料作成可能
+- WFS サービス：QGIS のベクターレイヤーを OGC WFS 2.0 準拠で提供し、GeoJSON または GML 形式で地物を外部アプリケーションから取得可能
 
 ## 外部マップライブラリ（OpenLayers / MapLibre / Google Maps / Google Earth）
 
@@ -48,6 +49,50 @@ QMapPermalink は QGIS の表示状態（中心位置・ズーム・レイヤ設
 - Google Maps / Google Earth
   - これらは外部の商用サービスです。資料作成時に "外部での確認"（例：Google Maps で位置を素早く確認したい、Google Earth で 3D 表示を確認したい）といった用途で便利です。
    - 外部の人から受け取った Google Maps/Earth の共有リンク（住所やピン）や共有 URL から緯度・経度を取り出し、QGIS 上で同じ場所を素早く復元することができます。
+
+## WFS (Web Feature Service) 機能
+
+QMapPermalink は QGIS のベクターレイヤーを OGC WFS 2.0 準拠のサービスとして提供します。これにより、外部の GIS アプリケーションやウェブアプリケーションから QGIS の地物を GeoJSON または GML 形式で取得することができます。
+
+### 利用可能な WFS オペレーション
+
+- **GetCapabilities**: 利用可能なレイヤー情報とサービスメタデータを XML 形式で返します
+- **GetFeature**: 指定したレイヤーから地物を GeoJSON または GML 形式で返します
+- **DescribeFeatureType**: 指定したレイヤーの属性スキーマを XML 形式で返します
+
+### 使用例
+
+```bash
+# サービス情報を取得
+curl "http://localhost:8089/wfs?SERVICE=WFS&REQUEST=GetCapabilities&VERSION=2.0.0"
+
+# 特定のレイヤーから地物を GeoJSON で取得
+curl "http://localhost:8089/wfs?SERVICE=WFS&REQUEST=GetFeature&TYPENAME=my_layer&OUTPUTFORMAT=application/json"
+
+# 特定のレイヤーから地物を GML で取得
+curl "http://localhost:8089/wfs?SERVICE=WFS&REQUEST=GetFeature&TYPENAME=my_layer&OUTPUTFORMAT=application/gml+xml"
+
+# レイヤーのスキーマ情報を取得
+curl "http://localhost:8089/wfs?SERVICE=WFS&REQUEST=DescribeFeatureType&TYPENAME=my_layer"
+```
+
+### パラメータ
+
+- **SERVICE**: "WFS" （必須）
+- **REQUEST**: "GetCapabilities", "GetFeature", "DescribeFeatureType" のいずれか （必須）
+- **VERSION**: "2.0.0" （オプション、デフォルト: 2.0.0）
+- **TYPENAME/TYPENAMES**: レイヤー名 （GetFeature, DescribeFeatureType で必須）
+- **OUTPUTFORMAT**: "application/json" または "application/gml+xml" （GetFeature でオプション、デフォルト: application/json）
+- **MAXFEATURES**: 最大地物数 （オプション）
+- **BBOX**: 空間フィルタ（minx,miny,maxx,maxy） （オプション）
+- **SRSNAME**: 座標系 （オプション）
+
+### 注意点
+
+- WFS サービスは QGIS プロジェクトで読み込まれているベクターレイヤーのみを公開します
+- レイヤー名にスペースが含まれる場合は、アンダースコア（_）に置き換えて指定してください
+- 空間フィルタ（BBOX）はレイヤーの座標系で指定してください
+- 社内 LAN での利用を前提としており、外部公開には適していません
   
 ## 使用例
 
