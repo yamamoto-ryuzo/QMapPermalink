@@ -1,0 +1,96 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no" />
+  <title>MapLibre Viewer</title>
+	<link href="https://unpkg.com/maplibre-gl@latest/dist/maplibre-gl.css" rel="stylesheet" />
+  <style>html,body,#map{height:100%;margin:0;padding:0}#map{position:fixed;inset:0}</style>
+</head>
+<body>
+<div id="map"></div>
+<button id="pitchToggle" style="position:absolute;top:10px;right:10px;z-index:1001;padding:6px 8px;background:#fff;border:1px solid #666;border-radius:4px;cursor:pointer">斜め禁止</button>
+<script src="https://unpkg.com/maplibre-gl@latest/dist/maplibre-gl.js"></script>
+<script>
+  console.log('MapLibre script loaded');
+  try {
+    // Use a minimal inline raster style (OpenStreetMap tiles)
+		const style = {
+			"version": 8,
+			"sources": {
+				"qmap": {
+					"type": "raster",
+					"tiles": ["/wmts/{z}/{x}/{y}.png"],
+					"tileSize": 256,
+					"attribution": "QMapPermalink WMTS"
+				}
+			},
+			"layers": [ { "id": "qmap", "type": "raster", "source": "qmap", "minzoom": 0 } ]
+		};
+    
+			console.log('Initializing map at lat=35.92752516738862, lon=139.59189019302835, zoom=20.42');
+		const map = new maplibregl.Map({
+			container: 'map',
+			style: style,
+			center: [139.59189019302835, 35.92752516738862],
+			zoom: 20.42
+		});
+
+			// Pitch toggle button: disable/enable oblique (3D) tilt interaction
+			try {
+				const pitchBtn = document.getElementById('pitchToggle');
+				// Start with pitch locked (斜め禁止) as requested; rotation remains allowed.
+				let pitchLocked = true;
+				const _enforcePitch = function() {
+					try {
+						if (map.getPitch && Math.abs(map.getPitch()) > 0.0001) {
+							map.setPitch(0);
+						}
+					} catch (e) { /* ignore */ }
+				};
+				function lockPitch() {
+					try { map.setPitch(0); } catch(e) { console.warn('setPitch failed', e); }
+					try { if (map.on) map.on('move', _enforcePitch); } catch(e) {}
+					pitchLocked = true;
+					pitchBtn.textContent = '斜め許可';
+				}
+				function unlockPitch() {
+					try { if (map.off) map.off('move', _enforcePitch); } catch(e) {}
+					pitchLocked = false;
+					pitchBtn.textContent = '斜め禁止';
+				}
+				pitchBtn.addEventListener('click', function() {
+					if (!pitchLocked) lockPitch(); else unlockPitch();
+				});
+				// enforce initially
+				try { lockPitch(); } catch(e) {}
+			} catch(e) { console.warn('pitch toggle setup failed', e); }
+		// Defer resize and fitBounds until style/tile sources are loaded to
+		// avoid missing tiles or blank initial render when the container was
+		// not yet ready. Call map.resize() then apply fitBounds if present.
+    
+		map.on('load', function() {
+			console.log('Map loaded successfully');
+			try {
+				// ensure map knows its container size
+				map.resize();
+			} catch (e) {
+				console.warn('map.resize() failed', e);
+			}
+			try {
+				
+			} catch (e) {
+				console.warn('fitBounds failed', e);
+			}
+		});
+    
+    map.on('error', function(e) {
+      console.error('Map error:', e);
+    });
+  } catch (e) {
+    console.error('Failed to initialize map:', e);
+    document.body.innerHTML = '<div style="padding:20px;font-family:sans-serif;"><h2>Map initialization failed</h2><pre>' + e.toString() + '</pre><p>Check browser console (F12) for details.</p></div>';
+  }
+</script>
+</body>
+</html>
