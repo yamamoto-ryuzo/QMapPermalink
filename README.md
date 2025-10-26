@@ -45,7 +45,7 @@ QMapPermalink は QGIS の表示状態（中心位置・ズーム・レイヤ設
 - MapLibre
   - 軽量な Mapbox GL JS の互換実装で、ベクタータイル中心のモダンな地図表示に向いています。`maplibre_endpoint.py` が関係する設定や出力をサポートします。
   - 特徴：高速でスタイルやベクター表現を柔軟に扱えるため、見た目重視のインタラクティブ表示に強い。
-  ![alt text](image.png)
+  ![alt text](images/maplibre.png)
 - Google Maps / Google Earth
   - これらは外部の商用サービスです。資料作成時に "外部での確認"（例：Google Maps で位置を素早く確認したい、Google Earth で 3D 表示を確認したい）といった用途で便利です。
    - 外部の人から受け取った Google Maps/Earth の共有リンク（住所やピン）や共有 URL から緯度・経度を取り出し、QGIS 上で同じ場所を素早く復元することができます。
