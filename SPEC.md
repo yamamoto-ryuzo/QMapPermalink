@@ -14,15 +14,16 @@
 3. パーマリンク形式とパラメータ
 4. Map 表示生成（OpenLayers / MapLibre）
 5. WMS / WMTS (タイルプロキシ) の挙動
-6. Google Maps / Google Earth 連携（生成とパース）
-7. External Control（外部制御）のパース優先度と挙動
-8. テーマ (Theme) サポート
-9. 回転（ANGLE）パイプラインとパフォーマンス
-10. 投影 (CRS) ポリシー
-11. セキュリティ・運用上の注意
-12. テスト・QA 手順
-13. 実装ファイルと責務マッピング
-14. 変更履歴の要約（V2 系ハイライト）
+6. WFS (Web Feature Service) の挙動
+7. Google Maps / Google Earth 連携（生成とパース）
+8. External Control（外部制御）のパース優先度と挙動
+9. テーマ (Theme) サポート
+10. 回転（ANGLE）パイプラインとパフォーマンス
+11. 投影 (CRS) ポリシー
+12. セキュリティ・運用上の注意
+13. テスト・QA 手順
+14. 実装ファイルと責務マッピング
+15. 変更履歴の要約（V2 系ハイライト）
 
 ---
 ## 1. 機能概要
@@ -89,7 +90,7 @@ WMS (`/wms`):
 - `ANGLE` パラメータを受け付ける（デフォルト 0）。
 - `BBOX` が無い、またはパース失敗の場合はエラー（MissingParameterValue 等）を返す。暗黙のフォールバックは行わない。
 
-ANGLE パイプライン（詳細は §9）
+ANGLE パイプライン（詳細は §10）
 - `ANGLE=0` : 高速パス — 指定の BBOX をそのまま map extent に設定して直接レンダリング。
 - `ANGLE!=0` : 拡張パス — 外接 BBOX を計算して大きめにレンダ→画像空間で逆回転→中心クロップ→要求サイズにリサンプル。
 - レンダリング最大サイズは内部でクランプ（デフォルト 4096 px 等）してメモリ暴走を防ぐ。
@@ -99,7 +100,45 @@ WMTS-like タイル (`/wmts/{z}/{x}/{y}.png`):
 - キャッシュは軽量実装では未実装だが、運用向けにはキャッシュ層（ファイル/メモリ/外部 CDN など）追加を推奨。
 
 ---
-## 6. Google Maps / Google Earth 連携（生成とパース）
+
+## 6. WFS (Web Feature Service) の挙動
+
+### 概要
+- QMapPermalink の WFS は QGIS プロジェクトのベクターレイヤーを外部アプリケーションに提供します。
+- `/wfs-layers` エンドポイントはプロジェクトの `WFSLayers` エントリを読み、公開対象レイヤの JSON リストを返します。
+- `GetCapabilities` は `/wfs-layers` と同じロジックを参照して FeatureTypeList を生成します（すなわち、プロジェクトの `WFSLayers` に登録されたレイヤのみが公開されます）。
+
+### GetCapabilities
+- 挙動: `WFSLayers` に列挙されたレイヤのみを `<FeatureTypeList>` として返す。`WFSLayers` が未定義または空の場合は空の `<FeatureTypeList>` を返す。
+- レスポンス: `WFS_Capabilities` XML（version=2.0.0）を返す。
+- 注意: 実装変更後は実行中の HTTP サーバ（QGIS プラグイン）を再起動する必要がある（実行中のプロセスはディスク上の変更を自動で読み込まないため）。
+
+### GetFeature
+- 入力パラメータ: `TYPENAME`（必須）、`OUTPUTFORMAT`（任意）、`BBOX`、`MAXFEATURES`、`SRSNAME` など。
+- OUTPUTFORMAT 判定ロジック: 受け取った値に `gml` を含む文字列があれば GML を返却し、それ以外は GeoJSON を返却する（例: `application/gml+xml` → GML、`application/json` → GeoJSON）。
+- GeoJSON: `QgsJsonExporter` 等を利用して GeoJSON を返す。
+- GML: 簡易 GML を生成する実装を持つ。Point, LineString, Polygon に加え、簡易的な MultiPoint/MultiLineString/MultiPolygon の出力をサポートする（ポリゴンは外郭リングのみを扱う等の制限あり）。フルスキーマの互換性を要求するクライアントは事前に検証すること。
+
+### DescribeFeatureType
+- 挙動: 指定レイヤの属性スキーマを XML 形式で返す（既存の実装に準拠）。
+
+### エラー応答
+- WFS のエラーは OWS スタイルの ExceptionReport（XML）で返却する。基本形式:
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<ExceptionReport version="1.3.0" xmlns="http://www.opengis.net/ows/1.1">
+  <Exception exceptionCode="InvalidParameterValue" locator="TYPENAME">
+    <ExceptionText>指定されたレイヤが見つかりません</ExceptionText>
+  </Exception>
+</ExceptionReport>
+```
+
+### 運用上の注意
+- `GetCapabilities` と `/wfs-layers` が同じ `WFSLayers` を参照するため、公開設定はプロジェクト側で一元的に管理すること。
+- 実装は簡易的な GML 出力を行うため、GML の厳密な互換性が必要なワークフローでは注意して検証すること。
+
+## 7. Google Maps / Google Earth 連携（生成とパース）
 生成
 - Google Maps: `https://www.google.co.jp/maps/@{lat},{lon},{zoom}z` を生成。`zoom` は scale→zoom の推定を使う（小数点ズームを許容）。
 - Google Earth: `https://earth.google.com/web/@{lat},{lon},{alt}a,{distance}d,{y}y,{heading}h,{tilt}t,{roll}r` を生成。実測データ（例: scale 15695 -> altitude 32.04m, distance 160699m, 1y）を基準に比例計算して `altitude` と `distance` を決定。
@@ -113,7 +152,7 @@ WMTS-like タイル (`/wmts/{z}/{x}/{y}.png`):
 - DPI / OS スケーリングの差異により微小な差が出るため、必要なら環境依存パラメータで補正可能。
 
 ---
-## 7. External Control（外部制御）のパース優先度と挙動
+## 8. External Control（外部制御）のパース優先度と挙動
 - 機能: パネルの `External Control` が有効なら、外部から受信した URL を自動適用して QGIS をナビゲートする。
 - パース優先度は上記 §6 に準じる。
 - 動作:
@@ -122,13 +161,13 @@ WMTS-like タイル (`/wmts/{z}/{x}/{y}.png`):
 - セキュリティ: 自動ナビゲートは UX を上書きするため、明確な ON/OFF トグルを持ち、ログに受信元・実行時刻を記録することを推奨。
 
 ---
-## 8. テーマ (Theme) サポート
+## 9. テーマ (Theme) サポート
 - `theme` パラメータに指定されたマップテーマ名を仮想マップビューに適用して PNG を生成する。プロジェクト自体の状態を変更しない（仮想ビューを使用）。
 - `theme` 値はプロジェクト内の既存マップテーマ名のみサポート。未存在の場合はエラーまたはフォールバック動作（No Theme として位置のみ適用）。
 - スタイルのエクスポートでは QGIS バージョン差に備えて `exportNamedStyle` 等の呼び出しにフォールバックを用意。
 
 ---
-## 9. 回転（ANGLE）パイプラインとパフォーマンス
+## 10. 回転（ANGLE）パイプラインとパフォーマンス
 契約（contract）:
 - 入力: `BBOX`, `WIDTH`, `HEIGHT`, `ANGLE`（度）
 - 出力: north-up PNG（クライアントは view.rotation を使って回転表示）
@@ -150,21 +189,21 @@ WMTS-like タイル (`/wmts/{z}/{x}/{y}.png`):
 - デフォルトクランプ値（例: 4096 px 等）を推奨。ログで大きなリクエストを計測して運用で調整。
 
 ---
-## 10. 投影 (CRS) ポリシー
+## 11. 投影 (CRS) ポリシー
 - OpenLayers（ブラウザ表示）は常に `EPSG:3857` で提供する。
 - WMS は複数 CRS を受け付け、要求 CRS に従ってレンダリングする。クライアント向けに変換が必要な場合はサーバ側で `EPSG:3857` に変換して返す（OpenLayers の一貫性のため）。
 - `crs` を指定しないパーマリンクは `EPSG:4326` として解釈される。
 - 座標変換は `QgsCoordinateTransform` を利用。プロジェクトによっては外部の proj 定義が必要となる場合がある。
 
 ---
-## 11. セキュリティ・運用上の注意
+## 12. セキュリティ・運用上の注意
 - デフォルトで外部アクセスを許す設計だが、公開環境ではファイアウォールやプロキシでアクセス制御を厳格に行うこと。
 - `External Control` を有効にしていると任意の外部URLで QGIS の表示が書き換わるため、信頼できるネットワーク内または追加の承認フローを用いることを強く推奨。
 - WMS の `GetMap` で大きなレンダ要求が可能なため、認証・リクエストレート制限・サイズ上限を検討する。特に `ANGLE!=0` のリクエストは重い。
 - ログを適切に出力し、受信元IP・タイムスタンプ・実行アクションを残す運用を推奨。
 
 ---
-## 12. テスト・QA 手順
+## 13. テスト・QA 手順
 自動テスト候補:
 - `qmap_permalink_server_manager.py` のユニットテスト: ポート選定・バインド挙動のモックテスト。
 - URL パーサ（Google Maps/Earth/内部形式）の単体テスト（複数フォーマットのケース）。
@@ -181,7 +220,7 @@ WMTS-like タイル (`/wmts/{z}/{x}/{y}.png`):
 - CI 環境では `qgis.core` や `PyQt5` が無いため、これらをモックするかローカルでの手動確認が必要。
 
 ---
-## 13. 実装ファイルと責務マッピング
+## 14. 実装ファイルと責務マッピング
 - `qmap_permalink.py` — メインプラグインロジック、ユーティリティ関数。
 - `qmap_permalink_panel.py` — パネル UI 実装（ナビゲート、生成、外部制御トグル等）。
 - `qmap_permalink_panel_base.ui` — Qt Designer の UI 定義。
@@ -191,7 +230,7 @@ WMTS-like タイル (`/wmts/{z}/{x}/{y}.png`):
 - `qmap_permalink_panel.py` から `navigate_from_http` / `navigate_to_coordinates` を呼び出す流れ。
 
 ---
-## 14. 変更履歴の要約（V2 系ハイライト）
+## 15. 変更履歴の要約（V2 系ハイライト）
 - V2.0.0: WMS サポートと外部アクセス（0.0.0.0 バインド）を追加。
 - V2.6.0: 投影定義と軸順情報を生成 HTML に埋め込み、座標表示の精度向上。
 - V2.8.0: External Control の自動ナビゲート追加。
