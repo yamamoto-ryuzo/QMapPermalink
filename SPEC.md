@@ -103,6 +103,15 @@ WMTS-like タイル (`/wmts/{z}/{x}/{y}.png`):
 
 ## 6. WFS (Web Feature Service) の挙動
 
+### 日本語・多言語対応について
+
+- QMapPermalink の WFS 機能および MapLibre クライアントは、日本語を含む多言語のレイヤ名・属性名・UI表示に完全対応しています。
+- `/wfs-layers` エンドポイントの `title` フィールドや、`TYPENAME` には日本語（全角文字・記号含む）を利用可能です。
+- クライアント側（MapLibre等）でIDやHTML要素属性として利用する場合は、`encodeURIComponent` などで一意かつ安全なIDに変換してください。
+- JSON/HTML出力時はUTF-8エンコーディングを強制し、`ensure_ascii=False` で日本語がそのまま出力されます。
+- 仕様上、レイヤ名・属性名・UIテキスト等に日本語・多言語を利用しても動作・表示・選択・検索に支障はありません。
+
+
 ### 概要
 - QMapPermalink の WFS は QGIS プロジェクトのベクターレイヤーを外部アプリケーションに提供します。
 - `/wfs-layers` エンドポイントはプロジェクトの `WFSLayers` エントリを読み、公開対象レイヤの JSON リストを返します。
