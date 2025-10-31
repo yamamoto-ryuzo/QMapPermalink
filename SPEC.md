@@ -131,6 +131,13 @@ WMTS-like タイル (`/wmts/{z}/{x}/{y}.png`):
 ### DescribeFeatureType
 - 挙動: 指定レイヤの属性スキーマを XML 形式で返す（既存の実装に準拠）。
 
+### GetStyles
+- 挙動: 指定レイヤの QGIS レンダラ設定に基づいて SLD (Styled Layer Descriptor) を生成して XML 形式で返す。
+- 入力パラメータ: `TYPENAME`（必須）、`VERSION`（オプション、デフォルト: 1.1.0）。
+- サポートするレンダラタイプ: 単一シンボル (singleSymbol)、分類シンボル (categorizedSymbol)、グラデーションシンボル (graduatedSymbol)、ルールベースレンダラ (ruleBased)。
+- レスポンス: SLD 1.1.0 準拠の XML。レンダラタイプに応じて適切なシンボル定義を生成。
+- 注意: ルールベースレンダラの場合、最初のルールのシンボルをデフォルトとして使用。複雑なルール構造は簡易的に処理。
+
 ### エラー応答
 - WFS のエラーは OWS スタイルの ExceptionReport（XML）で返却する。基本形式:
 
@@ -143,8 +150,11 @@ WMTS-like タイル (`/wmts/{z}/{x}/{y}.png`):
 </ExceptionReport>
 ```
 
+- GetStyles 固有のエラー: レイヤが見つからない場合やレンダラの処理に失敗した場合に同様の形式でエラーを返す。
+
 ### 運用上の注意
 - `GetCapabilities` と `/wfs-layers` が同じ `WFSLayers` を参照するため、公開設定はプロジェクト側で一元的に管理すること。
+- GetStyles は QGIS のレンダラ設定を SLD に変換するため、複雑なスタイルは簡易的に処理される場合がある。
 - 実装は簡易的な GML 出力を行うため、GML の厳密な互換性が必要なワークフローでは注意して検証すること。
 
 ## 7. Google Maps / Google Earth 連携（生成とパース）

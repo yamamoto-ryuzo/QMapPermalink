@@ -59,6 +59,7 @@ QMapPermalink は QGIS のベクターレイヤーを OGC WFS 2.0 準拠のサ�
 - **GetCapabilities**: 利用可能なレイヤー情報とサービスメタデータを XML 形式で返します
 - **GetFeature**: 指定したレイヤーから地物を GeoJSON または GML 形式で返します
 - **DescribeFeatureType**: 指定したレイヤーの属性スキーマを XML 形式で返します
+- **GetStyles**: 指定したレイヤーのスタイル情報を SLD (Styled Layer Descriptor) 形式で返します
 
 ### 使用例
 
@@ -74,12 +75,15 @@ curl "http://localhost:8089/wfs?SERVICE=WFS&REQUEST=GetFeature&TYPENAME=my_layer
 
 # レイヤーのスキーマ情報を取得
 curl "http://localhost:8089/wfs?SERVICE=WFS&REQUEST=DescribeFeatureType&TYPENAME=my_layer"
+
+# レイヤーのスタイル情報を取得
+curl "http://localhost:8089/wfs?SERVICE=WFS&REQUEST=GetStyles&TYPENAME=my_layer"
 ```
 
 ### パラメータ
 
 - **SERVICE**: "WFS" （必須）
-- **REQUEST**: "GetCapabilities", "GetFeature", "DescribeFeatureType" のいずれか （必須）
+- **REQUEST**: "GetCapabilities", "GetFeature", "DescribeFeatureType", "GetStyles" のいずれか （必須）
 - **VERSION**: "2.0.0" （オプション、デフォルト: 2.0.0）
 - **TYPENAME/TYPENAMES**: レイヤー名 （GetFeature, DescribeFeatureType で必須）
 - **OUTPUTFORMAT**: "application/json" または "application/gml+xml" （GetFeature でオプション、デフォルト: application/json）
@@ -92,6 +96,7 @@ curl "http://localhost:8089/wfs?SERVICE=WFS&REQUEST=DescribeFeatureType&TYPENAME
 - WFS サービスは QGIS プロジェクトで読み込まれているベクターレイヤーのみを公開します
 - レイヤー名にスペースが含まれる場合は、アンダースコア（_）に置き換えて指定してください
 - 空間フィルタ（BBOX）はレイヤーの座標系で指定してください
+- GetStyles は QGIS のレンダラ設定に基づいて SLD (Styled Layer Descriptor) を生成します
 - 社内 LAN での利用を前提としており、外部公開には適していません
   
 ## 使用例
