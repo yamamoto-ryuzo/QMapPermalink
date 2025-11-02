@@ -47,6 +47,7 @@ def prepare_wfs_for_maplibre(permalink_text: str, wfs_typename: str = None) -> D
         fails (running inside QGIS).
     """
     from urllib.parse import quote as _quote, urlparse as _urlparse, parse_qs as _parse_qs
+    import json as _jsonmod
 
     _final_typename = None
     if wfs_typename and str(wfs_typename).strip():
@@ -63,7 +64,29 @@ def prepare_wfs_for_maplibre(permalink_text: str, wfs_typename: str = None) -> D
             _final_typename = None
 
     if not _final_typename:
-        raise ValueError("WFS typename not provided: specify 'wfs_typename' argument or include a typename in the permalink query parameters")
+        # No typename provided — return a benign response so callers can still
+        # generate a MapLibre HTML without WFS layers. Use a sensible default
+        # style URL so the map can initialize.
+        default_style = "https://demotiles.maplibre.org/style.json"
+        return {
+            'final_typename': None,
+            'wfs_typename': '',
+            'wfs_query_url': '',
+            'wfs_source_id': '',
+            'wfs_layer_id': '',
+            'wfs_label_id': '',
+            'wfs_layer_title': '',
+            'wfs_label_title': '',
+            'wfs_source_id_js': _jsonmod.dumps(''),
+            'wfs_layer_id_js': _jsonmod.dumps(''),
+            'wfs_label_id_js': _jsonmod.dumps(''),
+            'wfs_layer_title_js': _jsonmod.dumps(''),
+            'wfs_label_title_js': _jsonmod.dumps(''),
+            'style_url': default_style,
+            'mapbox_layers': [],
+            'style_json': None,
+            'wfs_layers_js': '',
+        }
 
     _wfs_typename = _quote(_final_typename)
     _wfs_query_url = f"/wfs?SERVICE=WFS&REQUEST=GetFeature&TYPENAMES={_wfs_typename}&OUTPUTFORMAT=application/json&MAXFEATURES=1000"
