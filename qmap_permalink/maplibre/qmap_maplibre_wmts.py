@@ -9,12 +9,23 @@ and instead attempt lightweight existence checks so the module can be used
 both inside and outside QGIS (e.g. in unit tests).
 """
 
+# Public API exported by this module
+__all__ = [
+    'choose_tile_template',
+    'default_wmts_layers_js',
+]
 
-def choose_tile_template():
+
+def choose_tile_template() -> str:
     """Return a tile URL template string.
 
     Prefers a local WMTS endpoint when QGIS is available, otherwise falls
     back to a public OSM tile template.
+
+    Returns
+    -------
+    str
+        Tile URL template suitable for MapLibre tile sources.
     """
     try:
         # existence check for QGIS runtime
@@ -24,7 +35,7 @@ def choose_tile_template():
         return "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
 
 
-def default_wmts_layers_js():
+def default_wmts_layers_js() -> str:
     """Return a JS snippet (string) that defines the initial wmtsLayers array.
 
     The returned string is intended to be inserted verbatim into the HTML

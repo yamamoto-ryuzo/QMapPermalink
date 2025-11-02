@@ -7,20 +7,44 @@ previously embedded in `qmap_maplibre.py` so callers can simply call
 ready-to-use values.
 """
 
+# Public API exported by this module
+__all__ = [
+    'prepare_wfs_for_maplibre',
+    'sld_to_mapbox_style',
+    '_extract_css_param',
+]
+
 from typing import Dict, Any
 
 
 def prepare_wfs_for_maplibre(permalink_text: str, wfs_typename: str = None) -> Dict[str, Any]:
     """Prepare and validate WFS-related variables for MapLibre HTML.
 
-    Returns a dict with keys matching the variables used by the MapLibre
-    HTML generator (for example: 'final_typename', 'wfs_typename',
-    'wfs_query_url', 'wfs_source_id', 'wfs_layer_id', 'wfs_label_id',
-    'wfs_layer_title', 'wfs_label_title', 'style_url', 'wfs_layers_js').
+    This function extracts a typename from the provided permalink (unless
+    `wfs_typename` is explicitly provided), url-encodes it for WFS queries,
+    and — when running inside QGIS — attempts to normalize it to a canonical
+    QGIS layer id. The returned dict contains the values expected by the
+    MapLibre HTML template generator.
 
-    Raises ValueError when typename is not provided or when running inside
-    QGIS and the provided typename cannot be normalized to a canonical
-    layer id.
+    Parameters
+    ----------
+    permalink_text : str
+        The permalink/URL that may include query parameters such as
+        `typename`/`typenames`.
+    wfs_typename : Optional[str]
+        Optional explicit typename to use instead of extracting from the
+        permalink.
+
+    Returns
+    -------
+    Dict[str, Any]
+        Dictionary containing keys used by the MapLibre generator.
+
+    Raises
+    ------
+    ValueError
+        When no typename can be determined or when QGIS-specific validation
+        fails (running inside QGIS).
     """
     from urllib.parse import quote as _quote, urlparse as _urlparse, parse_qs as _parse_qs
 
