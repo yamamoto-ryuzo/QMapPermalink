@@ -1,6 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<ExceptionReport version="1.0.0" xmlns="http://www.opengis.net/ows">
-    <Exception exceptionCode="InvalidParameterValue" locator="TYPENAME">
-        <ExceptionText>Layer '<canonical_id_or_typename>' not found</ExceptionText>
-    </Exception>
-</ExceptionReport>
