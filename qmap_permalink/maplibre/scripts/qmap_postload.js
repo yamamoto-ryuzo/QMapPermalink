@@ -57,99 +57,140 @@
                 if (geomType.indexOf('Multi') === 0) { geomType = geomType.replace(/Multi/i, ''); }
               }
 
-              if (!geomType || geomType === 'Point' || geomType === 'MultiPoint') {
-                if (!map.getLayer(layerId)) {
-                  map.addLayer({
-                    id: layerId,
-                    type: 'circle',
-                    source: sourceId,
-                    paint: {
-                      'circle-radius': 6,
-                      'circle-color': '#d62728',
-                      'circle-stroke-color': '#fff',
-                      'circle-stroke-width': 1
-                    }
-                  });
+              // スタイルは /maplibre-style エンドポイントから既に適用されているため、
+              // レイヤーが既に存在する場合は何もしない（スタイルを上書きしない）
+              // レイヤーが存在しない場合のみ、フォールバックスタイルで追加
+              var layerExists = false;
+              try {
+                // Check if any layers using this source already exist
+                // (they would have been added by the style JSON)
+                var allLayers = map.getStyle().layers || [];
+                for (var i = 0; i < allLayers.length; i++) {
+                  if (allLayers[i].source === sourceId) {
+                    layerExists = true;
+                    console.log('Layer already exists in style for source:', sourceId);
+                    break;
+                  }
                 }
-                if (!map.getLayer(labelId)) {
-                  map.addLayer({
-                    id: labelId,
-                    type: 'symbol',
-                    source: sourceId,
-                    filter: ['has', 'label'],
-                    layout: {
-                      'text-field': ['get', 'label'],
-                      'text-size': 14,
-                      'text-offset': [0, 1.0],
-                      'text-anchor': 'top',
-                      'text-allow-overlap': true
-                    },
-                    paint: {
-                      'text-color': '#000000',
-                      'text-halo-color': '#ffffff',
-                      'text-halo-width': 2
-                    }
-                  });
-                }
-              } else if (geomType === 'LineString') {
-                if (!map.getLayer(layerId)) {
-                  map.addLayer({
-                    id: layerId,
-                    type: 'line',
-                    source: sourceId,
-                    paint: { 'line-color': '#d62728', 'line-width': 3, 'line-opacity': 1.0 }
-                  });
-                }
-                if (!map.getLayer(labelId)) {
-                  map.addLayer({
-                    id: labelId,
-                    type: 'symbol',
-                    source: sourceId,
-                    filter: ['has', 'label'],
-                    layout: {
-                      'symbol-placement': 'line',
-                      'text-field': ['get', 'label'],
-                      'text-size': 14,
-                      'text-offset': [0, 1.0],
-                      'text-allow-overlap': true
-                    },
-                    paint: { 'text-color': '#000000', 'text-halo-color': '#ffffff', 'text-halo-width': 2 }
-                  });
-                }
-              } else if (geomType === 'Polygon') {
-                if (!map.getLayer(layerId)) {
-                  map.addLayer({
-                    id: layerId,
-                    type: 'fill',
-                    source: sourceId,
-                    paint: { 'fill-color': '#d62728', 'fill-opacity': 0.4, 'fill-outline-color': '#fff' }
-                  });
-                }
-                if (!map.getLayer(labelId)) {
-                  map.addLayer({
-                    id: labelId,
-                    type: 'symbol',
-                    source: sourceId,
-                    filter: ['has', 'label'],
-                    layout: { 'symbol-placement': 'point', 'text-field': ['get', 'label'], 'text-size': 14, 'text-allow-overlap': true },
-                    paint: { 'text-color': '#000000', 'text-halo-color': '#ffffff', 'text-halo-width': 2 }
-                  });
-                }
-              } else {
-                if (!map.getLayer(layerId)) {
-                  map.addLayer({
-                    id: layerId,
-                    type: 'circle',
-                    source: sourceId,
-                    paint: { 'circle-radius': 6, 'circle-color': '#d62728', 'circle-stroke-color': '#fff', 'circle-stroke-width': 1 }
-                  });
+              } catch (e) {
+                console.warn('Failed to check existing layers', e);
+              }
+
+              // Only add layers if they don't already exist in the style
+              if (!layerExists) {
+                console.warn('No style found for source ' + sourceId + ', using fallback style');
+                if (!geomType || geomType === 'Point' || geomType === 'MultiPoint') {
+                  if (!map.getLayer(layerId)) {
+                    map.addLayer({
+                      id: layerId,
+                      type: 'circle',
+                      source: sourceId,
+                      paint: {
+                        'circle-radius': 6,
+                        'circle-color': '#d62728',
+                        'circle-stroke-color': '#fff',
+                        'circle-stroke-width': 1
+                      }
+                    });
+                  }
+                } else if (geomType === 'LineString') {
+                  if (!map.getLayer(layerId)) {
+                    map.addLayer({
+                      id: layerId,
+                      type: 'line',
+                      source: sourceId,
+                      paint: { 'line-color': '#d62728', 'line-width': 3, 'line-opacity': 1.0 }
+                    });
+                  }
+                } else if (geomType === 'Polygon') {
+                  if (!map.getLayer(layerId)) {
+                    map.addLayer({
+                      id: layerId,
+                      type: 'fill',
+                      source: sourceId,
+                      paint: { 'fill-color': '#d62728', 'fill-opacity': 0.4, 'fill-outline-color': '#fff' }
+                    });
+                  }
+                } else {
+                  if (!map.getLayer(layerId)) {
+                    map.addLayer({
+                      id: layerId,
+                      type: 'circle',
+                      source: sourceId,
+                      paint: { 'circle-radius': 6, 'circle-color': '#d62728', 'circle-stroke-color': '#fff', 'circle-stroke-width': 1 }
+                    });
+                  }
                 }
               }
 
+              // ラベルレイヤーは常に追加（スタイルJSONには通常含まれない）
+              if (!map.getLayer(labelId)) {
+                var labelLayout = {
+                  'text-field': ['get', 'label'],
+                  'text-size': 14,
+                  'text-allow-overlap': true
+                };
+                var labelPaint = {
+                  'text-color': '#000000',
+                  'text-halo-color': '#ffffff',
+                  'text-halo-width': 2
+                };
+
+                if (geomType === 'LineString') {
+                  labelLayout['symbol-placement'] = 'line';
+                  labelLayout['text-offset'] = [0, 1.0];
+                } else if (geomType === 'Polygon') {
+                  labelLayout['symbol-placement'] = 'point';
+                } else {
+                  labelLayout['text-offset'] = [0, 1.0];
+                  labelLayout['text-anchor'] = 'top';
+                }
+
+                map.addLayer({
+                  id: labelId,
+                  type: 'symbol',
+                  source: sourceId,
+                  filter: ['has', 'label'],
+                  layout: labelLayout,
+                  paint: labelPaint
+                });
+              }
+
               // Expose added layers to the WMTS/vector layer control
+              // スタイルから読み込まれたレイヤーも含めて、すべてのWFSレイヤーを登録
               if (typeof wmtsLayers !== 'undefined' && Array.isArray(wmtsLayers)) {
-                wmtsLayers.push({ id: layerId, title: layerTitle });
-                wmtsLayers.push({ id: labelId, title: labelTitle });
+                // Check if this layer is already in wmtsLayers (from style JSON)
+                var layerExists = wmtsLayers.some(function(l) { return l && (l.id === layerId || l.id === labelId); });
+                if (!layerExists) {
+                  // Only add if not already present
+                  // Get actual layer IDs from the style (may differ from our expected IDs)
+                  try {
+                    var styleLayers = map.getStyle().layers || [];
+                    var foundIds = [];
+                    for (var i = 0; i < styleLayers.length; i++) {
+                      if (styleLayers[i].source === sourceId) {
+                        foundIds.push(styleLayers[i].id);
+                      }
+                    }
+                    // Register all layers from this source
+                    for (var j = 0; j < foundIds.length; j++) {
+                      var fid = foundIds[j];
+                      // Skip if already registered
+                      if (wmtsLayers.some(function(l) { return l && l.id === fid; })) continue;
+                      // Determine title based on layer type
+                      var fTitle = layerTitle;
+                      if (fid.indexOf('label') >= 0 || fid.indexOf('symbol') >= 0) {
+                        fTitle = labelTitle;
+                      }
+                      wmtsLayers.push({ id: fid, title: fTitle });
+                    }
+                  } catch (e) {
+                    console.warn('Failed to register style layers in control', e);
+                    // Fallback: register expected IDs
+                    wmtsLayers.push({ id: layerId, title: layerTitle });
+                    wmtsLayers.push({ id: labelId, title: labelTitle });
+                  }
+                }
               }
 
             } catch (e) { console.warn('Failed to add WFS layer after successful fetch:', e); }
@@ -169,6 +210,10 @@
             const xml = parser.parseFromString(xmlText, 'text/xml');
             const featureTypes = xml.getElementsByTagName('FeatureType');
             const control = document.getElementById('layerControl');
+            
+            // WFSレイヤー用のチェックボックスを作成する前に、既存のものをチェック
+            var processedSources = new Set();
+            
             for (let i = 0; i < featureTypes.length; i++) {
               const ft = featureTypes[i];
               const nameElem = ft.getElementsByTagName('Name')[0];
@@ -180,19 +225,76 @@
               const expectedLabelId = id + '_label';
               const labelText = (titleElem ? titleElem.textContent : id);
 
-              const row = document.createElement('div');
-              row.style.marginBottom = '4px';
-              const cb = document.createElement('input'); cb.type = 'checkbox'; cb.id = 'cb_' + safeId; cb.checked = true; cb.style.marginRight = '6px';
-              const label = document.createElement('label'); label.htmlFor = cb.id; label.innerHTML = labelText;
-              row.appendChild(cb); row.appendChild(label); control.appendChild(row);
+              // 既にwmtsLayersに登録されているかチェック（重複防止）
+              var alreadyInWmts = false;
+              if (typeof wmtsLayers !== 'undefined' && Array.isArray(wmtsLayers)) {
+                alreadyInWmts = wmtsLayers.some(function(l) {
+                  return l && (l.id === id || l.id === expectedLayerId || l.title === labelText || l.title === `WFS: ${id}`);
+                });
+              }
+              
+              // UIに既に追加されているかチェック
+              var existingCb = document.getElementById('cb_' + safeId);
+              
+              if (!existingCb && !alreadyInWmts) {
+                const row = document.createElement('div');
+                row.style.marginBottom = '4px';
+                const cb = document.createElement('input'); 
+                cb.type = 'checkbox'; 
+                cb.id = 'cb_' + safeId; 
+                cb.checked = true; 
+                cb.style.marginRight = '6px';
+                const label = document.createElement('label'); 
+                label.htmlFor = cb.id; 
+                label.innerHTML = labelText;
+                row.appendChild(cb); 
+                row.appendChild(label); 
+                control.appendChild(row);
 
-              cb.addEventListener('change', function() {
-                try {
-                  const visibility = cb.checked ? 'visible' : 'none';
-                  if (map.getLayer(expectedLayerId)) { map.setLayoutProperty(expectedLayerId, 'visibility', visibility); }
-                  if (map.getLayer(expectedLabelId)) { map.setLayoutProperty(expectedLabelId, 'visibility', visibility); }
-                } catch (e) { console.warn('Failed to toggle layer visibility', e); }
-              });
+                cb.addEventListener('change', function() {
+                  try {
+                    const visibility = cb.checked ? 'visible' : 'none';
+                    // スタイルJSONから読み込まれたレイヤーを含む、このソースを使用するすべてのレイヤーを制御
+                    var controlledCount = 0;
+                    try {
+                      var allLayers = map.getStyle().layers || [];
+                      for (var li = 0; li < allLayers.length; li++) {
+                        var layer = allLayers[li];
+                        if (layer.source === id) {
+                          // このソースを使用するすべてのレイヤーの表示を切り替え
+                          try {
+                            map.setLayoutProperty(layer.id, 'visibility', visibility);
+                            controlledCount++;
+                            console.log('Set visibility for layer:', layer.id, 'to', visibility);
+                          } catch (e) {
+                            console.warn('Failed to set visibility for layer:', layer.id, e);
+                          }
+                        }
+                      }
+                    } catch (e) {
+                      console.warn('Failed to enumerate layers for source:', id, e);
+                    }
+                    
+                    // フォールバック: 期待されるレイヤーIDも試す
+                    if (controlledCount === 0) {
+                      if (map.getLayer(expectedLayerId)) { 
+                        map.setLayoutProperty(expectedLayerId, 'visibility', visibility); 
+                        controlledCount++;
+                      }
+                      if (map.getLayer(expectedLabelId)) { 
+                        map.setLayoutProperty(expectedLabelId, 'visibility', visibility); 
+                        controlledCount++;
+                      }
+                    }
+                    
+                    if (controlledCount === 0) {
+                      console.warn('No layers found for source:', id);
+                    }
+                  } catch (e) { console.warn('Failed to toggle layer visibility', e); }
+                });
+                
+                processedSources.add(id);
+              }
 
               const already = (typeof wmtsLayers !== 'undefined') ? wmtsLayers.find(function(e) { return e && e.title === `WFS: ${id}`; }) : null;
               if (!already) {
@@ -208,16 +310,60 @@
         const control = document.getElementById('layerControl');
         if (typeof wmtsLayers !== 'undefined' && Array.isArray(wmtsLayers)) {
           wmtsLayers.forEach(function(layerInfo) {
-            const row = document.createElement('div'); row.style.marginBottom = '4px';
-            const cb = document.createElement('input'); cb.type = 'checkbox'; cb.id = 'cb_' + encodeURIComponent(layerInfo.id); cb.checked = true; cb.style.marginRight = '6px';
-            const label = document.createElement('label'); label.htmlFor = cb.id; label.textContent = layerInfo.title || layerInfo.id;
-            row.appendChild(cb); row.appendChild(label); control.appendChild(row);
+            // 既にUIに追加されているかチェック（重複防止）
+            var cbId = 'cb_' + encodeURIComponent(layerInfo.id);
+            if (document.getElementById(cbId)) {
+              console.log('Layer control already exists for:', layerInfo.id);
+              return; // skip duplicates
+            }
+            
+            const row = document.createElement('div'); 
+            row.style.marginBottom = '4px';
+            const cb = document.createElement('input'); 
+            cb.type = 'checkbox'; 
+            cb.id = cbId; 
+            cb.checked = true; 
+            cb.style.marginRight = '6px';
+            const label = document.createElement('label'); 
+            label.htmlFor = cb.id; 
+            label.textContent = layerInfo.title || layerInfo.id;
+            row.appendChild(cb); 
+            row.appendChild(label); 
+            control.appendChild(row);
 
             cb.addEventListener('change', function() {
               try {
                 const visibility = cb.checked ? 'visible' : 'none';
-                if (map.getLayer(layerInfo.id)) { map.setLayoutProperty(layerInfo.id, 'visibility', visibility); }
-                else { console.warn('Layer not found on map yet:', layerInfo.id); }
+                var controlled = false;
+                
+                // Try to control the specific layer by ID first
+                if (map.getLayer(layerInfo.id)) { 
+                  map.setLayoutProperty(layerInfo.id, 'visibility', visibility); 
+                  controlled = true;
+                  console.log('Set visibility for layer:', layerInfo.id, 'to', visibility);
+                }
+                
+                // If layer not found, try to find it by source (for style JSON layers)
+                if (!controlled) {
+                  try {
+                    var allLayers = map.getStyle().layers || [];
+                    for (var i = 0; i < allLayers.length; i++) {
+                      var layer = allLayers[i];
+                      // Match by layer ID or source ID
+                      if (layer.id === layerInfo.id || layer.source === layerInfo.id) {
+                        map.setLayoutProperty(layer.id, 'visibility', visibility);
+                        controlled = true;
+                        console.log('Set visibility for layer via source:', layer.id, 'to', visibility);
+                      }
+                    }
+                  } catch (e) {
+                    console.warn('Failed to search layers by source', e);
+                  }
+                }
+                
+                if (!controlled) {
+                  console.warn('Layer not found on map yet:', layerInfo.id);
+                }
               } catch (e) { console.warn('Failed to toggle layer visibility', e); }
             });
           });
