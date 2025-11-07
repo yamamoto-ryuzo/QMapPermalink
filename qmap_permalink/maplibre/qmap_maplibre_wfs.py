@@ -153,7 +153,10 @@ def prepare_wfs_for_maplibre(permalink_text: str, wfs_typename: str = None) -> D
     _wfs_layer_title_js = _jsonmod.dumps(_wfs_layer_title)
     _wfs_label_title_js = _jsonmod.dumps(_wfs_label_title)
 
-    style_url = f"/maplibre-style?typename={_wfs_typename}"
+    # Use complete URL for MapLibre style endpoint
+    # MapLibre GL JS requires either a complete URL or an inline style object
+    # Using URL maintains separation of concerns and allows for caching
+    style_url = f"http://localhost:8089/maplibre-style?typename={_wfs_typename}"
 
     mapbox_layers = []
     style_json = None
@@ -295,6 +298,11 @@ def sld_to_mapbox_style(sld_xml, source_id="qgis"):
                                 outline_width = float(sw)
                             except Exception:
                                 outline_width = None
+                    
+                    # If no stroke color extracted but stroke element exists, use default
+                    if stroke is not None and not outline_color:
+                        outline_color = '#000000'  # Default to black
+                        outline_width = 1.0
 
                     # If there is no effective fill (no color or fully transparent),
                     # prefer to omit the fill layer and only emit a line layer for the
@@ -302,11 +310,14 @@ def sld_to_mapbox_style(sld_xml, source_id="qgis"):
                     # user's expectation for "ブラシなし" (brushless) polygon styles.
                     has_fill = False
                     try:
-                        if 'fill-color' in paint:
+                        if 'fill-color' in paint and paint['fill-color']:
                             # If explicit fill-opacity is zero, treat as no fill
                             fop_val = paint.get('fill-opacity')
                             if fop_val is None or (isinstance(fop_val, (int, float)) and float(fop_val) > 0):
                                 has_fill = True
+                        # If fill-color is missing or empty string, no fill
+                        elif not paint.get('fill-color'):
+                            has_fill = False
                     except Exception:
                         has_fill = False
 

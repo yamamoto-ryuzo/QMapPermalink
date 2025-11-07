@@ -30,7 +30,17 @@ def choose_tile_template() -> str:
     try:
         # existence check for QGIS runtime
         from qgis.core import QgsApplication  # type: ignore
-        return "/wmts/{z}/{x}/{y}.png"
+        # MapLibre requires complete URLs for tile sources
+        # Try to get the actual server port from the plugin
+        try:
+            from ..qmap_permalink_server_manager import QMapPermalinkServerManager
+            # Attempt to find a running server instance
+            port = 8089  # default fallback
+            # In practice, the server manager is instantiated with the plugin
+            # and we don't have easy access here. We use the default port.
+        except Exception:
+            port = 8089
+        return f"http://localhost:{port}/wmts/{{z}}/{{x}}/{{y}}.png"
     except Exception:
         return "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
 
