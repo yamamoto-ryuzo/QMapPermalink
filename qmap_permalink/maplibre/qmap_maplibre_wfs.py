@@ -65,9 +65,9 @@ def prepare_wfs_for_maplibre(permalink_text: str, wfs_typename: str = None) -> D
 
     if not _final_typename:
         # No typename provided — return a benign response so callers can still
-        # generate a MapLibre HTML without WFS layers. Use a sensible default
-        # style URL so the map can initialize.
-        default_style = "https://demotiles.maplibre.org/style.json"
+        # generate a MapLibre HTML without WFS layers. Use the local WMTS
+        # style endpoint so base map tiles are always available.
+        local_style = "/maplibre-style"
         return {
             'final_typename': None,
             'wfs_typename': '',
@@ -82,7 +82,7 @@ def prepare_wfs_for_maplibre(permalink_text: str, wfs_typename: str = None) -> D
             'wfs_label_id_js': _jsonmod.dumps(''),
             'wfs_layer_title_js': _jsonmod.dumps(''),
             'wfs_label_title_js': _jsonmod.dumps(''),
-            'style_url': default_style,
+            'style_url': local_style,
             'mapbox_layers': [],
             'style_json': None,
             'wfs_layers_js': '',
