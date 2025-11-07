@@ -269,6 +269,15 @@ def sld_to_mapbox_style(sld_xml, source_id="qgis"):
                                 paint['line-opacity'] = float(opacity)
                             except Exception:
                                 pass
+                        # LineSymbolizerのみの場合でも必ずlayersに追加
+                        base_index = len(layers)
+                        layers.append({
+                            'id': f"{source_id}_{layer_type}_{base_index}",
+                            'type': layer_type,
+                            'source': source_id,
+                            'paint': paint,
+                            'layout': layout
+                        })
 
                 elif poly_sym is not None:
                     layer_type = 'fill'
