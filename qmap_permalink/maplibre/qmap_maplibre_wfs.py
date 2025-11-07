@@ -16,6 +16,12 @@ __all__ = [
 
 from typing import Dict, Any
 
+# 可能なら統一スタイル正規化を使用（将来の直接変換に備え）
+try:
+    from ..style_normalizer import extract_normalized_style  # type: ignore
+except Exception:
+    extract_normalized_style = None  # type: ignore
+
 
 def prepare_wfs_for_maplibre(permalink_text: str, wfs_typename: str = None) -> Dict[str, Any]:
     """Prepare and validate WFS-related variables for MapLibre HTML.
