@@ -269,6 +269,24 @@ def sld_to_mapbox_style(sld_xml, source_id="qgis"):
                                 paint['line-opacity'] = float(opacity)
                             except Exception:
                                 pass
+                        # line join/cap
+                        join = _extract_css_param(stroke, 'stroke-linejoin')
+                        if join:
+                            # Map SLD 'mitre' to MapLibre 'miter'
+                            join_mbx = 'miter' if join.lower() == 'mitre' else join.lower()
+                            layout['line-join'] = join_mbx
+                        cap = _extract_css_param(stroke, 'stroke-linecap')
+                        if cap:
+                            layout['line-cap'] = cap.lower()
+                        # dasharray
+                        dash = _extract_css_param(stroke, 'stroke-dasharray')
+                        if dash:
+                            try:
+                                parts = [float(x) for x in dash.replace(',', ' ').split() if x.strip()]
+                                if parts:
+                                    paint['line-dasharray'] = parts
+                            except Exception:
+                                pass
                         # LineSymbolizerのみの場合でも必ずlayersに追加
                         base_index = len(layers)
                         layers.append({
@@ -307,6 +325,18 @@ def sld_to_mapbox_style(sld_xml, source_id="qgis"):
                                 outline_width = float(sw)
                             except Exception:
                                 outline_width = None
+                        # stroke-opacity
+                        sop = _extract_css_param(stroke, 'stroke-opacity')
+                        outline_opacity = None
+                        if sop:
+                            try:
+                                outline_opacity = float(sop)
+                            except Exception:
+                                outline_opacity = None
+                        # join/cap/dash for outline
+                        outline_join = _extract_css_param(stroke, 'stroke-linejoin')
+                        outline_cap = _extract_css_param(stroke, 'stroke-linecap')
+                        outline_dash = _extract_css_param(stroke, 'stroke-dasharray')
                     
                     # If no stroke color extracted but stroke element exists, use default
                     if stroke is not None and not outline_color:
@@ -354,12 +384,30 @@ def sld_to_mapbox_style(sld_xml, source_id="qgis"):
                             else:
                                 line_width_val = 1
                             line_paint = {'line-color': outline_color, 'line-width': line_width_val, 'line-opacity': 1.0}
+                            if outline_opacity is not None:
+                                try:
+                                    line_paint['line-opacity'] = float(outline_opacity)
+                                except Exception:
+                                    pass
+                            # layout for outline
+                            line_layout = {}
+                            if outline_join:
+                                line_layout['line-join'] = 'miter' if outline_join.lower() == 'mitre' else outline_join.lower()
+                            if outline_cap:
+                                line_layout['line-cap'] = outline_cap.lower()
+                            if outline_dash:
+                                try:
+                                    parts = [float(x) for x in outline_dash.replace(',', ' ').split() if x.strip()]
+                                    if parts:
+                                        line_paint['line-dasharray'] = parts
+                                except Exception:
+                                    pass
                             layers.append({
                                 'id': f"{source_id}_line_{line_index}",
                                 'type': 'line',
                                 'source': source_id,
                                 'paint': line_paint,
-                                'layout': {}
+                                'layout': line_layout
                             })
                     except Exception:
                         # non-fatal: continue without outline/fill
