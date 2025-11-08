@@ -8,6 +8,146 @@
     try {
       // Add helper: addWfsLayer (mirrors previous inline implementation)
       function addWfsLayer(wfsUrl, sourceId, layerId, labelId, layerTitle, labelTitle) {
+        // スタイルJSONから既にレイヤーが読み込まれている場合は、sourceだけ更新
+        var sourceAlreadyExists = false;
+        var layersFromStyleExist = false;
+        
+        try {
+          sourceAlreadyExists = !!map.getSource(sourceId);
+          var allLayers = map.getStyle().layers || [];
+          for (var i = 0; i < allLayers.length; i++) {
+            if (allLayers[i].source === sourceId) {
+              layersFromStyleExist = true;
+              console.log('Layer from style JSON already exists:', allLayers[i].id);
+              break;
+            }
+          }
+        } catch (e) {
+          console.warn('Failed to check existing source/layers', e);
+        }
+        
+        // スタイルJSONからレイヤーが既に追加されている場合は、
+        // データソースの更新のみを行い、レイヤーは追加しない
+        if (layersFromStyleExist && sourceAlreadyExists) {
+          console.log('Source and layers already exist for:', sourceId, '- skipping WFS fetch (using style JSON data source)');
+          // Register layers in wmtsLayers for control
+          if (typeof wmtsLayers !== 'undefined' && Array.isArray(wmtsLayers)) {
+            try {
+              var styleLayers = map.getStyle().layers || [];
+              for (var i = 0; i < styleLayers.length; i++) {
+                if (styleLayers[i].source === sourceId) {
+                  var fid = styleLayers[i].id;
+                  // Skip if already registered
+                  if (wmtsLayers.some(function(l) { return l && l.id === fid; })) continue;
+                  // Determine title based on layer type
+                  var fTitle = layerTitle;
+                  if (fid.indexOf('label') >= 0 || fid.indexOf('symbol') >= 0) {
+                    fTitle = labelTitle;
+                  }
+                  wmtsLayers.push({ id: fid, title: fTitle });
+                }
+              }
+            } catch (e) {
+              console.warn('Failed to register style layers', e);
+            }
+          }
+          return; // Skip WFS fetch - data is already being loaded from style JSON source
+        }
+
+        // まだスタイルJSONにこのsourceのレイヤーが含まれていない場合、個別に /maplibre-style?typename=sourceId を叩いて
+        // 追加スタイルをマージする（成功したらフォールバックのWFSフェッチをスキップできる）
+        async function tryInjectStyleForSource(id) {
+          var encodedId = encodeURIComponent(id);
+          var styleEndpoint = '/maplibre-style?typename=' + encodedId;
+          try {
+            console.log('Attempting style fetch for extra typename:', id);
+            const resp = await fetch(styleEndpoint, { method: 'GET' });
+            if (!resp.ok) throw new Error('style fetch failed: ' + resp.status);
+            const styleJson = await resp.json();
+            if (!styleJson || !styleJson.layers || !styleJson.sources) {
+              console.warn('Style JSON missing layers/sources for:', id); return false;
+            }
+            if (map.getSource(id)) {
+              console.log('Source already exists before style injection, skipping source add:', id);
+            } else if (styleJson.sources[id]) {
+              // 追加するソース（geojson）。style側は data に /wfs URL を持つため自動ロードされる。
+              map.addSource(id, styleJson.sources[id]);
+              console.log('Added source from style for:', id);
+            } else {
+              console.warn('Style JSON has no source entry for id:', id); return false;
+            }
+            // そのsourceを参照するレイヤーのみ抽出して追加（既存重複はスキップ）
+            var addedAny = false;
+            for (var li = 0; li < styleJson.layers.length; li++) {
+              var lyr = styleJson.layers[li];
+              if (!lyr || lyr.source !== id) continue;
+              if (map.getLayer(lyr.id)) { continue; }
+              map.addLayer(lyr); // 既存スタイル末尾に追加
+              addedAny = true;
+              console.log('Injected style layer:', lyr.id);
+              // レイヤー制御へ登録
+              if (typeof wmtsLayers !== 'undefined' && Array.isArray(wmtsLayers)) {
+                var fTitle = layerTitle;
+                if (lyr.id.indexOf('label') >= 0 || lyr.id.indexOf('symbol') >= 0) { fTitle = labelTitle; }
+                if (!wmtsLayers.some(function(l) { return l && l.id === lyr.id; })) {
+                  wmtsLayers.push({ id: lyr.id, title: fTitle });
+                }
+              }
+            }
+            if (!addedAny) {
+              console.warn('No layers injected from style for source:', id);
+              return false;
+            }
+            return true;
+          } catch (e) {
+            console.warn('Failed injecting style for source:', id, e);
+            return false;
+          }
+        }
+
+        // スタイル未存在時はまずスタイルを試みる（成功すればWFSフォールバック不要）
+        if (!layersFromStyleExist) {
+          // 非同期だが、後続処理を簡潔にするため IIFE と then で制御
+          return (async () => {
+            var injected = await tryInjectStyleForSource(sourceId);
+            if (injected) {
+              console.log('Style injection succeeded for', sourceId, '- skipping WFS fetch.');
+              // ラベルレイヤーは通常スタイルに含まれないため追加
+              if (!map.getLayer(labelId)) {
+                try {
+                  map.addLayer({
+                    id: labelId,
+                    type: 'symbol',
+                    source: sourceId,
+                    filter: ['has', 'label'],
+                    layout: {
+                      'text-field': ['get', 'label'],
+                      'text-size': 14,
+                      'text-allow-overlap': true
+                    },
+                    paint: {
+                      'text-color': '#000000',
+                      'text-halo-color': '#ffffff',
+                      'text-halo-width': 2
+                    }
+                  });
+                  if (typeof wmtsLayers !== 'undefined' && Array.isArray(wmtsLayers)) {
+                    if (!wmtsLayers.some(function(l){ return l && l.id === labelId; })) {
+                      wmtsLayers.push({ id: labelId, title: labelTitle });
+                    }
+                  }
+                } catch (e) { console.warn('Failed to add label layer after style injection', e); }
+              }
+              return; // 完了
+            }
+            // 失敗した場合は従来のWFSフェッチによるフォールバックへ進む
+            proceedWfsFetch();
+          })();
+        }
+
+        // 既存ロジックでの WFS フェッチを関数化（スタイル注入失敗時のみ使用）
+        function proceedWfsFetch() {
+        
         const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
         const signal = controller ? controller.signal : null;
         let timeoutId = null;
@@ -196,6 +336,11 @@
             } catch (e) { console.warn('Failed to add WFS layer after successful fetch:', e); }
           })
           .catch(function(err) { console.warn('WFS fetch error (skipping WFS layer):', err); });
+        }
+        // スタイル注入が既に return していない（= layersFromStyleExist だった）場合のみ WFS を実行
+        if (layersFromStyleExist) {
+          proceedWfsFetch();
+        }
       }
 
       // Expose addWfsLayer globally for other scripts if needed

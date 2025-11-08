@@ -209,6 +209,13 @@ def qgis_layer_to_maplibre_style(layer_id: str, source_id: str = None) -> List[D
     geometry_type = layer.geometryType()
     layers = []
     
+    # Debug logging
+    try:
+        from qgis.core import QgsMessageLog, Qgis
+        QgsMessageLog.logMessage(f'🔍 Layer: {layer.name()}, Geometry: {geometry_type}, Renderer: {type(renderer).__name__}', 'QMapPermalink', Qgis.Info)
+    except Exception:
+        pass
+    
     # Get renderer type
     if isinstance(renderer, QgsSingleSymbolRenderer):
         # Single symbol - one layer
@@ -261,7 +268,7 @@ def qgis_layer_to_maplibre_style(layer_id: str, source_id: str = None) -> List[D
     return layers
 
 
-def _convert_symbol_to_maplibre(symbol, source_id: str, geometry_type, base_index: int) -> List[Dict[str, Any]]:
+def _convert_symbol_to_maplibre(symbol, source_id: str, geometry_type, base_index: int = 0) -> List[Dict[str, Any]]:
     """Convert QgsSymbol to MapLibre layer definition(s).
     
     Parameters
@@ -273,7 +280,7 @@ def _convert_symbol_to_maplibre(symbol, source_id: str, geometry_type, base_inde
     geometry_type : QgsWkbTypes.GeometryType
         Geometry type (Point, Line, Polygon)
     base_index : int
-        Base index for layer ID generation
+        Base index for layer ID generation (not used, kept for compatibility)
         
     Returns
     -------
@@ -283,7 +290,8 @@ def _convert_symbol_to_maplibre(symbol, source_id: str, geometry_type, base_inde
     try:
         from qgis.core import (
             QgsWkbTypes,
-            QgsSimpleMarkerSymbolLayer, QgsSimpleLineSymbolLayer, QgsSimpleFillSymbolLayer
+            QgsSimpleMarkerSymbolLayer, QgsSimpleLineSymbolLayer, QgsSimpleFillSymbolLayer,
+            QgsUnitTypes
         )
     except ImportError:
         return []
@@ -291,7 +299,34 @@ def _convert_symbol_to_maplibre(symbol, source_id: str, geometry_type, base_inde
     if not symbol:
         return []
     
+    # Debug logging
+    try:
+        from qgis.core import QgsMessageLog, Qgis, QgsWkbTypes
+        geom_name = {QgsWkbTypes.PointGeometry: 'Point', QgsWkbTypes.LineGeometry: 'Line', QgsWkbTypes.PolygonGeometry: 'Polygon'}.get(geometry_type, 'Unknown')
+        QgsMessageLog.logMessage(f'🔍 Converting symbol for {source_id}, geometry={geom_name}, symbol_layers={symbol.symbolLayerCount()}', 'QMapPermalink', Qgis.Info)
+    except Exception:
+        pass
+    
     layers = []
+    # Use internal counter starting from 0 for consistent layer IDs
+    layer_index = 0
+
+    # Helper: convert QGIS render units to pixels for widths/sizes
+    def _to_px(val: float, unit) -> float:
+        try:
+            # mm -> px (96dpi): 1mm ≒ 3.78px
+            if unit == QgsUnitTypes.RenderMillimeters:
+                return float(val) * 3.78
+            # pixels -> px
+            if unit == QgsUnitTypes.RenderPixels:
+                return float(val)
+            # points (1/72 inch) -> px (96dpi): 1pt = 96/72 = 1.333...
+            if unit == QgsUnitTypes.RenderPoints:
+                return float(val) * (96.0/72.0)
+            # map units or others: fallback to raw (may look scale-dependent)
+            return float(val)
+        except Exception:
+            return float(val) if isinstance(val, (int, float)) else 0.0
     
     # Get the first symbol layer (main style)
     if symbol.symbolLayerCount() > 0:
@@ -314,18 +349,41 @@ def _convert_symbol_to_maplibre(symbol, source_id: str, geometry_type, base_inde
                 if stroke_color.isValid():
                     paint['circle-stroke-color'] = stroke_color.name()
                     paint['circle-stroke-opacity'] = stroke_color.alphaF()
-                    paint['circle-stroke-width'] = symbol_layer.strokeWidth()
+                    try:
+                        sw = symbol_layer.strokeWidth()
+                        swu = getattr(symbol_layer, 'strokeWidthUnit', lambda: QgsUnitTypes.RenderMillimeters)()
+                        converted_sw = _to_px(sw, swu)
+                        paint['circle-stroke-width'] = converted_sw
+                        try:
+                            from qgis.core import QgsMessageLog, Qgis
+                            QgsMessageLog.logMessage(f'🔍 Point stroke width raw={sw} unit={swu} -> px={converted_sw}', 'QMapPermalink', Qgis.Info)
+                        except Exception:
+                            pass
+                    except Exception:
+                        paint['circle-stroke-width'] = symbol_layer.strokeWidth()
                 
                 # Size
-                paint['circle-radius'] = symbol_layer.size() / 2
+                try:
+                    sz = symbol_layer.size()  # diameter in render units
+                    szu = getattr(symbol_layer, 'sizeUnit', lambda: QgsUnitTypes.RenderMillimeters)()
+                    px = _to_px(sz, szu)
+                    paint['circle-radius'] = px / 2.0
+                    try:
+                        from qgis.core import QgsMessageLog, Qgis
+                        QgsMessageLog.logMessage(f'🔍 Point size raw={sz} unit={szu} -> diameter_px={px} radius_px={px/2.0}', 'QMapPermalink', Qgis.Info)
+                    except Exception:
+                        pass
+                except Exception:
+                    paint['circle-radius'] = symbol_layer.size() / 2
             
             layers.append({
-                'id': f"{source_id}_circle_{base_index}",
+                'id': f"{source_id}_circle_{layer_index}",
                 'type': 'circle',
                 'source': source_id,
                 'paint': paint,
                 'layout': layout
             })
+            layer_index += 1
             
         elif geometry_type == QgsWkbTypes.LineGeometry:
             # Line geometry
@@ -340,7 +398,18 @@ def _convert_symbol_to_maplibre(symbol, source_id: str, geometry_type, base_inde
                     paint['line-opacity'] = color.alphaF()
                 
                 # Width
-                paint['line-width'] = symbol_layer.width()
+                try:
+                    w = symbol_layer.width()
+                    wu = getattr(symbol_layer, 'widthUnit', lambda: QgsUnitTypes.RenderMillimeters)()
+                    converted_w = _to_px(w, wu)
+                    paint['line-width'] = converted_w
+                    try:
+                        from qgis.core import QgsMessageLog, Qgis
+                        QgsMessageLog.logMessage(f'🔍 Line width raw={w} unit={wu} -> px={converted_w}', 'QMapPermalink', Qgis.Info)
+                    except Exception:
+                        pass
+                except Exception:
+                    paint['line-width'] = symbol_layer.width()
                 
                 # Join and cap styles
                 pen_join_style = symbol_layer.penJoinStyle()
@@ -360,12 +429,13 @@ def _convert_symbol_to_maplibre(symbol, source_id: str, geometry_type, base_inde
                     layout['line-cap'] = 'round'
             
             layers.append({
-                'id': f"{source_id}_line_{base_index}",
+                'id': f"{source_id}_line_{layer_index}",
                 'type': 'line',
                 'source': source_id,
                 'paint': paint,
                 'layout': layout
             })
+            layer_index += 1
             
         elif geometry_type == QgsWkbTypes.PolygonGeometry:
             # Polygon geometry - may have fill and/or outline
@@ -375,18 +445,32 @@ def _convert_symbol_to_maplibre(symbol, source_id: str, geometry_type, base_inde
                 fill_color = symbol_layer.color()
                 has_fill = fill_color.isValid() and fill_color.alpha() > 0
                 
+                # Debug logging for polygon fill
+                try:
+                    from qgis.core import QgsMessageLog, Qgis
+                    stroke_color = symbol_layer.strokeColor()
+                    QgsMessageLog.logMessage(
+                        f'🔍 Polygon: fill={fill_color.name() if fill_color.isValid() else "invalid"} '
+                        f'alpha={fill_color.alpha()}, stroke={stroke_color.name() if stroke_color.isValid() else "invalid"} '
+                        f'alpha={stroke_color.alpha()}, width={symbol_layer.strokeWidth()}',
+                        'QMapPermalink', Qgis.Info
+                    )
+                except Exception:
+                    pass
+                
                 if has_fill:
                     paint = {
                         'fill-color': fill_color.name(),
                         'fill-opacity': fill_color.alphaF()
                     }
                     layers.append({
-                        'id': f"{source_id}_fill_{base_index}",
+                        'id': f"{source_id}_fill_{layer_index}",
                         'type': 'fill',
                         'source': source_id,
                         'paint': paint,
                         'layout': {}
                     })
+                    layer_index += 1
                 
                 # Outline
                 stroke_color = symbol_layer.strokeColor()
@@ -394,8 +478,16 @@ def _convert_symbol_to_maplibre(symbol, source_id: str, geometry_type, base_inde
                     paint = {
                         'line-color': stroke_color.name(),
                         'line-opacity': stroke_color.alphaF(),
-                        'line-width': symbol_layer.strokeWidth()
+                        'line-width': _to_px(symbol_layer.strokeWidth(), getattr(symbol_layer, 'strokeWidthUnit', lambda: QgsUnitTypes.RenderMillimeters)())
                     }
+                    try:
+                        sw_raw = symbol_layer.strokeWidth()
+                        sw_unit = getattr(symbol_layer, 'strokeWidthUnit', lambda: QgsUnitTypes.RenderMillimeters)()
+                        sw_px = _to_px(sw_raw, sw_unit)
+                        from qgis.core import QgsMessageLog, Qgis
+                        QgsMessageLog.logMessage(f'🔍 Polygon outline stroke raw={sw_raw} unit={sw_unit} -> px={sw_px}', 'QMapPermalink', Qgis.Info)
+                    except Exception:
+                        pass
                     
                     layout = {}
                     pen_join_style = symbol_layer.penJoinStyle()
@@ -407,12 +499,13 @@ def _convert_symbol_to_maplibre(symbol, source_id: str, geometry_type, base_inde
                         layout['line-join'] = 'round'
                     
                     layers.append({
-                        'id': f"{source_id}_line_{base_index + (1 if has_fill else 0)}",
+                        'id': f"{source_id}_line_{layer_index}",
                         'type': 'line',
                         'source': source_id,
                         'paint': paint,
                         'layout': layout
                     })
+                    layer_index += 1
     
     return layers
 
