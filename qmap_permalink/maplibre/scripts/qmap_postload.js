@@ -23,37 +23,117 @@
       }
 
       function addWfsLayer(wfsUrl, sourceId, layerId, labelId, layerTitle, labelTitle) {
-        // スタイルJSONから既にレイヤーが読み込まれている場合は、sourceだけ更新
-        var sourceAlreadyExists = false;
-        var layersFromStyleExist = false;
-        
-        try {
-          sourceAlreadyExists = !!map.getSource(sourceId);
-          var allLayers = map.getStyle().layers || [];
-          for (var i = 0; i < allLayers.length; i++) {
-            if (allLayers[i].source === sourceId) {
-              layersFromStyleExist = true;
-              console.log('Layer from style JSON already exists:', allLayers[i].id);
-              break;
-            }
-          }
-        } catch (e) {
-          console.warn('Failed to check existing source/layers', e);
+        // 1) まず /maplibre-style?typename=sourceId を取得して QGIS 由来スタイルを注入する試行
+        // 2) 失敗した場合のみ WFS GeoJSON を直接取得して簡易フォールバックスタイルを付与
+        // 3) ポリゴン「ブラシなし」は QGIS スタイル注入成功時は fill レイヤ未生成となり輪郭線のみ (alpha=0 判定)
+        // 4) 成功/失敗双方でラベルレイヤは必ず追加
+
+        const STYLE_ENDPOINT = '/maplibre-style?typename=' + encodeURIComponent(sourceId);
+        const fetchTimeoutMs = 5000;
+        let aborted = false;
+
+        function withTimeout(promise, ms) {
+          if (typeof AbortController === 'undefined') return promise; // 古いブラウザ
+          const controller = new AbortController();
+          const id = setTimeout(() => { aborted = true; controller.abort(); }, ms);
+          return Promise.race([
+            promise(controller.signal).finally(() => clearTimeout(id)),
+            new Promise((_r, rej) => setTimeout(() => rej(new Error('timeout')), ms + 50))
+          ]);
         }
-        
-        // スタイルJSON有無に関係なくシンプル化のため常にWFSフェッチへ進む
 
-        // 余計なスタイル注入は行わず、常にWFSフェッチ（公開WFSがある場合のみ成功）
-        proceedWfsFetch();
-        return;
+        function injectQgisStyle(styleJson) {
+          try {
+            if (!styleJson || !styleJson.sources || !styleJson.sources[sourceId]) {
+              console.warn('[style-inject] 対象ソースが style JSON に含まれないためスキップ:', sourceId);
+              return false;
+            }
+            // ソース追加 / 更新
+            if (!map.getSource(sourceId)) {
+              map.addSource(sourceId, styleJson.sources[sourceId]);
+              console.log('[style-inject] addSource:', sourceId, styleJson.sources[sourceId]);
+            } else {
+              // 既存ソースは GeoJSON の場合 setData で更新可能
+              try {
+                const existing = map.getSource(sourceId);
+                if (existing && typeof existing.setData === 'function' && styleJson.sources[sourceId].data) {
+                  existing.setData(styleJson.sources[sourceId].data);
+                  console.log('[style-inject] update existing source data via setData');
+                }
+              } catch (e) {
+                console.warn('[style-inject] ソース更新失敗 (非致命):', e);
+              }
+            }
+            // レイヤ追加 (sourceId を参照するもののみ / 既存重複はスキップ)
+            const styleLayers = styleJson.layers || [];
+            let addedCount = 0;
+            styleLayers.forEach(function(ly) {
+              if (!ly || ly.source !== sourceId) return;
+              if (map.getLayer(ly.id)) return;
+              try {
+                map.addLayer(ly);
+                addedCount++;
+              } catch (e) {
+                console.warn('[style-inject] addLayer 失敗:', ly.id, e);
+              }
+            });
+            console.log(`[style-inject] source=${sourceId} 追加レイヤ数=${addedCount}`);
+            return addedCount > 0;
+          } catch (e) {
+            console.warn('[style-inject] 例外 (非致命):', e);
+            return false;
+          }
+        }
 
-        // 既存ロジックでの WFS フェッチを関数化（スタイル注入失敗時のみ使用）
+        function ensureLabelLayer(geomTypeGuess) {
+          if (map.getLayer(labelId)) return;
+          const layout = { 'text-field': ['get', 'label'], 'text-size': 14 };
+          if (geomTypeGuess === 'LineString') layout['symbol-placement'] = 'line';
+          map.addLayer({
+            id: labelId,
+            type: 'symbol',
+            source: sourceId,
+            filter: ['has', 'label'],
+            layout: layout,
+            paint: { 'text-color': '#000', 'text-halo-color': '#fff', 'text-halo-width': 2 }
+          });
+          console.log('[label] 追加:', labelId);
+        }
+
+        function registerLayersInControl() {
+          if (typeof wmtsLayers === 'undefined' || !Array.isArray(wmtsLayers)) return;
+            try {
+              const current = map.getStyle().layers || [];
+              current.forEach(function(ly) {
+                if (ly.source === sourceId) {
+                  if (!wmtsLayers.some(function(e) { return e && e.id === ly.id; })) {
+                    const title = (ly.id.indexOf('label') >= 0) ? labelTitle : layerTitle;
+                    wmtsLayers.push({ id: ly.id, title });
+                    console.log('[layerControl] 登録:', ly.id);
+                  }
+                }
+              });
+            } catch (e) { console.warn('[layerControl] 登録失敗', e); }
+        }
+
+        function determineGeomTypeFromLayers() {
+          try {
+            const types = new Set();
+            (map.getStyle().layers || []).forEach(function(ly) { if (ly.source === sourceId) types.add(ly.type); });
+            if (types.has('fill')) return 'Polygon';
+            if (types.has('line')) return 'LineString';
+            if (types.has('circle')) return 'Point';
+          } catch (e) {}
+          return null;
+        }
+
+        // フォールバック WFS フェッチ処理 (style 取得失敗時のみ呼ぶ)
         function proceedWfsFetch() {
         
-        const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
-        const signal = controller ? controller.signal : null;
-        let timeoutId = null;
-        if (controller) timeoutId = setTimeout(() => controller.abort(), 5000);
+  const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+  const signal = controller ? controller.signal : null;
+  let timeoutId = null;
+  if (controller) timeoutId = setTimeout(() => controller.abort(), 5000);
 
         fetch(wfsUrl, { signal })
           .then(function(resp) {
@@ -86,6 +166,22 @@
               if (data && data.features && data.features.length > 0) {
                 for (var fi = 0; fi < data.features.length; fi++) {
                   var g = data.features[fi] && data.features[fi].geometry;
+      
+                // スタイルから幾何タイプを推定（注入成功時のラベル配置に利用）
+                function inferGeomFromStyleBySource(srcId) {
+                  try {
+                    var types = new Set();
+                    var allLayers = map.getStyle().layers || [];
+                    for (var i = 0; i < allLayers.length; i++) {
+                      var lyr = allLayers[i];
+                      if (lyr && lyr.source === srcId && lyr.type) types.add(String(lyr.type));
+                    }
+                    if (types.has('fill')) return 'Polygon';
+                    if (types.has('line')) return 'LineString';
+                    if (types.has('circle')) return 'Point';
+                  } catch (e) {}
+                  return null;
+                }
                   if (!g || !g.type) continue;
                   var coords = g.coordinates;
                   if (coords && Array.isArray(coords) && coords.length === 0) continue;
@@ -118,9 +214,11 @@
                 console.warn('Failed to check existing layers', e);
               }
 
-              // Only add layers if they don't already exist in the style
+              // Only add a MINIMAL fallback style if style injection failed.
+              // Goal: 表示は確保するが「QGISスタイル」と誤解させないシンプル記号。
+              // Polygon は線のみ、Point は小さなアウトライン付き円、Line は細線。
               if (!layerExists) {
-                console.warn('No style found for source ' + sourceId + ', using fallback style');
+                console.warn('No QGIS style injected for source ' + sourceId + '; using minimal fallback (data-only look)');
                 if (!geomType || geomType === 'Point' || geomType === 'MultiPoint') {
                   if (!map.getLayer(layerId)) {
                     map.addLayer({
@@ -128,11 +226,12 @@
                       type: 'circle',
                       source: sourceId,
                       paint: {
-                        'circle-radius': 6,
-                        'circle-color': '#d62728',
-                        'circle-stroke-color': '#fff',
+                        'circle-radius': 4,
+                        'circle-color': '#ffffff',
+                        'circle-stroke-color': '#555555',
                         'circle-stroke-width': 1
-                      }
+                      },
+                      layout: { 'visibility': 'visible' }
                     });
                   }
                 } else if (geomType === 'LineString') {
@@ -141,36 +240,37 @@
                       id: layerId,
                       type: 'line',
                       source: sourceId,
-                      paint: { 'line-color': '#d62728', 'line-width': 3, 'line-opacity': 1.0 }
+                      paint: { 'line-color': '#555555', 'line-width': 1, 'line-opacity': 1.0 },
+                      layout: { 'visibility': 'visible' }
                     });
                   }
                 } else if (geomType === 'Polygon') {
+                  // 線のみ（塗り無し）
                   if (!map.getLayer(layerId)) {
                     map.addLayer({
                       id: layerId,
-                      type: 'fill',
+                      type: 'line',
                       source: sourceId,
-                      paint: { 'fill-color': '#d62728', 'fill-opacity': 0.4, 'fill-outline-color': '#fff' }
+                      paint: { 'line-color': '#555555', 'line-width': 1, 'line-opacity': 1.0 },
+                      layout: { 'visibility': 'visible' }
                     });
                   }
                 } else {
+                  // 不明 → point扱い
                   if (!map.getLayer(layerId)) {
                     map.addLayer({
                       id: layerId,
                       type: 'circle',
                       source: sourceId,
-                      paint: { 'circle-radius': 6, 'circle-color': '#d62728', 'circle-stroke-color': '#fff', 'circle-stroke-width': 1 }
+                      paint: { 'circle-radius': 4, 'circle-color': '#ffffff', 'circle-stroke-color': '#555555', 'circle-stroke-width': 1 },
+                      layout: { 'visibility': 'visible' }
                     });
                   }
                 }
               }
 
-              // ラベルレイヤーは常に追加（スタイルJSONには通常含まれない）
-              if (!map.getLayer(labelId)) {
-                  var labelLayout = { 'text-field': ['get', 'label'], 'text-size': 14 };
-                  if (geomType === 'LineString') labelLayout['symbol-placement'] = 'line';
-                  map.addLayer({ id: labelId, type: 'symbol', source: sourceId, filter: ['has', 'label'], layout: labelLayout, paint: { 'text-color': '#000', 'text-halo-color': '#fff', 'text-halo-width': 2 } });
-              }
+        // ラベルレイヤー追加
+        ensureLabelLayer(geomType);
 
               // Expose added layers to the WMTS/vector layer control
               // スタイルから読み込まれたレイヤーも含めて、すべてのWFSレイヤーを登録
@@ -213,10 +313,28 @@
           })
           .catch(function(err) { console.warn('WFS fetch error (skipping WFS layer):', err); });
         }
-        // スタイル注入が既に return していない（= layersFromStyleExist だった）場合のみ WFS を実行
-        if (layersFromStyleExist) {
-          proceedWfsFetch();
-        }
+
+        // ---- スタイル取得フェーズ ----
+        withTimeout((sig) => fetch(STYLE_ENDPOINT, { signal: sig }))
+          .then(resp => {
+            if (!resp.ok) throw new Error('style HTTP ' + resp.status);
+            return resp.json();
+          })
+          .then(styleJson => {
+            console.log('[style-inject] 取得成功:', STYLE_ENDPOINT);
+            const injected = injectQgisStyle(styleJson);
+            let geomTypeGuess = determineGeomTypeFromLayers();
+            if (!geomTypeGuess) {
+              // style JSON から推定できない場合、後段 WFS データで再推定するため fallback fetch へ
+              if (!injected) throw new Error('no layers injected');
+            }
+            ensureLabelLayer(geomTypeGuess);
+            registerLayersInControl();
+          })
+          .catch(err => {
+            console.warn('[style-inject] 失敗 -> フォールバックWFS適用:', err.message || err);
+            proceedWfsFetch();
+          });
       }
 
       // Expose addWfsLayer globally for other scripts if needed

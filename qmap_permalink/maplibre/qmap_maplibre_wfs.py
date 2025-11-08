@@ -144,8 +144,8 @@ def prepare_wfs_for_maplibre(permalink_text: str, wfs_typename: str = None) -> D
 
     # 初回も追加も同一JS関数で処理するため、スタイルURLは常にベースのみを指す
     # （WFSレイヤはクライアント側で /maplibre-style?typename=... を個別取得・注入）
-    # MapLibre GL JS はURLまたはインラインオブジェクトを受け付けるが、ここではURLを用いる
-    style_url = "http://localhost:8089/maplibre-style"
+    # 相対パスにして現在のホスト/ポートを利用
+    style_url = "/maplibre-style"
 
     mapbox_layers = []
     style_json = None
