@@ -8,20 +8,17 @@
     try {
       // Add helper: addWfsLayer (mirrors previous inline implementation)
       // 付帯ヘルパー: スタイルから幾何タイプを推定
-      function inferGeomFromStyleBySource(srcId) {
-        try {
-          var types = new Set();
-          var allLayers = map.getStyle().layers || [];
-          for (var i = 0; i < allLayers.length; i++) {
-            var lyr = allLayers[i];
-            if (lyr && lyr.source === srcId && lyr.type) {
-              types.add(String(lyr.type));
-            }
-          }
-          if (types.has('fill')) return 'Polygon';
-          if (types.has('line')) return 'LineString';
-          if (types.has('circle')) return 'Point';
-        } catch (e) { /* ignore */ }
+      // 幾何推定ヘルパー（フォールバック簡易版）
+      function inferGeomFromData(features) {
+        if (!features || !features.length) return null;
+        for (var i=0;i<features.length;i++) {
+          var g = features[i] && features[i].geometry;
+          if (!g || !g.type) continue;
+          var t = g.type.toLowerCase();
+          if (t.indexOf('point')>=0) return 'Point';
+          if (t.indexOf('line')>=0) return 'LineString';
+          if (t.indexOf('polygon')>=0) return 'Polygon';
+        }
         return null;
       }
 
@@ -44,166 +41,11 @@
           console.warn('Failed to check existing source/layers', e);
         }
         
-        // スタイルJSONからレイヤーが既に追加されている場合は、
-        // データソースの更新のみを行い、レイヤーは追加しない
-        if (layersFromStyleExist && sourceAlreadyExists) {
-          console.log('Source and layers already exist for:', sourceId, '- skipping WFS fetch (using style JSON data source)');
-          // Register layers in wmtsLayers for control
-          if (typeof wmtsLayers !== 'undefined' && Array.isArray(wmtsLayers)) {
-            try {
-              var styleLayers = map.getStyle().layers || [];
-              for (var i = 0; i < styleLayers.length; i++) {
-                if (styleLayers[i].source === sourceId) {
-                  var fid = styleLayers[i].id;
-                  // Skip if already registered
-                  if (wmtsLayers.some(function(l) { return l && l.id === fid; })) continue;
-                  // Determine title based on layer type
-                  var fTitle = layerTitle;
-                  if (fid.indexOf('label') >= 0 || fid.indexOf('symbol') >= 0) {
-                    fTitle = labelTitle;
-                  }
-                  wmtsLayers.push({ id: fid, title: fTitle });
-                }
-              }
-            } catch (e) {
-              console.warn('Failed to register style layers', e);
-            }
-          }
-          // ラベルレイヤーはスタイルに含まれないため、ここで追加して登録する
-          try {
-            if (!map.getLayer(labelId)) {
-              var inferred = inferGeomFromStyleBySource(sourceId);
-              var labelLayout = { 'text-field': ['get', 'label'], 'text-size': 14, 'text-allow-overlap': true };
-              if (inferred === 'LineString') {
-                labelLayout['symbol-placement'] = 'line';
-                labelLayout['text-offset'] = [0, 1.0];
-              } else if (inferred === 'Polygon') {
-                labelLayout['symbol-placement'] = 'point';
-              } else {
-                labelLayout['text-offset'] = [0, 1.0];
-                labelLayout['text-anchor'] = 'top';
-              }
-              map.addLayer({
-                id: labelId,
-                type: 'symbol',
-                source: sourceId,
-                filter: ['has', 'label'],
-                layout: labelLayout,
-                paint: {
-                  'text-color': '#000000',
-                  'text-halo-color': '#ffffff',
-                  'text-halo-width': 2
-                }
-              });
-              if (typeof wmtsLayers !== 'undefined' && Array.isArray(wmtsLayers)) {
-                if (!wmtsLayers.some(function(l){ return l && l.id === labelId; })) {
-                  wmtsLayers.push({ id: labelId, title: labelTitle });
-                }
-              }
-            }
-          } catch (e) {
-            console.warn('Failed to add/register label layer on existing-style branch', e);
-          }
-          return; // Skip WFS fetch - data is already being loaded from style JSON source
-        }
+        // スタイルJSON有無に関係なくシンプル化のため常にWFSフェッチへ進む
 
-        // まだスタイルJSONにこのsourceのレイヤーが含まれていない場合、個別に /maplibre-style?typename=sourceId を叩いて
-        // 追加スタイルをマージする（成功したらフォールバックのWFSフェッチをスキップできる）
-        async function tryInjectStyleForSource(id) {
-          var encodedId = encodeURIComponent(id);
-          var styleEndpoint = '/maplibre-style?typename=' + encodedId;
-          try {
-            console.log('Attempting style fetch for extra typename:', id);
-            const resp = await fetch(styleEndpoint, { method: 'GET' });
-            if (!resp.ok) throw new Error('style fetch failed: ' + resp.status);
-            const styleJson = await resp.json();
-            if (!styleJson || !styleJson.layers || !styleJson.sources) {
-              console.warn('Style JSON missing layers/sources for:', id); return false;
-            }
-            if (map.getSource(id)) {
-              console.log('Source already exists before style injection, skipping source add:', id);
-            } else if (styleJson.sources[id]) {
-              // 追加するソース（geojson）。style側は data に /wfs URL を持つため自動ロードされる。
-              map.addSource(id, styleJson.sources[id]);
-              console.log('Added source from style for:', id);
-            } else {
-              console.warn('Style JSON has no source entry for id:', id); return false;
-            }
-            // そのsourceを参照するレイヤーのみ抽出して追加（既存重複はスキップ）
-            var addedAny = false;
-            for (var li = 0; li < styleJson.layers.length; li++) {
-              var lyr = styleJson.layers[li];
-              if (!lyr || lyr.source !== id) continue;
-              if (map.getLayer(lyr.id)) { continue; }
-              map.addLayer(lyr); // 既存スタイル末尾に追加
-              addedAny = true;
-              console.log('Injected style layer:', lyr.id);
-              // レイヤー制御へ登録
-              if (typeof wmtsLayers !== 'undefined' && Array.isArray(wmtsLayers)) {
-                var fTitle = layerTitle;
-                if (lyr.id.indexOf('label') >= 0 || lyr.id.indexOf('symbol') >= 0) { fTitle = labelTitle; }
-                if (!wmtsLayers.some(function(l) { return l && l.id === lyr.id; })) {
-                  wmtsLayers.push({ id: lyr.id, title: fTitle });
-                }
-              }
-            }
-            if (!addedAny) {
-              console.warn('No layers injected from style for source:', id);
-              return false;
-            }
-            return true;
-          } catch (e) {
-            console.warn('Failed injecting style for source:', id, e);
-            return false;
-          }
-        }
-
-        // スタイル未存在時はまずスタイルを試みる（成功すればWFSフォールバック不要）
-        if (!layersFromStyleExist) {
-          // 非同期だが、後続処理を簡潔にするため IIFE と then で制御
-          return (async () => {
-            var injected = await tryInjectStyleForSource(sourceId);
-            if (injected) {
-              console.log('Style injection succeeded for', sourceId, '- skipping WFS fetch.');
-              // ラベルレイヤーは通常スタイルに含まれないため追加
-              if (!map.getLayer(labelId)) {
-                try {
-                  var inferred = inferGeomFromStyleBySource(sourceId);
-                  var labelLayout = { 'text-field': ['get', 'label'], 'text-size': 14, 'text-allow-overlap': true };
-                  if (inferred === 'LineString') {
-                    labelLayout['symbol-placement'] = 'line';
-                    labelLayout['text-offset'] = [0, 1.0];
-                  } else if (inferred === 'Polygon') {
-                    labelLayout['symbol-placement'] = 'point';
-                  } else {
-                    labelLayout['text-offset'] = [0, 1.0];
-                    labelLayout['text-anchor'] = 'top';
-                  }
-                  map.addLayer({
-                    id: labelId,
-                    type: 'symbol',
-                    source: sourceId,
-                    filter: ['has', 'label'],
-                    layout: labelLayout,
-                    paint: {
-                      'text-color': '#000000',
-                      'text-halo-color': '#ffffff',
-                      'text-halo-width': 2
-                    }
-                  });
-                  if (typeof wmtsLayers !== 'undefined' && Array.isArray(wmtsLayers)) {
-                    if (!wmtsLayers.some(function(l){ return l && l.id === labelId; })) {
-                      wmtsLayers.push({ id: labelId, title: labelTitle });
-                    }
-                  }
-                } catch (e) { console.warn('Failed to add label layer after style injection', e); }
-              }
-              return; // 完了
-            }
-            // 失敗した場合は従来のWFSフェッチによるフォールバックへ進む
-            proceedWfsFetch();
-          })();
-        }
+        // 余計なスタイル注入は行わず、常にWFSフェッチ（公開WFSがある場合のみ成功）
+        proceedWfsFetch();
+        return;
 
         // 既存ロジックでの WFS フェッチを関数化（スタイル注入失敗時のみ使用）
         function proceedWfsFetch() {
@@ -325,35 +167,9 @@
 
               // ラベルレイヤーは常に追加（スタイルJSONには通常含まれない）
               if (!map.getLayer(labelId)) {
-                var labelLayout = {
-                  'text-field': ['get', 'label'],
-                  'text-size': 14,
-                  'text-allow-overlap': true
-                };
-                var labelPaint = {
-                  'text-color': '#000000',
-                  'text-halo-color': '#ffffff',
-                  'text-halo-width': 2
-                };
-
-                if (geomType === 'LineString') {
-                  labelLayout['symbol-placement'] = 'line';
-                  labelLayout['text-offset'] = [0, 1.0];
-                } else if (geomType === 'Polygon') {
-                  labelLayout['symbol-placement'] = 'point';
-                } else {
-                  labelLayout['text-offset'] = [0, 1.0];
-                  labelLayout['text-anchor'] = 'top';
-                }
-
-                map.addLayer({
-                  id: labelId,
-                  type: 'symbol',
-                  source: sourceId,
-                  filter: ['has', 'label'],
-                  layout: labelLayout,
-                  paint: labelPaint
-                });
+                  var labelLayout = { 'text-field': ['get', 'label'], 'text-size': 14 };
+                  if (geomType === 'LineString') labelLayout['symbol-placement'] = 'line';
+                  map.addLayer({ id: labelId, type: 'symbol', source: sourceId, filter: ['has', 'label'], layout: labelLayout, paint: { 'text-color': '#000', 'text-halo-color': '#fff', 'text-halo-width': 2 } });
               }
 
               // Expose added layers to the WMTS/vector layer control
