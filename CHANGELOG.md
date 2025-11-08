@@ -1,128 +1,50 @@
-# Changelog
+# 変更履歴（Changelog）
 
-All notable changes to the QMap Permalink plugin are documented in this file.
+このファイルでは QMapPermalink プラグインの主な変更点を記録します。
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+記法は [Keep a Changelog](https://keepachangelog.com/ja/1.0.0/) に基づき、
+[Semantic Versioning](https://semver.org/spec/v2.0.0.html) に準拠します。
 
-## Version Format: VA.B.C
+## バージョン形式: VA.B.C
 
-- **A**: Major changes due to QGIS core updates or significant plugin architecture changes
-- **B**: UI changes, new plugin features, or moderate functionality additions
-- **C**: Profile/plugin fixes, minor bug fixes, and small improvements
+- **A**: QGIS コア更新やプラグインアーキテクチャ大幅変更などのメジャー変更
+- **B**: UI 変更・新機能追加・中規模な機能拡張
+- **C**: 軽微な不具合修正・小改善・プロファイル/プラグインの微修正
 
-## [V2.10.0] - 2025-10-21
+## メジャー節目（Major Milestones）
 
-### Patch: Google Earth 'y' token handlingとスケール推定の改善
+- V1.0.0: OpenLayers + WMS（パーマリンク共有の基礎 / ブラウザ再現）
+- V2.0.0: MapLibre + WMTS（高速タイル表示とモダン UI）
+- V3.0.0: MapLibre + WFS + スタイル注入（QGIS ベクターを忠実転写、注入フロー安定化）
 
-### Added
-- Google Earth Web の @...a,...d,1y 形式の "y" トークン（ピクセルあたりのメートル: m/px）を解釈し、画面 DPI を用いてより正確にスケールを算出して QGIS の表示に反映する対応を追加しました。
-
-### Changed
-- Google Earth 用パーマリンクから distance->scale の逆算ロジックを改善し、'y' トークンがある場合はそちらを優先して scale を算出します。
-- パネルのナビゲート入力で Google @ 形式（例: /@lat,lon,1763m/）が貼り付けられた場合にプラグインの内部パーサへルーティングする挙動を安定化しました。
-- プラグイン初期化時に発生していた一部の読み込みエラー（未インポートの標準ライブラリ等）を修正しました。
-
-### Fixed
-- _parse_google_earth_url のスケール/ズーム推定の不整合を修正。
-- 不要なコード断片や静的解析でエラーを出していた箇所をクリーンアップしました。
-
-### Notes
-- これらの変更は QGIS 実行環境での画面 DPI や OS スケーリングに依存するため、実運用での厳密な一致が必要な場合は環境依存パラメータの微調整を推奨します。
-
-## [V2.11.0] - 2025-10-22
-
-## [V2.12.0] - 2025-10-22
-
-## [V2.13.0] - 2025-10-24
-
-### Added
-- WMTS-like tile endpoint (`/wmts/{z}/{x}/{y}.png`) that proxies existing WMS rendering to provide XYZ tiles for MapLibre and other tile clients.
-- MapLibre HTML generator: prefer local WMTS tiles when running inside QGIS and allow supplying a tile template via `generate_maplibre_html`.
-- UI: a pitch-toggle button in MapLibre pages to disable oblique (tilt) views (初期状態は「斜め禁止」)。回転は引き続き許可されます。
-
-### Changed
-- MapLibre HTML generation no longer clamps zoom to 19.0 by default; generated styles no longer include a hard `maxzoom: 19` so higher zoom levels may be requested by the client. (Server capability to render such zooms depends on environment and project data.)
-
-### Fixed
-- Prevented a Python f-string formatting error in the MapLibre HTML template by escaping JS object braces correctly.
-
-### Notes
-- The new WMTS endpoint is a lightweight on-the-fly tile proxy that reuses the plugin's WMS rendering. For production or high-load usage, consider adding more robust caching or pre-rendering strategies.
-- High zoom values rely on the server's ability to render at finer scales; test high-zoom behavior in a QGIS runtime.
+（詳細な旧履歴は簡略化のため整理済み。必要に応じて Git の履歴や過去タグをご参照ください。）
 
 
-### Added
-- 右上の回転コントロールに小さな回転サイクルボタン（0/90/180/270）を追加。ボタンをクリックするたびに角度を巡回し、WMS に `ANGLE` パラメータを送信して高画質の画像再取得を行えるようにしました。
-- OpenLayers テンプレート内のイベントアタッチロジックを簡素化し、DOM 生存性に起因する未登録問題を軽減しました。
+## V2 系列まとめ (V2.0.0 — V2.13.0)
 
-### Changed
-- 回転ハンドラの実装を安定化させ、静的ボタンの存在時にも確実にクリックイベントが登録されるようにしました。
+期間: 2025-10-12 〜 2025-10-24
 
-### Notes
-- ブラウザのキャッシュにより古い HTML/JS が読み込まれる場合があります。テンプレートやプラグインを更新した際は強制リロード（Ctrl+Shift+R）やサーバ上のファイル差し替えを行ってください。
+### Added（主な追加）
+- WMTS 風タイルエンドポイント `/wmts/{z}/{x}/{y}.png`（既存 WMS レンダリングをプロキシして XYZ 供給）
+- MapLibre HTML 生成の拡充（ローカル WMTS 優先、ピッチ制御ボタン）
+- テーマ対応 WMS 出力（仮想マップビューにテーマ適用して PNG 生成）
+- External Control（外部制御）の自動ナビゲート（ON 時）
+- OpenLayers HTML に座標/スケール表示、必要に応じて投影定義・軸順情報を埋め込み
 
+### Changed（主な変更）
+- MapLibre: 既定で `maxzoom` のハード固定を撤廃（高ズーム要求を許容、サーバ能力に依存）
+- 回転（ANGLE）パイプライン: ANGLE=0 は高速パス、ANGLE!=0 は拡張レンダ→逆回転→中心クロップ→リサンプル
+- Google Earth `y`（m/px）トークン対応でスケール推定を精緻化（DPI を考慮）
+- OpenLayers HTML を相対パス参照に統一し、外部ブラウザからの参照を安定化
 
-### Added
-- テーマ対応のWMS出力を追加。`theme` パラメータを指定することで、プロジェクトのマップテーマに基づくレイヤの表示/非表示およびスタイル適用を行い、仮想マップビュー上でPNGを生成します。
+### Fixed（主な修正）
+- MapLibre HTML テンプレートでの Python f-string 波括弧エスケープ不具合を修正
+- Google Earth URL パースのスケール/ズーム推定の不整合を修正、初期化時の読み込みエラーを解消
 
-### Changed
-- 仮想マップビュー方式により、現在のキャンバスやプロジェクト状態を変更せずにテーマのみを適用してレンダリングできるようにしました。
-- `exportNamedStyle` に関する QGIS バージョン差を吸収するフォールバックの実装を追加しました。
-
-### Notes
-- 本機能は QGIS 3.x 系で動作を想定しています。スタイルのエクスポートや一部の API 挙動は QGIS のマイナーバージョン間で差異があるため、問題が発生した場合は実行環境の QGIS バージョン情報を添えて Issue を報告してください。
-
-## [V2.8.0] - 2025-10-21
-
-### 🔁 外部制御の自動ナビゲートと挙動改善
-
-### Added
-- 新機能: パネルの「外部制御 (External Control)」が有効な場合、外部から受信したパーマリンクURLを自動的に適用してナビゲートする機能を追加しました。
-
-### Changed
-- 受信した外部URLをパネルのナビゲート欄にセットする際、外部制御がONであれば自動的にナビゲーション処理を呼び出すようにしました。
-- パネル起動時に外部制御がONの状態で既に受信済みのURLがある場合、パネル表示と同時に自動ナビゲートを実行します。
-
-### Notes
-- 自動ナビゲートはユーザーの表示状態を上書きするため、オン/オフの明示的なトグルと解除UIを用意しています。必要に応じてプレビューや確認ダイアログを追加する運用を検討してください。
-
-## [V2.7.0] - 2025-10-20
-
-### 🔁 回転対応とWMS振る舞いの改善
-
-### Changed
-- クライアントから常に ANGLE パラメータを送信するようにし、OpenLayers テンプレートで初期 URL の角度を優先して送出するが、以後は map の現在角度を優先して送信する挙動を導入しました。
-- サーバ側で ANGLE=0 の場合は高速パス（直接レンダ）を採用し、ANGLE!=0 の場合は拡張レンダ→画像空間での逆回転→中心クロップ→要求サイズへのリサンプルを行うパイプラインを実装しました。
-- BBOX が欠如またはパース失敗の際は暗黙のフォールバックを廃止し、明示的にエラーとして扱うように変更しました。
-
-### Notes
-- これらの変更により、サーバが north-up な PNG を返すことで OpenLayers 側で view.rotation を適用した際に座標と画像の整合性が保たれるようになります。ANGLE=0 の高速パスにより通常のリクエストは軽量化されます。
-
----
-
-## [V2.6.0] - 2025-10-18
-
-### 🧭 座標管理の改善
-
-### Added
-- サーバー側で利用可能な場合に PyQGIS から投影定義（proj4/WKT）および軸順情報を収集し、生成する OpenLayers HTML に埋め込む機能を追加しました。クライアントは埋め込まれた情報を利用して座標表示の軸順（X/Y or Lat/Lon）を自動判定します。
-- OpenLayers 表示の右下にリアルタイム座標表示（投影座標と緯度経度）およびスケール表示を追加しました。
----
-
-## [V2.0.0] - 2025-10-12 🎉 WMS SUPPORT & EXTERNAL ACCESS
-
-### 🗺️ WMS配信機能の追加と外部アクセス改善
-
-### Added
-- **WMS (Web Map Service) 1.3.0 準拠のエンドポイント**: `/wms` により GetCapabilities / GetMap を提供
-- **外部アクセス対応**: サーバーが全インターフェース (0.0.0.0) にバインドされ、同一ネットワーク内の別ホストからのアクセスが可能
-
-### Changed
-- **OpenLayers HTML の相対パス化**: `/qgis-map` で生成されるページは WMS リクエストをページ起点の相対 URL `/wms` を使用するよう変更し、外部ブラウザからも正常に WMS を参照できるようにしました
-
-### Notes
-- セキュリティはデフォルトで簡素化しています。公開環境での運用時はファイアウォールやプロキシで適切にアクセス制御してください。
+### Notes（運用メモ）
+- WMTS エンドポイントは軽量プロキシ実装。高負荷用途ではキャッシュ/プリレンダー等の併用を推奨
+- 高ズーム挙動はサーバのレンダリング能力次第。ブラウザ/サーバ双方で検証を推奨
+- 自動ナビゲートは表示状態を上書きするため、ON/OFF を明示して運用
 
 
 ## V1 系列まとめ (V1.0.0 — V1.10.0)

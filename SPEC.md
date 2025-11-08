@@ -23,7 +23,7 @@
 12. セキュリティ・運用上の注意
 13. テスト・QA 手順
 14. 実装ファイルと責務マッピング
-15. 変更履歴の要約（V2 系ハイライト）
+15. 変更履歴の要約（V2/V3 ハイライト）
 
 ---
 ## 1. 機能概要
@@ -75,12 +75,18 @@ OpenLayers（`/qgis-map`）
 - 右下の座標・スケール表示を埋め込み、埋め込み時に可能ならプロジェクトの投影定義と軸順情報を入れる（`qgis` から取得可能な場合）。
 
 MapLibre（`/maplibre`）
-- MapLibre 用の HTML を生成。V2.13.0 では pitch（傾き）を使った擬似3Dをサポートし、ツールバーに「斜め禁止」トグルを追加。
-- WMTS タイルテンプレート（`/wmts/{z}/{x}/{y}.png`）を優先して埋め込める（ローカル実行時）。
-- 生成されるスタイルで `maxzoom` のハードクランプは廃止（サーバが対応できるかは別途）。
-
-テンプレート注意点:
-- JavaScript オブジェクト中の波括弧はテンプレートで適切にエスケープすること（過去に f-string の不具合があったため）。
+ - 初期 HTML は常に相対パス `/maplibre-style`（typename なし）を style URL に設定し、WMTS ラスタのみのベーススタイル（sources:`qmap`, layers:`qmap`）をロードする。
+ - 公開 WFS レイヤはクライアント側 `qmap_postload.js` が `/wfs?SERVICE=WFS&REQUEST=GetCapabilities` を取得後、各レイヤ毎に `/maplibre-style?typename=<QGIS layer.id()>` をフェッチして QGIS 由来スタイルを“注入”する。
+ - スタイル注入成功時: QGIS シンボルを変換した MapLibre レイヤ群（fill/line/circle/symbol）が追加される。ポリゴンは fill α=0（ブラシなし）なら fill レイヤを生成せず line レイヤのみ。線幅・ポイントサイズは mm/pt/px を px に正規化（mm→×3.78, pt→×1.333...）。
+ - 失敗時（404, タイムアウト等）: GetFeature で GeoJSON を取得し最小限の中立フォールバック表示（Point: 白円+灰枠, Line: 細灰線, Polygon: 灰線のみ）。フォールバックは QGIS スタイル再現を意図せず “データ存在” の指標。
+ - GeoJSON にはスタイル情報を含めない（データ/スタイル分離）。常に `/maplibre-style` エンドポイント経由で動的取得することで QGIS 側スタイル変更の即時反映とキャッシュ効率を確保。
+ - レイヤ ID は `<sourceId>_<type>_<index>` の決定的命名で衝突回避。`layout.visibility` は明示的に `'visible'`。
+ - ベーススタイルは相対 URL 利用によりサーバ起動ポート可変（8089〜8099）でも透過的に利用可能。
+ - Pitch（傾き）操作は UI ボタン「斜め許可/斜め禁止」で切替。初期状態は禁止（pitch=0 を強制）。
+ - `maxzoom` のハードクランプは撤廃。高ズーム要求の可否はサーバ側レンダリング能力に依存。
+ テンプレート注意点:
+ - 生成処理内で f-string エスケープ起因の二重波括弧を単一波括弧へ正規化済み。
+ - スタイル URL は絶対パス固定を避け相対パスを使用。
 
 ---
 ## 5. WMS / WMTS (タイルプロキシ) の挙動
@@ -117,6 +123,22 @@ WMTS-like タイル (`/wmts/{z}/{x}/{y}.png`):
 - `/wfs-layers` エンドポイントはプロジェクトの `WFSLayers` エントリを読み、公開対象レイヤの JSON リストを返します。
 - `GetCapabilities` は `/wfs-layers` と同じロジックを参照して FeatureTypeList を生成します（すなわち、プロジェクトの `WFSLayers` に登録されたレイヤのみが公開されます）。
 
+### MapLibre スタイル注入フロー
+1. ベーススタイル（WMTS のみ）を `/maplibre-style` でロード。
+2. 公開 WFS レイヤ一覧を GetCapabilities から取得。
+3. 各レイヤ毎に `/maplibre-style?typename=<layer.id()>` をフェッチ。
+  - 成功: 変換済みスタイルレイヤ（fill/line/circle）が追加。ブラシなしポリゴンは fill レイヤ生成なし。
+  - 失敗: GetFeature で GeoJSON のみ取得し最小限フォールバック表示（中立スタイル）。
+4. 両ケースでラベルレイヤ（symbol, text-field=['get','label']）を追加。
+5. 追加レイヤ ID を `wmtsLayers` に登録し UI で表示/非表示制御。
+
+用語: スタイル注入＝QGIS スタイル成功取り込み。フォールバック＝最小限中立表示。ブラシなし＝QGIS fill α=0。
+
+### `/maplibre-style` エンドポイント
+- `GET /maplibre-style` : ベース WMTS ラスタのみ。
+- `GET /maplibre-style?typename=<QGIS layer.id()>` : WMTS + 指定レイヤ GeoJSON + 変換スタイルレイヤ。
+- 404 時は `{ error, available_typenames }` を JSON で返しクライアントはフォールバックへ移行。
+
 ### GetCapabilities
 - 挙動: `WFSLayers` に列挙されたレイヤのみを `<FeatureTypeList>` として返す。`WFSLayers` が未定義または空の場合は空の `<FeatureTypeList>` を返す。
 - レスポンス: `WFS_Capabilities` XML（version=2.0.0）を返す。
@@ -124,7 +146,7 @@ WMTS-like タイル (`/wmts/{z}/{x}/{y}.png`):
 
 ### GetFeature
 - 入力パラメータ: `TYPENAME`（必須）、`OUTPUTFORMAT`（任意）、`BBOX`、`MAXFEATURES`、`SRSNAME` など。
-- OUTPUTFORMAT 判定ロジック: 受け取った値に `gml` を含む文字列があれば GML を返却し、それ以外は GeoJSON を返却する（例: `application/gml+xml` → GML、`application/json` → GeoJSON）。
+- OUTPUTFORMAT 判定ロジック: 受け取った値に `gml` を含む文字列があれば GML、それ以外は GeoJSON（例: `application/gml+xml` → GML / `application/json` → GeoJSON）。GeoJSON にはスタイル情報を含めない（データ/スタイル分離）。
 - GeoJSON: `QgsJsonExporter` 等を利用して GeoJSON を返す。
 - GML: 簡易 GML を生成する実装を持つ。Point, LineString, Polygon に加え、簡易的な MultiPoint/MultiLineString/MultiPolygon の出力をサポートする（ポリゴンは外郭リングのみを扱う等の制限あり）。フルスキーマの互換性を要求するクライアントは事前に検証すること。
 
@@ -136,7 +158,7 @@ WMTS-like タイル (`/wmts/{z}/{x}/{y}.png`):
 - 入力パラメータ: `TYPENAME`（必須）、`VERSION`（オプション、デフォルト: 1.1.0）。
 - サポートするレンダラタイプ: 単一シンボル (singleSymbol)、分類シンボル (categorizedSymbol)、グラデーションシンボル (graduatedSymbol)、ルールベースレンダラ (ruleBased)。
 - レスポンス: SLD 1.1.0 準拠の XML。レンダラタイプに応じて適切なシンボル定義を生成。
-- 注意: ルールベースレンダラの場合、最初のルールのシンボルをデフォルトとして使用。複雑なルール構造は簡易的に処理。
+- 注意: ルールベースレンダラの場合、最初のルールのシンボルをデフォルトとして使用。複雑なルール構造は簡易処理。MapLibre のスタイル注入は SLD を直接利用せず、QGIS レンダラ → MapLibre 変換を別エンドポイント（`/maplibre-style`）で行う。
 
 ### エラー応答
 - WFS のエラーは OWS スタイルの ExceptionReport（XML）で返却する。基本形式:
@@ -150,7 +172,7 @@ WMTS-like タイル (`/wmts/{z}/{x}/{y}.png`):
 </ExceptionReport>
 ```
 
-- GetStyles 固有のエラー: レイヤが見つからない場合やレンダラの処理に失敗した場合に同様の形式でエラーを返す。
+- GetStyles 固有のエラー: レイヤが見つからない場合やレンダラ処理失敗時に同形式エラー。`/maplibre-style` 404 は JSON で返却しクライアントはフォールバック表示へ遷移。
 
 ### 運用上の注意
 - `GetCapabilities` と `/wfs-layers` が同じ `WFSLayers` を参照するため、公開設定はプロジェクト側で一元的に管理すること。
@@ -249,13 +271,14 @@ WMTS-like タイル (`/wmts/{z}/{x}/{y}.png`):
 - `qmap_permalink_panel.py` から `navigate_from_http` / `navigate_to_coordinates` を呼び出す流れ。
 
 ---
-## 15. 変更履歴の要約（V2 系ハイライト）
+## 15. 変更履歴の要約（V2/V3 ハイライト）
 - V2.0.0: WMS サポートと外部アクセス（0.0.0.0 バインド）を追加。
 - V2.6.0: 投影定義と軸順情報を生成 HTML に埋め込み、座標表示の精度向上。
 - V2.8.0: External Control の自動ナビゲート追加。
 - V2.10.0: Google Earth `y` トークン対応とスケール推定の改善。
 - V2.12.0: テーマ対応 WMS 出力（仮想マップビュー）。
 - V2.13.0: WMTS タイルエンドポイント、MapLibre 改善（pitch トグル、zoom clamp 解除）。
+- V3.0.0: MapLibre WFS + QGIS スタイル注入の安定化、ベーススタイルの相対URL化、ブラシ無しポリゴンの正しい境界線表示、単位正規化（mm/pt→px）を確立。
 
 ---
 ## 付録: 代表的なサンプル URL
