@@ -1,26 +1,17 @@
 """WFS helper utilities for QMapPermalink MapLibre HTML generation.
 
 This module extracts and normalizes WFS-related parameters used by the
-MapLibre HTML generator. It mirrors the validation/normalization logic
-previously embedded in `qmap_maplibre.py` so callers can simply call
-`prepare_wfs_for_maplibre(permalink_text, wfs_typename)` to receive the
-ready-to-use values.
+MapLibre HTML generator. It uses QGIS API directly to convert layer styles
+to MapLibre GL JS format.
 """
 
 # Public API exported by this module
 __all__ = [
     'prepare_wfs_for_maplibre',
-    'sld_to_mapbox_style',
-    '_extract_css_param',
+    'qgis_layer_to_maplibre_style',
 ]
 
-from typing import Dict, Any
-
-# 可能なら統一スタイル正規化を使用（将来の直接変換に備え）
-try:
-    from ..style_normalizer import extract_normalized_style  # type: ignore
-except Exception:
-    extract_normalized_style = None  # type: ignore
+from typing import Dict, Any, List
 
 
 def prepare_wfs_for_maplibre(permalink_text: str, wfs_typename: str = None) -> Dict[str, Any]:
@@ -98,52 +89,44 @@ def prepare_wfs_for_maplibre(permalink_text: str, wfs_typename: str = None) -> D
     _wfs_query_url = f"/wfs?SERVICE=WFS&REQUEST=GetFeature&TYPENAMES={_wfs_typename}&OUTPUTFORMAT=application/json&MAXFEATURES=1000"
 
     # Try to normalize to canonical QGIS layer id when QGIS is available
+    from qgis.core import QgsProject
+    from urllib.parse import unquote_plus
+
     try:
-        from qgis.core import QgsProject  # type: ignore
-        from urllib.parse import unquote_plus
+        decoded_try = unquote_plus(_final_typename)
+    except Exception:
+        decoded_try = _final_typename
 
-        try:
-            decoded_try = unquote_plus(_final_typename)
-        except Exception:
-            decoded_try = _final_typename
+    found = None
+    layers_map = QgsProject.instance().mapLayers()
 
-        found = None
-        layers_map = QgsProject.instance().mapLayers()
+    if _final_typename in layers_map:
+        found = _final_typename
+    elif decoded_try in layers_map:
+        found = decoded_try
 
-        if _final_typename in layers_map:
-            found = _final_typename
-        elif decoded_try in layers_map:
-            found = decoded_try
-
-        if not found:
-            for lid, layer in layers_map.items():
-                try:
-                    if str(lid).lstrip('_') == _final_typename or str(lid).lstrip('_') == decoded_try:
-                        found = lid
-                        break
-                    if hasattr(layer, 'name') and (layer.name() == _final_typename or layer.name() == decoded_try):
-                        found = lid
-                        break
-                except Exception:
-                    continue
-
-        if not found:
+    if not found:
+        for lid, layer in layers_map.items():
             try:
-                available = list(layers_map.keys())
+                if str(lid).lstrip('_') == _final_typename or str(lid).lstrip('_') == decoded_try:
+                    found = lid
+                    break
+                if hasattr(layer, 'name') and (layer.name() == _final_typename or layer.name() == decoded_try):
+                    found = lid
+                    break
             except Exception:
-                available = []
-            raise ValueError(f"WFS typename must be a canonical QGIS layer id (layer.id()). Provided: '{_final_typename}'. Available typenames: {available}")
+                continue
 
-        _final_typename = found
-        _wfs_typename = _quote(_final_typename)
-        _wfs_query_url = f"/wfs?SERVICE=WFS&REQUEST=GetFeature&TYPENAMES={_wfs_typename}&OUTPUTFORMAT=application/json&MAXFEATURES=1000"
-    except Exception as e:
-        # propagate ValueError validation failures; otherwise continue (non-QGIS runtime)
+    if not found:
         try:
-            if isinstance(e, ValueError):
-                raise
+            available = list(layers_map.keys())
         except Exception:
-            pass
+            available = []
+        raise ValueError(f"WFS typename must be a canonical QGIS layer id (layer.id()). Provided: '{_final_typename}'. Available typenames: {available}")
+
+    _final_typename = found
+    _wfs_typename = _quote(_final_typename)
+    _wfs_query_url = f"/wfs?SERVICE=WFS&REQUEST=GetFeature&TYPENAMES={_wfs_typename}&OUTPUTFORMAT=application/json&MAXFEATURES=1000"
 
     import json as _jsonmod
 
@@ -189,10 +172,257 @@ def prepare_wfs_for_maplibre(permalink_text: str, wfs_typename: str = None) -> D
     }
 
 
+def qgis_layer_to_maplibre_style(layer_id: str, source_id: str = None) -> List[Dict[str, Any]]:
+    """Convert QGIS layer style to MapLibre GL JS style layers using QGIS API directly.
+    
+    Parameters
+    ----------
+    layer_id : str
+        QGIS layer ID
+    source_id : str, optional
+        MapLibre source ID to reference. If None, uses layer_id.
+        
+    Returns
+    -------
+    List[Dict[str, Any]]
+        List of MapLibre layer definitions
+    """
+    try:
+        from qgis.core import (
+            QgsProject, QgsWkbTypes,
+            QgsSimpleMarkerSymbolLayer, QgsSimpleLineSymbolLayer, QgsSimpleFillSymbolLayer,
+            QgsSingleSymbolRenderer, QgsCategorizedSymbolRenderer, QgsGraduatedSymbolRenderer
+        )
+    except ImportError:
+        return []
+    
+    if source_id is None:
+        source_id = layer_id
+    
+    project = QgsProject.instance()
+    layer = project.mapLayer(layer_id)
+    
+    if not layer or not hasattr(layer, 'renderer'):
+        return []
+    
+    renderer = layer.renderer()
+    geometry_type = layer.geometryType()
+    layers = []
+    
+    # Get renderer type
+    if isinstance(renderer, QgsSingleSymbolRenderer):
+        # Single symbol - one layer
+        symbol = renderer.symbol()
+        maplibre_layer = _convert_symbol_to_maplibre(symbol, source_id, geometry_type, len(layers))
+        if maplibre_layer:
+            layers.extend(maplibre_layer)
+            
+    elif isinstance(renderer, QgsCategorizedSymbolRenderer):
+        # Categorized - multiple layers with filters
+        for category in renderer.categories():
+            symbol = category.symbol()
+            value = category.value()
+            field = renderer.classAttribute()
+            
+            maplibre_layer = _convert_symbol_to_maplibre(symbol, source_id, geometry_type, len(layers))
+            if maplibre_layer:
+                # Add filter for this category
+                for layer_def in maplibre_layer:
+                    # Try to convert value to number if possible
+                    try:
+                        numeric_value = float(value)
+                        if numeric_value == int(numeric_value):
+                            numeric_value = int(numeric_value)
+                        layer_def['filter'] = ['==', ['get', field], numeric_value]
+                    except (ValueError, TypeError):
+                        layer_def['filter'] = ['==', ['get', field], str(value)]
+                layers.extend(maplibre_layer)
+                
+    elif isinstance(renderer, QgsGraduatedSymbolRenderer):
+        # Graduated - multiple layers with range filters
+        for range_item in renderer.ranges():
+            symbol = range_item.symbol()
+            lower = range_item.lowerValue()
+            upper = range_item.upperValue()
+            field = renderer.classAttribute()
+            
+            maplibre_layer = _convert_symbol_to_maplibre(symbol, source_id, geometry_type, len(layers))
+            if maplibre_layer:
+                # Add range filter
+                for layer_def in maplibre_layer:
+                    try:
+                        lower_val = float(lower)
+                        upper_val = float(upper)
+                        layer_def['filter'] = ['all', ['>=', ['get', field], lower_val], ['<', ['get', field], upper_val]]
+                    except (ValueError, TypeError):
+                        pass
+                layers.extend(maplibre_layer)
+    
+    return layers
+
+
+def _convert_symbol_to_maplibre(symbol, source_id: str, geometry_type, base_index: int) -> List[Dict[str, Any]]:
+    """Convert QgsSymbol to MapLibre layer definition(s).
+    
+    Parameters
+    ----------
+    symbol : QgsSymbol
+        QGIS symbol to convert
+    source_id : str
+        MapLibre source ID
+    geometry_type : QgsWkbTypes.GeometryType
+        Geometry type (Point, Line, Polygon)
+    base_index : int
+        Base index for layer ID generation
+        
+    Returns
+    -------
+    List[Dict[str, Any]]
+        List of MapLibre layer definitions (may be multiple for polygon with outline)
+    """
+    try:
+        from qgis.core import (
+            QgsWkbTypes,
+            QgsSimpleMarkerSymbolLayer, QgsSimpleLineSymbolLayer, QgsSimpleFillSymbolLayer
+        )
+    except ImportError:
+        return []
+    
+    if not symbol:
+        return []
+    
+    layers = []
+    
+    # Get the first symbol layer (main style)
+    if symbol.symbolLayerCount() > 0:
+        symbol_layer = symbol.symbolLayer(0)
+        
+        if geometry_type == QgsWkbTypes.PointGeometry:
+            # Point geometry - create circle layer
+            paint = {}
+            layout = {}
+            
+            if isinstance(symbol_layer, QgsSimpleMarkerSymbolLayer):
+                # Fill color
+                color = symbol_layer.color()
+                if color.isValid():
+                    paint['circle-color'] = color.name()
+                    paint['circle-opacity'] = color.alphaF()
+                
+                # Stroke
+                stroke_color = symbol_layer.strokeColor()
+                if stroke_color.isValid():
+                    paint['circle-stroke-color'] = stroke_color.name()
+                    paint['circle-stroke-opacity'] = stroke_color.alphaF()
+                    paint['circle-stroke-width'] = symbol_layer.strokeWidth()
+                
+                # Size
+                paint['circle-radius'] = symbol_layer.size() / 2
+            
+            layers.append({
+                'id': f"{source_id}_circle_{base_index}",
+                'type': 'circle',
+                'source': source_id,
+                'paint': paint,
+                'layout': layout
+            })
+            
+        elif geometry_type == QgsWkbTypes.LineGeometry:
+            # Line geometry
+            paint = {}
+            layout = {}
+            
+            if isinstance(symbol_layer, QgsSimpleLineSymbolLayer):
+                # Color
+                color = symbol_layer.color()
+                if color.isValid():
+                    paint['line-color'] = color.name()
+                    paint['line-opacity'] = color.alphaF()
+                
+                # Width
+                paint['line-width'] = symbol_layer.width()
+                
+                # Join and cap styles
+                pen_join_style = symbol_layer.penJoinStyle()
+                if pen_join_style == 0x40:  # Qt.MiterJoin
+                    layout['line-join'] = 'miter'
+                elif pen_join_style == 0x80:  # Qt.BevelJoin
+                    layout['line-join'] = 'bevel'
+                elif pen_join_style == 0x100:  # Qt.RoundJoin
+                    layout['line-join'] = 'round'
+                
+                pen_cap_style = symbol_layer.penCapStyle()
+                if pen_cap_style == 0x00:  # Qt.FlatCap
+                    layout['line-cap'] = 'butt'
+                elif pen_cap_style == 0x10:  # Qt.SquareCap
+                    layout['line-cap'] = 'square'
+                elif pen_cap_style == 0x20:  # Qt.RoundCap
+                    layout['line-cap'] = 'round'
+            
+            layers.append({
+                'id': f"{source_id}_line_{base_index}",
+                'type': 'line',
+                'source': source_id,
+                'paint': paint,
+                'layout': layout
+            })
+            
+        elif geometry_type == QgsWkbTypes.PolygonGeometry:
+            # Polygon geometry - may have fill and/or outline
+            
+            if isinstance(symbol_layer, QgsSimpleFillSymbolLayer):
+                # Fill
+                fill_color = symbol_layer.color()
+                has_fill = fill_color.isValid() and fill_color.alpha() > 0
+                
+                if has_fill:
+                    paint = {
+                        'fill-color': fill_color.name(),
+                        'fill-opacity': fill_color.alphaF()
+                    }
+                    layers.append({
+                        'id': f"{source_id}_fill_{base_index}",
+                        'type': 'fill',
+                        'source': source_id,
+                        'paint': paint,
+                        'layout': {}
+                    })
+                
+                # Outline
+                stroke_color = symbol_layer.strokeColor()
+                if stroke_color.isValid() and stroke_color.alpha() > 0:
+                    paint = {
+                        'line-color': stroke_color.name(),
+                        'line-opacity': stroke_color.alphaF(),
+                        'line-width': symbol_layer.strokeWidth()
+                    }
+                    
+                    layout = {}
+                    pen_join_style = symbol_layer.penJoinStyle()
+                    if pen_join_style == 0x40:  # Qt.MiterJoin
+                        layout['line-join'] = 'miter'
+                    elif pen_join_style == 0x80:  # Qt.BevelJoin
+                        layout['line-join'] = 'bevel'
+                    elif pen_join_style == 0x100:  # Qt.RoundJoin
+                        layout['line-join'] = 'round'
+                    
+                    layers.append({
+                        'id': f"{source_id}_line_{base_index + (1 if has_fill else 0)}",
+                        'type': 'line',
+                        'source': source_id,
+                        'paint': paint,
+                        'layout': layout
+                    })
+    
+    return layers
+
+
 def sld_to_mapbox_style(sld_xml, source_id="qgis"):
     """
     SLD XML を Mapbox Style の layers に変換。
-    シンプルな PointSymbolizer, LineSymbolizer, PolygonSymbolizer をサポート。
+    PointSymbolizer, LineSymbolizer, PolygonSymbolizer をサポート。
+    QGISのスタイル設定（色、線幅、透明度、線種、結合スタイル、キャップスタイル等）を
+    可能な限りMapLibre GL JSに反映。
     """
     import xml.etree.ElementTree as ET
     try:
@@ -210,6 +440,78 @@ def sld_to_mapbox_style(sld_xml, source_id="qgis"):
         for fts in feature_type_styles:
             rules = fts.findall('.//sld:Rule', ns) or fts.findall('.//Rule')
             for rule in rules:
+                # Ruleの名前を取得（カテゴリ分類やグラデーション分類用）
+                rule_name_elem = rule.find('.//sld:Name', ns) or rule.find('.//Name')
+                rule_name = rule_name_elem.text if (rule_name_elem is not None and rule_name_elem.text) else None
+                
+                # Filterの取得（カテゴリ分類・グラデーション分類用）
+                filter_elem = rule.find('.//ogc:Filter', ns) or rule.find('.//Filter')
+                mapbox_filter = None
+                if filter_elem is not None:
+                    # PropertyIsEqualTo（カテゴリ分類）
+                    prop_eq = filter_elem.find('.//ogc:PropertyIsEqualTo', ns) or filter_elem.find('.//PropertyIsEqualTo')
+                    if prop_eq is not None:
+                        prop_name_elem = prop_eq.find('.//ogc:PropertyName', ns) or prop_eq.find('.//PropertyName')
+                        literal_elem = prop_eq.find('.//ogc:Literal', ns) or prop_eq.find('.//Literal')
+                        if prop_name_elem is not None and literal_elem is not None:
+                            field = prop_name_elem.text.strip() if prop_name_elem.text else ''
+                            value = literal_elem.text.strip() if literal_elem.text else ''
+                            # Try to parse as number if possible
+                            try:
+                                value = float(value)
+                                if value == int(value):
+                                    value = int(value)
+                            except Exception:
+                                pass
+                            mapbox_filter = ['==', ['get', field], value]
+                    
+                    # PropertyIsGreaterThanOrEqualTo & PropertyIsLessThan（グラデーション分類）
+                    and_elem = filter_elem.find('.//ogc:And', ns) or filter_elem.find('.//And')
+                    if and_elem is not None:
+                        gte_elem = and_elem.find('.//ogc:PropertyIsGreaterThanOrEqualTo', ns) or and_elem.find('.//PropertyIsGreaterThanOrEqualTo')
+                        lt_elem = and_elem.find('.//ogc:PropertyIsLessThan', ns) or and_elem.find('.//PropertyIsLessThan')
+                        if gte_elem is not None and lt_elem is not None:
+                            prop_gte = gte_elem.find('.//ogc:PropertyName', ns) or gte_elem.find('.//PropertyName')
+                            lit_gte = gte_elem.find('.//ogc:Literal', ns) or gte_elem.find('.//Literal')
+                            prop_lt = lt_elem.find('.//ogc:PropertyName', ns) or lt_elem.find('.//PropertyName')
+                            lit_lt = lt_elem.find('.//ogc:Literal', ns) or lt_elem.find('.//Literal')
+                            if all([prop_gte, lit_gte, prop_lt, lit_lt]):
+                                field = prop_gte.text.strip() if prop_gte.text else ''
+                                lower = lit_gte.text.strip() if lit_gte.text else ''
+                                upper = lit_lt.text.strip() if lit_lt.text else ''
+                                try:
+                                    lower = float(lower)
+                                    upper = float(upper)
+                                except Exception:
+                                    pass
+                                # ['all', ['>=', ['get', field], lower], ['<', ['get', field], upper]]
+                                mapbox_filter = ['all', ['>=', ['get', field], lower], ['<', ['get', field], upper]]
+                        # PropertyIsGreaterThanOrEqualTo only (最後のクラス)
+                        elif gte_elem is not None:
+                            prop_gte = gte_elem.find('.//ogc:PropertyName', ns) or gte_elem.find('.//PropertyName')
+                            lit_gte = gte_elem.find('.//ogc:Literal', ns) or gte_elem.find('.//Literal')
+                            if prop_gte is not None and lit_gte is not None:
+                                field = prop_gte.text.strip() if prop_gte.text else ''
+                                lower = lit_gte.text.strip() if lit_gte.text else ''
+                                try:
+                                    lower = float(lower)
+                                except Exception:
+                                    pass
+                                mapbox_filter = ['>=', ['get', field], lower]
+                    # PropertyIsGreaterThanOrEqualTo only (without And)
+                    elif filter_elem.find('.//ogc:PropertyIsGreaterThanOrEqualTo', ns) or filter_elem.find('.//PropertyIsGreaterThanOrEqualTo'):
+                        gte_elem = filter_elem.find('.//ogc:PropertyIsGreaterThanOrEqualTo', ns) or filter_elem.find('.//PropertyIsGreaterThanOrEqualTo')
+                        prop_gte = gte_elem.find('.//ogc:PropertyName', ns) or gte_elem.find('.//PropertyName')
+                        lit_gte = gte_elem.find('.//ogc:Literal', ns) or gte_elem.find('.//Literal')
+                        if prop_gte is not None and lit_gte is not None:
+                            field = prop_gte.text.strip() if prop_gte.text else ''
+                            lower = lit_gte.text.strip() if lit_gte.text else ''
+                            try:
+                                lower = float(lower)
+                            except Exception:
+                                pass
+                            mapbox_filter = ['>=', ['get', field], lower]
+                
                 # Symbolizer を探す
                 point_sym = rule.find('.//sld:PointSymbolizer', ns) or rule.find('.//PointSymbolizer')
                 line_sym = rule.find('.//sld:LineSymbolizer', ns) or rule.find('.//LineSymbolizer')
@@ -224,12 +526,29 @@ def sld_to_mapbox_style(sld_xml, source_id="qgis"):
                     # Graphic > Mark > Fill/Stroke
                     mark = point_sym.find('.//sld:Mark', ns) or point_sym.find('.//Mark')
                     if mark:
+                        # WellKnownName の取得（シンボル形状）
+                        wkn_elem = mark.find('.//sld:WellKnownName', ns) or mark.find('.//WellKnownName')
+                        well_known_name = wkn_elem.text.strip() if (wkn_elem is not None and wkn_elem.text) else 'circle'
+                        
+                        # MapLibre では circle のみサポート（square, star, triangle, cross, x は未対応）
+                        # 将来的にはSymbolLayerでアイコン画像を使用可能
+                        if well_known_name not in ['circle']:
+                            # 非対応形状は circle にフォールバック
+                            well_known_name = 'circle'
+                        
                         fill = mark.find('.//sld:Fill', ns) or mark.find('.//Fill')
                         if fill:
                             # Extract fill color from SLD and use as concrete value
                             color = _extract_css_param(fill, 'fill')
                             if color:
                                 paint['circle-color'] = color
+                            # fill-opacity
+                            fill_opacity = _extract_css_param(fill, 'fill-opacity')
+                            if fill_opacity:
+                                try:
+                                    paint['circle-opacity'] = float(fill_opacity)
+                                except Exception:
+                                    pass
 
                         stroke = mark.find('.//sld:Stroke', ns) or mark.find('.//Stroke')
                         if stroke:
@@ -244,6 +563,13 @@ def sld_to_mapbox_style(sld_xml, source_id="qgis"):
                                 except Exception:
                                     # ignore non-numeric
                                     pass
+                            # stroke-opacity
+                            stroke_opacity = _extract_css_param(stroke, 'stroke-opacity')
+                            if stroke_opacity:
+                                try:
+                                    paint['circle-stroke-opacity'] = float(stroke_opacity)
+                                except Exception:
+                                    pass
 
                     # Size: try to extract Size element or Graphic/Size if present
                     size_elem = point_sym.find('.//sld:Size', ns) or point_sym.find('.//Size')
@@ -252,6 +578,17 @@ def sld_to_mapbox_style(sld_xml, source_id="qgis"):
                             paint['circle-radius'] = float(size_elem.text.strip())
                         except Exception:
                             pass
+                    
+                    # ポイントレイヤーを追加
+                    if layer_type == 'circle':
+                        base_index = len(layers)
+                        layers.append({
+                            'id': f"{source_id}_{layer_type}_{base_index}",
+                            'type': layer_type,
+                            'source': source_id,
+                            'paint': paint,
+                            'layout': layout
+                        })
 
                 elif line_sym is not None:
                     layer_type = 'line'
