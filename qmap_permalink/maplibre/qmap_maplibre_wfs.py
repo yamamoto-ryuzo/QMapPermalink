@@ -142,10 +142,10 @@ def prepare_wfs_for_maplibre(permalink_text: str, wfs_typename: str = None) -> D
     _wfs_layer_title_js = _jsonmod.dumps(_wfs_layer_title)
     _wfs_label_title_js = _jsonmod.dumps(_wfs_label_title)
 
-    # Use complete URL for MapLibre style endpoint
-    # MapLibre GL JS requires either a complete URL or an inline style object
-    # Using URL maintains separation of concerns and allows for caching
-    style_url = f"http://localhost:8089/maplibre-style?typename={_wfs_typename}"
+    # 初回も追加も同一JS関数で処理するため、スタイルURLは常にベースのみを指す
+    # （WFSレイヤはクライアント側で /maplibre-style?typename=... を個別取得・注入）
+    # MapLibre GL JS はURLまたはインラインオブジェクトを受け付けるが、ここではURLを用いる
+    style_url = "http://localhost:8089/maplibre-style"
 
     mapbox_layers = []
     style_json = None

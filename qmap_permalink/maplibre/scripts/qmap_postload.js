@@ -7,6 +7,24 @@
   window.qmap_init_after_load = function(map) {
     try {
       // Add helper: addWfsLayer (mirrors previous inline implementation)
+      // 付帯ヘルパー: スタイルから幾何タイプを推定
+      function inferGeomFromStyleBySource(srcId) {
+        try {
+          var types = new Set();
+          var allLayers = map.getStyle().layers || [];
+          for (var i = 0; i < allLayers.length; i++) {
+            var lyr = allLayers[i];
+            if (lyr && lyr.source === srcId && lyr.type) {
+              types.add(String(lyr.type));
+            }
+          }
+          if (types.has('fill')) return 'Polygon';
+          if (types.has('line')) return 'LineString';
+          if (types.has('circle')) return 'Point';
+        } catch (e) { /* ignore */ }
+        return null;
+      }
+
       function addWfsLayer(wfsUrl, sourceId, layerId, labelId, layerTitle, labelTitle) {
         // スタイルJSONから既にレイヤーが読み込まれている場合は、sourceだけ更新
         var sourceAlreadyExists = false;
@@ -50,6 +68,41 @@
             } catch (e) {
               console.warn('Failed to register style layers', e);
             }
+          }
+          // ラベルレイヤーはスタイルに含まれないため、ここで追加して登録する
+          try {
+            if (!map.getLayer(labelId)) {
+              var inferred = inferGeomFromStyleBySource(sourceId);
+              var labelLayout = { 'text-field': ['get', 'label'], 'text-size': 14, 'text-allow-overlap': true };
+              if (inferred === 'LineString') {
+                labelLayout['symbol-placement'] = 'line';
+                labelLayout['text-offset'] = [0, 1.0];
+              } else if (inferred === 'Polygon') {
+                labelLayout['symbol-placement'] = 'point';
+              } else {
+                labelLayout['text-offset'] = [0, 1.0];
+                labelLayout['text-anchor'] = 'top';
+              }
+              map.addLayer({
+                id: labelId,
+                type: 'symbol',
+                source: sourceId,
+                filter: ['has', 'label'],
+                layout: labelLayout,
+                paint: {
+                  'text-color': '#000000',
+                  'text-halo-color': '#ffffff',
+                  'text-halo-width': 2
+                }
+              });
+              if (typeof wmtsLayers !== 'undefined' && Array.isArray(wmtsLayers)) {
+                if (!wmtsLayers.some(function(l){ return l && l.id === labelId; })) {
+                  wmtsLayers.push({ id: labelId, title: labelTitle });
+                }
+              }
+            }
+          } catch (e) {
+            console.warn('Failed to add/register label layer on existing-style branch', e);
           }
           return; // Skip WFS fetch - data is already being loaded from style JSON source
         }
@@ -115,16 +168,23 @@
               // ラベルレイヤーは通常スタイルに含まれないため追加
               if (!map.getLayer(labelId)) {
                 try {
+                  var inferred = inferGeomFromStyleBySource(sourceId);
+                  var labelLayout = { 'text-field': ['get', 'label'], 'text-size': 14, 'text-allow-overlap': true };
+                  if (inferred === 'LineString') {
+                    labelLayout['symbol-placement'] = 'line';
+                    labelLayout['text-offset'] = [0, 1.0];
+                  } else if (inferred === 'Polygon') {
+                    labelLayout['symbol-placement'] = 'point';
+                  } else {
+                    labelLayout['text-offset'] = [0, 1.0];
+                    labelLayout['text-anchor'] = 'top';
+                  }
                   map.addLayer({
                     id: labelId,
                     type: 'symbol',
                     source: sourceId,
                     filter: ['has', 'label'],
-                    layout: {
-                      'text-field': ['get', 'label'],
-                      'text-size': 14,
-                      'text-allow-overlap': true
-                    },
+                    layout: labelLayout,
                     paint: {
                       'text-color': '#000000',
                       'text-halo-color': '#ffffff',

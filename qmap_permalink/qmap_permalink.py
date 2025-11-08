@@ -1345,28 +1345,8 @@ class QMapPermalink:
             theme_encoded = urllib.parse.quote(specific_theme)
             permalink_url += f"&theme={theme_encoded}"
 
-        # Append a canonical typename (QGIS layer.id()) to the permalink so
-        # client-side viewers (MapLibre) can fetch server-generated styles.
-        # Prefer the first layer listed in the project's WFSLayers project entry
-        # when available. Do not overwrite an explicit typename already present.
-        try:
-            if 'typename=' not in permalink_url and 'TYPENAME=' not in permalink_url:
-                project = QgsProject.instance()
-                try:
-                    wfs_ids, ok = project.readListEntry('WFSLayers', '/')
-                except Exception:
-                    wfs_ids, ok = ([], False)
-                if ok and wfs_ids:
-                    first_id = str(wfs_ids[0])
-                    try:
-                        from urllib.parse import quote as _quote
-                        permalink_url += f"&typename={_quote(first_id)}"
-                    except Exception:
-                        # best-effort: append raw id if quoting fails
-                        permalink_url += f"&typename={first_id}"
-        except Exception:
-            # non-fatal: leave permalink as-is
-            pass
+        # MapLibre 用のスタイルはクライアント側で個別に取得・注入するため、
+        # パーマリンクに typename を付与する処理は行わない（削除）。
         
         return permalink_url
 
