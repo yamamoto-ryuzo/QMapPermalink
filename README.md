@@ -152,6 +152,47 @@ curl "http://localhost:8089/wfs?SERVICE=WFS&REQUEST=GetStyles&TYPENAME=my_layer"
 3. QGIS　+　プラグイン を社内で立ち上げ
 4. Excel/PowerPoint に画像とリンクを挿入 → 配布用 PDF を生成
 
+### WMS 高速化（オプション）
+
+**QGIS Server を使って WMS を高速化できます：**
+
+#### 自動起動（推奨）
+
+プラグインメニューから「QGIS Server Settings」を開き、自動起動を有効にします：
+
+1. QGISメニュー → プラグイン → QMap Permalink → **QGIS Server Settings**
+2. 「Automatically start QGIS Server when plugin loads」にチェック
+3. ポート番号を設定（デフォルト: 8090）
+4. OKをクリック
+5. QGISを再起動
+
+**特徴:**
+- ✅ 現在起動しているQGISのEXEファイルを自動検出
+- ✅ 開いているプロジェクトファイルを自動使用
+- ✅ プラグイン起動時に自動でQGIS Serverも起動
+- ✅ ポート競合時は自動的に別ポートを使用
+
+#### 手動起動
+
+コマンドラインから手動で起動することもできます：
+
+```batch
+# Windows
+cd qmap_permalink\qgisserver
+start_qgis_server.bat myproject.qgs 8090
+
+# Linux/macOS
+cd qmap_permalink/qgisserver
+./start_qgis_server.sh myproject.qgs 8090
+```
+
+#### サーバーの使い分け
+
+- プラグイン内蔵サーバー（ポート8089）: 開発・プレビュー用
+- QGIS Server（ポート8090）: **本番・高速WMS用**（4倍以上高速）
+
+詳細は [qmap_permalink/qgisserver/README.md](qmap_permalink/qgisserver/README.md) を参照してください。
+
 ## 開発者向けメモ
 
 まずは [`SPEC.md`](./SPEC.md) をお読みください。

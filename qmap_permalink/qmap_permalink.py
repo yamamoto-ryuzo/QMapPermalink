@@ -154,6 +154,14 @@ class QMapPermalink:
         # server_portアトリビュートエラーを回避
         self.server_port = 8089
 
+        # QGIS Serverマネージャー
+        try:
+            from .qgisserver.qgis_server_manager import QGISServerManager
+            self.qgis_server_manager = QGISServerManager()
+        except Exception as e:
+            print(f"QGIS Server Manager initialization failed: {e}")
+            self.qgis_server_manager = None
+
         # ツールバーの確認（初回実行時にツールバーが存在するかチェック）
         self.first_start = None
 
@@ -262,6 +270,13 @@ class QMapPermalink:
                 text=self.tr(u'QMap Permalink'),
                 callback=self.toggle_panel,
                 parent=self.iface.mainWindow())
+            
+            # QGIS Server設定メニュー
+            self.add_action(
+                icon_path,
+                text=self.tr(u'QGIS Server Settings'),
+                callback=self.open_qgis_server_settings,
+                parent=self.iface.mainWindow())
         else:
             # パネルが利用できない場合は警告メッセージ
             self.iface.messageBar().pushMessage(
@@ -280,6 +295,9 @@ class QMapPermalink:
 
         # HTTPサーバーを起動
         self.server_manager.start_http_server()
+
+        # QGIS Serverを自動起動（設定で有効な場合）
+        self._auto_start_qgis_server()
 
         # 初回起動フラグ
         self.first_start = True
@@ -492,6 +510,13 @@ class QMapPermalink:
         # HTTPサーバーを停止
         self.server_manager.stop_http_server()
         
+        # QGIS Serverを停止
+        if self.qgis_server_manager:
+            try:
+                self.qgis_server_manager.stop_server()
+            except Exception as e:
+                print(f"Error stopping QGIS Server: {e}")
+        
         # パネルを削除
         if self.panel is not None:
             self.iface.removeDockWidget(self.panel)
@@ -506,6 +531,73 @@ class QMapPermalink:
                 self.tr(u'&QMap Permalink'),
                 action)
             self.iface.removeToolBarIcon(action)
+
+    def _auto_start_qgis_server(self):
+        """設定に基づいてQGIS Serverを自動起動"""
+        try:
+            if not self.qgis_server_manager:
+                return
+            
+            # 設定を読み込み
+            settings = QSettings()
+            auto_start = settings.value('QMapPermalink/qgis_server_auto_start', False, type=bool)
+            
+            if not auto_start:
+                return
+            
+            # 現在のプロジェクトファイルを取得
+            project = QgsProject.instance()
+            project_file = project.fileName()
+            
+            if not project_file:
+                print("QGIS Server auto-start: No project file open")
+                return
+            
+            # ポート設定を取得（デフォルト8090）
+            port = settings.value('QMapPermalink/qgis_server_port', 8090, type=int)
+            
+            # QGIS Serverを起動
+            success, result = self.qgis_server_manager.start_server(project_file, port)
+            
+            if success:
+                self.iface.messageBar().pushMessage(
+                    "QMap Permalink",
+                    f"QGIS Server started on port {result}",
+                    duration=5
+                )
+            else:
+                print(f"QGIS Server auto-start failed: {result}")
+                
+        except Exception as e:
+            print(f"Error in QGIS Server auto-start: {e}")
+            import traceback
+            traceback.print_exc()
+
+    def open_qgis_server_settings(self):
+        """QGIS Server設定ダイアログを開く"""
+        try:
+            from .qgisserver.qgis_server_settings_dialog import QGISServerSettingsDialog
+            
+            dialog = QGISServerSettingsDialog(self.iface.mainWindow())
+            result = dialog.exec_()
+            
+            if result == QMessageBox.Accepted:
+                # 設定が変更されたことを通知
+                self.iface.messageBar().pushMessage(
+                    "QMap Permalink",
+                    "QGIS Server settings saved. Restart QGIS to apply changes.",
+                    duration=5
+                )
+        except Exception as e:
+            QMessageBox.critical(
+                self.iface.mainWindow(),
+                "Error",
+                f"Failed to open settings dialog: {str(e)}"
+            )
+            import traceback
+            traceback.print_exc()
+
+
 
 
 
