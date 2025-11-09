@@ -233,7 +233,14 @@ class QMapPermalinkZipCreator:
         
         file_name = file_path.name
         file_str = str(file_path)
-        
+        # Exclude any file that is inside a __pycache__ directory explicitly
+        if '__pycache__' in file_path.parts:
+            return True
+
+        # Exclude any file that is inside a .cache directory (e.g. generated tile cache)
+        if '.cache' in file_path.parts:
+            return True
+
         for pattern in self.exclude_patterns:
             if fnmatch.fnmatch(file_name, pattern) or fnmatch.fnmatch(file_str, pattern):
                 return True
