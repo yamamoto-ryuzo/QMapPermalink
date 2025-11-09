@@ -23,6 +23,19 @@
       }
 
       function addWfsLayer(wfsUrl, sourceId, layerId, labelId, layerTitle, labelTitle) {
+        // Guard: avoid adding the same WFS source multiple times across
+        // re-initializations (map.setStyle triggers re-run of this script).
+        // Use a global Set on window so it survives style reloads in the
+        // same page context.
+        try {
+          if (!window.__qmap_seen_wfs_sources) window.__qmap_seen_wfs_sources = new Set();
+          if (window.__qmap_seen_wfs_sources.has(sourceId)) {
+            console.log('[addWfsLayer] source already registered, skipping:', sourceId);
+            return;
+          }
+          // mark immediately to avoid races from concurrent calls
+          window.__qmap_seen_wfs_sources.add(sourceId);
+        } catch (e) { console.warn('failed to guard repeated WFS registration', e); }
         // 1) まず /maplibre-style?typename=sourceId を取得して QGIS 由来スタイルを注入する試行
         // 2) 失敗した場合のみ WFS GeoJSON を直接取得して簡易フォールバックスタイルを付与
         // 3) ポリゴン「ブラシなし」は QGIS スタイル注入成功時は fill レイヤ未生成となり輪郭線のみ (alpha=0 判定)
@@ -105,13 +118,16 @@
             try {
               const current = map.getStyle().layers || [];
               current.forEach(function(ly) {
-                if (ly.source === sourceId) {
-                  if (!wmtsLayers.some(function(e) { return e && e.id === ly.id; })) {
-                    const title = (ly.id.indexOf('label') >= 0) ? labelTitle : layerTitle;
-                    wmtsLayers.push({ id: ly.id, title });
-                    console.log('[layerControl] 登録:', ly.id);
+                try {
+                  if (ly.source === sourceId) {
+                    // Avoid duplicates by id or title
+                    if (!wmtsLayers.some(function(e) { return e && (e.id === ly.id || e.title === (ly.id.indexOf('label') >= 0 ? labelTitle : layerTitle)); })) {
+                      const title = (ly.id.indexOf('label') >= 0) ? labelTitle : layerTitle;
+                      wmtsLayers.push({ id: ly.id, title });
+                      console.log('[layerControl] 登録:', ly.id);
+                    }
                   }
-                }
+                } catch (e) { console.warn('registerLayersInControl inner failure', e); }
               });
             } catch (e) { console.warn('[layerControl] 登録失敗', e); }
         }
@@ -519,6 +535,186 @@
         pitchBtn.addEventListener('click', function() { if (!pitchLocked) lockPitch(); else unlockPitch(); });
         try { lockPitch(); } catch(e) {}
       } catch (e) { console.warn('pitch toggle setup failed', e); }
+
+      // --- WMTS identity watch: on map move, re-check GetCapabilities and
+      // reload WMTS tile sources when the identity hash changes.
+      try {
+        // Simple helper: fetch GetCapabilities and extract ?v=... from
+        // ServiceMetadataURL or ResourceURL template. Returns identity string
+        // or null.
+        function getWmtsIdentity() {
+          return fetch('/wmts?SERVICE=WMTS')
+            .then(function(resp) { if (!resp.ok) throw new Error('GetCapabilities failed'); return resp.text(); })
+            .then(function(xmlText) {
+              try {
+                var parser = new window.DOMParser();
+                var xml = parser.parseFromString(xmlText, 'text/xml');
+                // Try ResourceURL template first
+                var resUrls = xml.getElementsByTagName('ResourceURL');
+                for (var i = 0; i < resUrls.length; i++) {
+                  var t = resUrls[i].getAttribute && resUrls[i].getAttribute('template');
+                  if (t) {
+                    var m = t.match(/[?&]v=([^&]+)/);
+                    if (m) return decodeURIComponent(m[1]);
+                  }
+                }
+                // Fallback: ServiceMetadataURL text content
+                var sm = xml.getElementsByTagName('ServiceMetadataURL');
+                if (sm && sm.length > 0) {
+                  var txt = sm[0].textContent || '';
+                  var m2 = txt.match(/[?&]v=([^&]+)/);
+                  if (m2) return decodeURIComponent(m2[1]);
+                }
+              } catch (e) {
+                console.warn('parse GetCapabilities failed', e);
+              }
+              return null;
+            })
+            .catch(function(err) { console.warn('getWmtsIdentity error', err); return null; });
+        }
+
+        // Replace or append ?v= in a tile template URL
+        function replaceVParamInTile(tileUrl, newV) {
+          try {
+            if (!tileUrl) return tileUrl;
+            if (/[?&]v=[^&]*/.test(tileUrl)) {
+              return tileUrl.replace(/([?&]v=)[^&]*/, '$1' + encodeURIComponent(newV));
+            } else {
+              return tileUrl + (tileUrl.indexOf('?') >= 0 ? '&' : '?') + 'v=' + encodeURIComponent(newV);
+            }
+          } catch (e) { return tileUrl; }
+        }
+
+        // Update only WMTS tile sources (sources with `tiles` array or raster url)
+        // to use the new identity value. This avoids calling map.setStyle(),
+        // which re-initializes the entire page and can cause WFS layers to be
+        // re-registered. Strategy: for each tile source, read its current
+        // descriptor from the style, compute new tiles/urls with ?v=, remove
+        // the source from the map and immediately re-add it with the same id
+        // and new descriptor. Layers referencing the source remain and will
+        // use the new source automatically.
+        function applyNewWmtsIdentity(map, newV) {
+          try {
+            var style = map.getStyle();
+            if (!style || !style.sources) return;
+            var srcIds = Object.keys(style.sources || {});
+            srcIds.forEach(function(sid) {
+              try {
+                var src = style.sources[sid];
+                if (!src) return;
+                var isTileSource = Array.isArray(src.tiles) && src.tiles.length > 0;
+                var isRasterUrl = !!(src.url && (src.type === 'raster' || src.type === 'raster'));
+                if (!isTileSource && !isRasterUrl) return; // skip non-tile sources
+
+                // Build new descriptor by cloning and replacing tiles/url
+                var newDesc = JSON.parse(JSON.stringify(src));
+                if (isTileSource) {
+                  newDesc.tiles = (src.tiles || []).map(function(t) { return replaceVParamInTile(t, newV); });
+                }
+                if (isRasterUrl && newDesc.url) {
+                  newDesc.url = replaceVParamInTile(newDesc.url, newV);
+                }
+
+                // To safely replace a source, first collect and remove any
+                // layers that reference it, then remove the source, add the
+                // new source descriptor, and finally re-add the layers in the
+                // original order. This avoids MapLibre errors about removing
+                // sources that are still used by layers and prevents duplicate
+                // source addition.
+                try {
+                  var fullStyle = map.getStyle() || { layers: [] };
+                  var allLayers = fullStyle.layers || [];
+                  var referencingLayers = [];
+                  var firstIndex = null;
+                  var lastIndex = null;
+                  for (var li = 0; li < allLayers.length; li++) {
+                    var L = allLayers[li];
+                    if (L && L.source === sid) {
+                      if (firstIndex === null) firstIndex = li;
+                      lastIndex = li;
+                      referencingLayers.push(JSON.parse(JSON.stringify(L)));
+                    }
+                  }
+
+                  // Determine id of the layer that followed the last referencing
+                  // layer so we can insert before it when restoring. If null,
+                  // re-adding will place layers at the top.
+                  var nextLayerId = (lastIndex !== null && allLayers[lastIndex + 1]) ? allLayers[lastIndex + 1].id : null;
+
+                  // Remove referencing layers from the map (if present)
+                  referencingLayers.forEach(function(ld) {
+                    try { if (map.getLayer && map.getLayer(ld.id)) { map.removeLayer(ld.id); } } catch (e) { /* ignore */ }
+                  });
+
+                  // Now remove the source if present
+                  try { if (map.getSource && map.getSource(sid)) { map.removeSource(sid); } } catch (e) { /* ignore */ }
+
+                  // Add the new source descriptor
+                  try {
+                    if (!map.getSource || !map.getSource(sid)) {
+                      map.addSource(sid, newDesc);
+                    } else {
+                      // If source persists for some reason, skip adding.
+                    }
+                    console.log('[WMTS] updated tile source', sid);
+                  } catch (e) {
+                    console.warn('[WMTS] failed to re-add source', sid, e);
+                  }
+
+                  // Re-add layers in the saved order, inserting before nextLayerId
+                  for (var ri = 0; ri < referencingLayers.length; ri++) {
+                    try {
+                      var layerDef = referencingLayers[ri];
+                      // Avoid re-adding if it already exists
+                      if (map.getLayer && map.getLayer(layerDef.id)) continue;
+                      if (nextLayerId && map.getLayer && map.getLayer(nextLayerId)) {
+                        map.addLayer(layerDef, nextLayerId);
+                      } else {
+                        // no next layer -> add to top
+                        map.addLayer(layerDef);
+                      }
+                    } catch (e) { console.warn('[WMTS] failed to re-add layer', layerDef && layerDef.id, e); }
+                  }
+                } catch (e) { console.warn('applyNewWmtsIdentity replacement failure', e); }
+              } catch (e) { console.warn('applyNewWmtsIdentity inner failure', e); }
+            });
+          } catch (e) { console.warn('applyNewWmtsIdentity failed', e); }
+        }
+
+        // Debounce helper
+        function debounce(fn, ms) {
+          var t = null;
+          return function() {
+            var args = arguments;
+            clearTimeout(t);
+            t = setTimeout(function() { fn.apply(null, args); }, ms);
+          };
+        }
+
+        // Check and reload if identity changed
+        var __qmap_current_wmts_identity = null;
+        getWmtsIdentity().then(function(v) { __qmap_current_wmts_identity = v; });
+
+        function checkWmtsIdentityAndReload() {
+          getWmtsIdentity().then(function(v) {
+            try {
+              if (!v) return;
+              if (__qmap_current_wmts_identity !== v) {
+                console.log('[WMTS] identity changed', __qmap_current_wmts_identity, '->', v);
+                __qmap_current_wmts_identity = v;
+                applyNewWmtsIdentity(map, v);
+              }
+            } catch (e) { console.warn('checkWmtsIdentityAndReload failed', e); }
+          });
+        }
+
+        // Attach to moveend (user finished panning/zooming) with debounce
+        try {
+          map.on('moveend', debounce(checkWmtsIdentityAndReload, 800));
+        } catch (e) {
+          console.warn('Failed to attach moveend handler', e);
+        }
+      } catch (e) { console.warn('WMTS identity watch setup failed', e); }
 
     } catch (e) { console.warn('qmap_postload failed', e); }
   };

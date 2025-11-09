@@ -13,17 +13,18 @@
 2. API / エンドポイント仕様
 3. パーマリンク形式とパラメータ
 4. Map 表示生成（OpenLayers / MapLibre）
-5. WMS / WMTS (タイルプロキシ) の挙動
-6. WFS (Web Feature Service) の挙動
-7. Google Maps / Google Earth 連携（生成とパース）
-8. External Control（外部制御）のパース優先度と挙動
-9. テーマ (Theme) サポート
-10. 回転（ANGLE）パイプラインとパフォーマンス
-11. 投影 (CRS) ポリシー
-12. セキュリティ・運用上の注意
-13. テスト・QA 手順
-14. 実装ファイルと責務マッピング
-15. 変更履歴の要約（V2/V3 ハイライト）
+5. WMS の挙動
+6. WMTS (タイルプロキシ) の挙動
+7. WFS (Web Feature Service) の挙動
+8. Google Maps / Google Earth 連携（生成とパース）
+9. External Control（外部制御）のパース優先度と挙動
+10. テーマ (Theme) サポート
+11. 回転（ANGLE）パイプラインとパフォーマンス
+12. 投影 (CRS) ポリシー
+13. セキュリティ・運用上の注意
+14. テスト・QA 手順
+15. 実装ファイルと責務マッピング
+16. 変更履歴の要約（V2/V3 ハイライト）
 
 ---
 ## 1. 機能概要
@@ -89,18 +90,19 @@ MapLibre（`/maplibre`）
  - スタイル URL は絶対パス固定を避け相対パスを使用。
 
 ---
-## 5. WMS / WMTS (タイルプロキシ) の挙動
+## 5. WMS の挙動
 WMS (`/wms`):
 - GetCapabilities を返す（WMS 1.3.0 準拠）
 - GetMap の必須パラメータ: `CRS`（または `SRS`）、`BBOX`、`WIDTH`、`HEIGHT`、`FORMAT`。
 - `ANGLE` パラメータを受け付ける（デフォルト 0）。
 - `BBOX` が無い、またはパース失敗の場合はエラー（MissingParameterValue 等）を返す。暗黙のフォールバックは行わない。
 
-ANGLE パイプライン（詳細は §10）
+ANGLE パイプライン（詳細は 回転（ANGLE）パイプライン節 を参照）
 - `ANGLE=0` : 高速パス — 指定の BBOX をそのまま map extent に設定して直接レンダリング。
 - `ANGLE!=0` : 拡張パス — 外接 BBOX を計算して大きめにレンダ→画像空間で逆回転→中心クロップ→要求サイズにリサンプル。
 - レンダリング最大サイズは内部でクランプ（デフォルト 4096 px 等）してメモリ暴走を防ぐ。
 
+## 6. WMTS (タイルプロキシ) の挙動
 WMTS-like タイル (`/wmts/{z}/{x}/{y}.png`):
 - タイル座標を BBOX に変換し、内部の WMS レンダラーを呼んで PNG を作成して返す。
 - キャッシュは軽量実装では未実装だが、運用向けにはキャッシュ層（ファイル/メモリ/外部 CDN など）追加を推奨。
@@ -110,7 +112,8 @@ WMTS GetCapabilities と TileMatrix
   - レイヤ識別子（Identifier）とタイトル
   - `ResourceURL` エントリ（`resourceType="tile"`、`format="image/png"`、`template` 属性にタイルテンプレートを指定）
   - `TileMatrixSet` セクション（`Identifier`、`SupportedCRS`、および各 `TileMatrix`）
-- `TileMatrix` は各ズームレベルについて次を含める:
+
+`TileMatrix` は各ズームレベルについて次を含める:
   - `Identifier`（ズームレベル）
   - `ScaleDenominator`（適切な解像度から計算）
   - `TopLeftCorner`（WebMercator では `-20037508.342789244 20037508.342789244`）
@@ -128,6 +131,27 @@ TMS（y 反転）オプション
 - 注意点:
   - キャッシュを導入する場合は `tms` フラグをキャッシュキーに含める（tms=0/1 で異なるタイル結果となるため）。
   - Capabilities の `TileMatrix.TopLeftCorner` は top-left を示すので、可能なら README や Capabilities の注記で `tms` オプションの存在を明示することを推奨する。
+
+WMTS キャッシュと identity（V3.1.0）
+- 概要: V3.1.0 では、WMTS タイルのキャッシュを表示中のレイヤ ID とスタイル ID を組み合わせた短い identity（sha1 の先頭12文字）で分離し、GetCapabilities に `?v=<identity>` を付与してクライアントが変化を検知できるようにしました。これによりサーバ側のレイヤ・スタイル変更時に WMTS タイルのみを効率的に更新できます。
+- identity の算出方法（サーバ側）: 表示中のレイヤ識別子（layer ID）と各レイヤに適用されるスタイル識別子（style ID）を決定的に組み合わせた JSON を sha1 ハッシュ化し、その先頭 12 文字（short hash）を `identity_short` として使用します。実装上は `_get_identity_info()` のような関数でこの情報を生成します。
+- GetCapabilities での通知:
+  - サーバは `ResourceURL` のタイルテンプレートおよび `ServiceMetadataURL` 等に `?v=<identity_short>` を付与して返します。これによりクライアントは現在サーバが提供している identity を検出できます。
+- サーバ側のキャッシュ配置（実装例）:
+  - キャッシュは identity 毎のディレクトリに分離して格納する（例: `.cache/wmts/<identity_short>/...`）。
+  - キャッシュキーには identity の他に `tms` 等の挙動を変えるフラグや出力フォーマットを含めることを推奨します。
+- クライアント（MapLibre）側の推奨挙動:
+  - 画面移動（`moveend`）等のタイミングで `/wmts?SERVICE=GetCapabilities` を再取得し、`?v=` の値（または ServiceMetadata の identity）を比較して変化を検知します。
+  - identity が変化している場合は、可能な限り「WMTS タイルソースのみ」を差し替えて新しいタイルを取得する（全スタイル再読み込みは避ける）。これにより WFS の重複登録やスタイル注入の副作用を防げます。
+  - MapLibre の実装注意点として、`removeSource` を実行する際にそのソースを参照する `layer` が残っていると例外が出るため、安全に差し替えるには以下の順序が推奨されます:
+    1. 参照するレイヤを一時的に保存して `removeLayer` で削除
+    2. `removeSource` でソースを削除
+    3. 新しいタイルテンプレート（`?v=<new>` を含む）で `addSource` を実行
+    4. 保存しておいたレイヤを同じ順序・設定で `addLayer` して復元
+  - あるいは、タイル URL に `?v=` を埋め込み、ソースを置き換えずに URL のバージョンパラメータだけを変えてキャッシュバイパスする工夫でも可（MapLibre のキャッシュ挙動に依存）。
+- 運用上の注意:
+  - identity の粒度（どの属性を style ID と見なすか）によっては不要なキャッシュバストや逆に更新を検知できないケースがあるため、サーバ側の identity 計算ロジックは十分ドキュメント化し、必要であれば style ID の生成ルールを固定することを推奨します。
+  - GetCapabilities に `?v=` を埋め込むことで CDN やブラウザキャッシュを利用しつつ、identity 変化時に確実に新規タイルを取得できます。
 
 
 ---
@@ -304,6 +328,12 @@ TMS（y 反転）オプション
 - V2.12.0: テーマ対応 WMS 出力（仮想マップビュー）。
 - V2.13.0: WMTS タイルエンドポイント、MapLibre 改善（pitch トグル、zoom clamp 解除）。
 - V3.0.0: MapLibre WFS + QGIS スタイル注入の安定化、ベーススタイルの相対URL化、ブラシ無しポリゴンの正しい境界線表示、単位正規化（mm/pt→px）を確立。
+
+- V3.1.0: WMTS キャッシュ導入
+  - サーバ側で WMTS タイルのキャッシュを有効化しました。キャッシュは各 "identity" ごとに分離され、identity は表示中のレイヤ識別子（layer ID）と各レイヤに適用されるスタイル識別子（style ID）を決定的に組み合わせた JSON を sha1 ハッシュ化し、その先頭 12 文字（short hash）を採用して生成されます。
+  - GetCapabilities の ResourceURL / ServiceMetadataURL に `?v=<identity_short>` を付与することで、クライアントが現在サーバ側で有効な identity を検出できるようにしました。
+  - クライアント（MapLibre）は画面移動（moveend）時に GetCapabilities を再取得し、identity が変化していれば WMTS タイルソースのみを差し替えて新しいタイルを取得する挙動を推奨します（WFS やスタイル全体の再読み込みは不要）。
+  - この仕組みにより、サーバ側で表示用レイヤやスタイルが変更された際に WMTS のみを効率的に更新・無効化でき、WFS の重複登録や全スタイル再適用に起因する副作用を避けられます。
 
 ---
 ## 付録: 代表的なサンプル URL
