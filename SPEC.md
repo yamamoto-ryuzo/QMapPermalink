@@ -105,6 +105,31 @@ WMTS-like タイル (`/wmts/{z}/{x}/{y}.png`):
 - タイル座標を BBOX に変換し、内部の WMS レンダラーを呼んで PNG を作成して返す。
 - キャッシュは軽量実装では未実装だが、運用向けにはキャッシュ層（ファイル/メモリ/外部 CDN など）追加を推奨。
 
+WMTS GetCapabilities と TileMatrix
+- サーバは最小限の WMTS GetCapabilities 応答を提供する。出力には少なくとも以下を含める:
+  - レイヤ識別子（Identifier）とタイトル
+  - `ResourceURL` エントリ（`resourceType="tile"`、`format="image/png"`、`template` 属性にタイルテンプレートを指定）
+  - `TileMatrixSet` セクション（`Identifier`、`SupportedCRS`、および各 `TileMatrix`）
+- `TileMatrix` は各ズームレベルについて次を含める:
+  - `Identifier`（ズームレベル）
+  - `ScaleDenominator`（適切な解像度から計算）
+  - `TopLeftCorner`（WebMercator では `-20037508.342789244 20037508.342789244`）
+  - `TileWidth` / `TileHeight`（本実装は 256）
+  - `MatrixWidth` / `MatrixHeight`（各ズームで `2**z`）
+- 実務上は完全な WMTS 仕様を満たすためにさらに `OperationsMetadata` 等を含めることが望ましいが、本実装はクライアント互換性を優先して `ResourceURL` と `TileMatrix` を提供することで多くのクライアントが利用可能になる。
+
+TMS（y 反転）オプション
+- 背景: 一部のタイル配列（TMS）ではタイルの Y 起点が bottom-left（左下）であるのに対し、一般的な XYZ（slippy map）では top-left（左上）を起点とする。
+- 影響: クライアントとサーバで起点解釈が一致しないと、同じ z/x/y で上下逆の領域が返却される。
+- 本実装の対応: クエリパラメータ `tms=1`（または `tms=true`）を受け付けると、受信した `y` を内部処理用に反転して（inverted_y = (2**z - 1) - y）から BBOX 計算を行う。これにより TMS クライアントからのリクエストにも正しく応答可能。
+- 例:
+  - URL パス方式: `GET /wmts/3/2/1.png?tms=1` は内部で y を反転してレンダリングする（z=3 の場合 inverted_y = 7 - 1 = 6 に相当する領域を返す）。
+  - KVP 方式: `GET /wmts?REQUEST=GetTile&TILEMATRIX=3&TILECOL=2&TILEROW=1&tms=1` として同様に反転される。
+- 注意点:
+  - キャッシュを導入する場合は `tms` フラグをキャッシュキーに含める（tms=0/1 で異なるタイル結果となるため）。
+  - Capabilities の `TileMatrix.TopLeftCorner` は top-left を示すので、可能なら README や Capabilities の注記で `tms` オプションの存在を明示することを推奨する。
+
+
 ---
 
 ## 6. WFS (Web Feature Service) の挙動
