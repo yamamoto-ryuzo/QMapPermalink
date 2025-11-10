@@ -71,3 +71,19 @@
 - V1 系は機能拡充に注力したリリース群のため、後続の V2 系では WMS 配信や外部アクセス（ネットワークバインド）の改善などを行い、運用面の強化を行っています。
 
 ---
+
+## [3.2.0] - 2025-11-10
+
+### Added
+- Qt6 compatibility: runtime shims and fallbacks to support QGIS builds using Qt6/PyQt6.
+
+### Changed
+- Replaced direct PyQt imports with `qgis.PyQt` usage where appropriate to allow QGIS to select the correct PyQt binding at runtime.
+- Added runtime detection for `QEventLoop.exec_()` vs `exec()` and for `QIODevice.WriteOnly` location (OpenMode/OpenModeFlag), plus fallbacks to avoid AttributeError on Qt6.
+
+### Fixed
+- Resolved AttributeError issues raised under Qt6 (missing `QIODevice.WriteOnly`, missing scoped enums) and other small compatibility bugs.
+
+### Notes
+- This release focuses on compatibility with Qt6-enabled QGIS builds. Please validate in your QGIS profile (restart QGIS after updating the plugin files) and report any remaining Qt6-specific issues.
+
