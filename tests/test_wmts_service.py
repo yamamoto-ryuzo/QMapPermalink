@@ -24,6 +24,30 @@ fake_qgis.core = qgis_core
 sys.modules['qgis'] = fake_qgis
 sys.modules['qgis.core'] = qgis_core
 
+# Create a minimal fake qgis.PyQt namespace used by the plugin imports
+pyqt = types.SimpleNamespace()
+pyqt.QtCore = types.SimpleNamespace(
+    QSize=lambda w, h: None,
+    QEventLoop=type('QEventLoop', (), {}),
+    QTimer=type('QTimer', (), {}),
+    QBuffer=type('QBuffer', (), {}),
+    QIODevice=type('QIODevice', (), {}),
+    Qt=types.SimpleNamespace(NoBrush=0, AlignCenter=0, TextWordWrap=0)
+)
+pyqt.QtGui = types.SimpleNamespace(
+    QColor=type('QColor', (), {'name': lambda self, *a, **k: '#000000', 'isValid': lambda self: True}),
+    QImage=object,
+    QPainter=object,
+    QFont=object,
+    QTransform=object
+)
+pyqt.QtXml = types.SimpleNamespace(QDomDocument=object)
+fake_qgis.PyQt = pyqt
+sys.modules['qgis.PyQt'] = pyqt
+sys.modules['qgis.PyQt.QtCore'] = pyqt.QtCore
+sys.modules['qgis.PyQt.QtGui'] = pyqt.QtGui
+sys.modules['qgis.PyQt.QtXml'] = pyqt.QtXml
+
 # Now import the module under test
 from qmap_permalink.qmap_wmts_service import QMapPermalinkWMTSService
 from qmap_permalink import http_server

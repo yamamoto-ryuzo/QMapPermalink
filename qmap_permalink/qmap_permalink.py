@@ -22,6 +22,19 @@
  ***************************************************************************/
 """
 from qgis.PyQt.QtCore import QSettings, QTranslator, QCoreApplication, Qt, QUrl, QThread, pyqtSignal, QObject
+
+# Qt6 enum compatibility shim: some enums are scoped under classes in Qt6
+# (for example DockWidgetArea). Provide legacy attribute names if missing so
+# code using Qt.LeftDockWidgetArea continues to work on both Qt5 and Qt6.
+try:
+    if not hasattr(Qt, 'LeftDockWidgetArea'):
+        try:
+            Qt.LeftDockWidgetArea = Qt.DockWidgetArea.LeftDockWidgetArea
+            Qt.RightDockWidgetArea = Qt.DockWidgetArea.RightDockWidgetArea
+        except Exception:
+            pass
+except Exception:
+    pass
 from qgis.PyQt.QtGui import QIcon, QDesktopServices, QClipboard
 from qgis.PyQt.QtWidgets import QAction, QMessageBox, QApplication, QDockWidget
 from qgis.core import QgsProject, QgsCoordinateReferenceSystem, QgsCoordinateTransform, QgsPointXY, QgsRectangle
