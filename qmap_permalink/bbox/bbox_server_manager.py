@@ -118,48 +118,75 @@ class BBoxServerManager(QObject):
             bool: 成功した場合True
         """
         try:
+            print("BBoxServerManager.download_server() started")
+            # ディレクトリが存在することを確認
+            os.makedirs(self.bin_dir, exist_ok=True)
+            os.makedirs(self.config_dir, exist_ok=True)
+            os.makedirs(self.data_dir, exist_ok=True)
+            print(f"Directories created: bin={self.bin_dir}")
+            
             platform_name, ext = self.get_platform_info()
+            print(f"Platform: {platform_name}, Extension: {ext}")
             filename = f"bbox-server-{platform_name}.{ext}"
             url = f"https://github.com/bbox-services/bbox/releases/download/v{self.BBOX_VERSION}/{filename}"
+            print(f"Download URL: {url}")
             
             self.status_changed.emit(f"Downloading BBOX Server v{self.BBOX_VERSION}...")
             QgsMessageLog.logMessage(f"Downloading from: {url}", 'QMapPermalink', Qgis.Info)
             
             # ダウンロード
             download_path = os.path.join(self.bin_dir, filename)
+            print(f"Download path: {download_path}")
+            QgsMessageLog.logMessage(f"Download path: {download_path}", 'QMapPermalink', Qgis.Info)
             
             def report_progress(block_num, block_size, total_size):
                 if total_size > 0:
                     percent = int((block_num * block_size * 100) / total_size)
+                    print(f"Download progress: {percent}%")
                     if callback:
                         callback(min(percent, 100))
                     self.download_progress.emit(min(percent, 100))
             
+            print(f"Starting urllib.request.urlretrieve...")
             urllib.request.urlretrieve(url, download_path, report_progress)
+            print(f"Download completed, file size: {os.path.getsize(download_path)} bytes")
             
             # 解凍
             self.status_changed.emit("Extracting...")
+            print("Extracting archive...")
+            QgsMessageLog.logMessage(f"Extracting to: {self.bin_dir}", 'QMapPermalink', Qgis.Info)
             if ext == 'zip':
+                print("Extracting ZIP file...")
                 with zipfile.ZipFile(download_path, 'r') as zip_ref:
                     zip_ref.extractall(self.bin_dir)
+                print("ZIP extraction completed")
             else:  # tar.gz
+                print("Extracting tar.gz file...")
                 with tarfile.open(download_path, 'r:gz') as tar_ref:
                     tar_ref.extractall(self.bin_dir)
+                print("tar.gz extraction completed")
             
             # ダウンロードファイル削除
+            print(f"Removing downloaded archive: {download_path}")
             os.remove(download_path)
             
             # 実行権限付与 (Unix系)
             exe_path = self.get_executable_path()
+            print(f"Executable path: {exe_path}")
             if exe_path and platform.system().lower() != 'windows':
+                print("Setting executable permissions...")
                 os.chmod(exe_path, 0o755)
             
             self.status_changed.emit("Download completed!")
+            print("BBoxServerManager.download_server() completed successfully")
             QgsMessageLog.logMessage("BBOX Server downloaded successfully", 'QMapPermalink', Qgis.Success)
             return True
             
         except Exception as e:
             error_msg = f"Download failed: {str(e)}"
+            print(f"BBoxServerManager.download_server() error: {error_msg}")
+            import traceback
+            traceback.print_exc()
             self.status_changed.emit(error_msg)
             QgsMessageLog.logMessage(error_msg, 'QMapPermalink', Qgis.Critical)
             return False
