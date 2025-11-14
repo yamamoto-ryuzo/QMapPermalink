@@ -339,6 +339,12 @@ class QMapPermalink:
                 if hasattr(self.panel, 'pushButton_check_access'):
                     self.panel.pushButton_check_access.clicked.connect(self.on_check_access_clicked)
                 
+                # 標準ポートボタンのイベントを接続
+                if hasattr(self.panel, 'pushButton_port_80'):
+                    self.panel.pushButton_port_80.clicked.connect(lambda: self.on_standard_port_clicked(80))
+                if hasattr(self.panel, 'pushButton_port_443'):
+                    self.panel.pushButton_port_443.clicked.connect(lambda: self.on_standard_port_clicked(443))
+                
                 print("ボタンイベント接続完了")
                 
                 # HTTPサーバーの状態を更新
@@ -2205,6 +2211,67 @@ class QMapPermalink:
                 self.iface.mainWindow(),
                 "QMap Permalink",
                 f"診断エラー: {str(e)}"
+            )
+    
+    def on_standard_port_clicked(self, port):
+        """標準ポートボタンがクリックされた時の処理
+        
+        Args:
+            port: 設定するポート番号 (80 or 443)
+        """
+        try:
+            if not self.panel or not hasattr(self.panel, 'spinBox_port'):
+                return
+            
+            # 管理者権限が必要な警告を表示
+            from qgis.PyQt.QtWidgets import QMessageBox
+            
+            warning_msg = f"ポート {port} は標準ポートです。\n\n"
+            if port == 80:
+                warning_msg += "このポートでサーバーを起動するには管理者権限が必要です。\n"
+            elif port == 443:
+                warning_msg += "このポートでサーバーを起動するには管理者権限が必要です。\n"
+                warning_msg += "また、HTTPSには証明書が必要です（現在未対応）。\n"
+            
+            warning_msg += f"\nポート番号を {port} に設定しますか？"
+            
+            # Qt5/Qt6互換性: StandardButtonの取得
+            try:
+                # Qt6
+                if hasattr(QMessageBox, 'StandardButton'):
+                    Yes = QMessageBox.StandardButton.Yes
+                    No = QMessageBox.StandardButton.No
+                # Qt5
+                else:
+                    Yes = QMessageBox.Yes
+                    No = QMessageBox.No
+            except Exception:
+                # フォールバック
+                Yes = 0x00004000  # QMessageBox.Yes in Qt5
+                No = 0x00010000   # QMessageBox.No in Qt5
+            
+            reply = QMessageBox.question(
+                self.iface.mainWindow(),
+                "QMap Permalink",
+                warning_msg,
+                Yes | No,
+                No
+            )
+            
+            if reply == Yes:
+                # スピンボックスの値を更新
+                self.panel.spinBox_port.setValue(port)
+                
+                self.iface.messageBar().pushMessage(
+                    "QMap Permalink",
+                    f"ポート番号を {port} に設定しました。管理者権限でQGISを再起動してサーバーを起動してください。",
+                    duration=5
+                )
+        except Exception as e:
+            QMessageBox.warning(
+                self.iface.mainWindow(),
+                "QMap Permalink",
+                f"ポート設定エラー: {str(e)}"
             )
 
     # テーマ関連のメソッド群
