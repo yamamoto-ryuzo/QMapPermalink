@@ -348,7 +348,14 @@ class QMapPermalink:
                     def _toggle_server(checked: bool):
                         try:
                             if checked:
-                                self.server_manager.start_http_server()
+                                # Get the port from spinBox if available
+                                port = 8089
+                                try:
+                                    if hasattr(self.panel, 'spinBox_port') and self.panel.spinBox_port is not None:
+                                        port = self.panel.spinBox_port.value()
+                                except Exception:
+                                    pass
+                                self.server_manager.start_http_server(port)
                             else:
                                 self.server_manager.stop_http_server()
                             # 更新後の状態をラベルに反映
@@ -375,6 +382,37 @@ class QMapPermalink:
 
                     if hasattr(self.panel, 'set_external_control_handler'):
                         self.panel.set_external_control_handler(_external_control_toggled)
+                except Exception:
+                    pass
+                
+                # Port change handler: restart server with new port when changed
+                try:
+                    def _port_changed(new_port: int):
+                        try:
+                            # Only restart if server is currently running
+                            if self.server_manager.is_server_running():
+                                from qgis.PyQt.QtWidgets import QMessageBox
+                                reply = QMessageBox.question(
+                                    self.iface.mainWindow(),
+                                    self.tr("QMap Permalink"),
+                                    self.tr(f"サーバーを停止してポート {new_port} で再起動しますか？"),
+                                    QMessageBox.Yes | QMessageBox.No,
+                                    QMessageBox.No
+                                )
+                                if reply == QMessageBox.Yes:
+                                    self.server_manager.stop_http_server()
+                                    self.server_manager.start_http_server(new_port)
+                                    # 更新後の状態をパネルに反映
+                                    pr = self.server_manager.get_server_port() or new_port
+                                    self.panel.update_server_status(pr, self.server_manager.is_server_running())
+                            else:
+                                # サーバーが停止中の場合は、次回起動時に新しいポートを使用
+                                self.server_manager.preferred_port = new_port
+                        except Exception as e:
+                            print(f"Port change handler error: {e}")
+
+                    if hasattr(self.panel, 'set_port_change_handler'):
+                        self.panel.set_port_change_handler(_port_changed)
                 except Exception:
                     pass
 
