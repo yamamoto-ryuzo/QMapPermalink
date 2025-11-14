@@ -595,7 +595,16 @@
       // --- Bookmark selector setup ---
       try {
         const bookmarkSelect = document.getElementById('qmp-bookmarks');
+        
+        // Debug: check if bookmarks variable is available
+        console.log('Bookmark setup - bookmarks variable:', typeof bookmarks !== 'undefined' ? bookmarks : 'UNDEFINED');
+        console.log('Bookmark setup - initialX:', typeof initialX !== 'undefined' ? initialX : 'UNDEFINED');
+        console.log('Bookmark setup - initialY:', typeof initialY !== 'undefined' ? initialY : 'UNDEFINED');
+        console.log('Bookmark setup - initialZoom:', typeof initialZoom !== 'undefined' ? initialZoom : 'UNDEFINED');
+        
         if (bookmarkSelect && typeof bookmarks !== 'undefined' && Array.isArray(bookmarks)) {
+          console.log('Setting up bookmark selector with', bookmarks.length, 'bookmarks');
+          
           // Add prompt option
           const promptOpt = document.createElement('option');
           promptOpt.value = '';
@@ -616,6 +625,7 @@
               opt.value = String(index);
               opt.textContent = bookmark.name || ('Bookmark ' + (index + 1));
               bookmarkSelect.appendChild(opt);
+              console.log('Added bookmark option:', bookmark.name, 'at index', index, 'lon:', bookmark.lon, 'lat:', bookmark.lat);
             } catch (e) { console.warn('Failed to add bookmark option', e); }
           });
           
@@ -623,10 +633,13 @@
           bookmarkSelect.addEventListener('change', function() {
             try {
               const selectedValue = this.value;
+              console.log('Bookmark selected:', selectedValue);
+              
               if (!selectedValue) return;
               
               if (selectedValue === '__home') {
                 // Return to initial position
+                console.log('Navigating to home:', initialX, initialY, initialZoom);
                 if (typeof initialX !== 'undefined' && typeof initialY !== 'undefined') {
                   map.flyTo({
                     center: [initialX, initialY],
@@ -638,16 +651,26 @@
               } else {
                 // Navigate to selected bookmark
                 const index = parseInt(selectedValue, 10);
+                console.log('Parsed bookmark index:', index);
+                
                 if (!isNaN(index) && index >= 0 && index < bookmarks.length) {
                   const bookmark = bookmarks[index];
-                  if (bookmark && typeof bookmark.x !== 'undefined' && typeof bookmark.y !== 'undefined') {
+                  console.log('Navigating to bookmark:', bookmark);
+                  
+                  // MapLibre expects [longitude, latitude] in WGS84
+                  if (bookmark && typeof bookmark.lon !== 'undefined' && typeof bookmark.lat !== 'undefined') {
+                    console.log('Flying to: [lon:', bookmark.lon, ', lat:', bookmark.lat, '] zoom:', bookmark.zoom || 14);
                     map.flyTo({
-                      center: [bookmark.x, bookmark.y],
+                      center: [bookmark.lon, bookmark.lat],
                       zoom: bookmark.zoom || 14,
                       duration: 1000
                     });
                     console.log('Navigated to bookmark:', bookmark.name);
+                  } else {
+                    console.warn('Bookmark missing lon/lat coordinates:', bookmark);
                   }
+                } else {
+                  console.warn('Invalid bookmark index:', index, 'bookmarks length:', bookmarks.length);
                 }
               }
               
@@ -661,6 +684,7 @@
           console.log('Bookmark selector initialized with', bookmarks.length, 'bookmarks');
         } else if (bookmarkSelect) {
           // No bookmarks available - hide the selector
+          console.warn('Hiding bookmark selector - bookmarks not available or not an array');
           bookmarkSelect.style.display = 'none';
         }
       } catch (e) { console.warn('Bookmark selector setup failed', e); }
