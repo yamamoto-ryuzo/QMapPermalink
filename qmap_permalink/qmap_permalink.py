@@ -2179,7 +2179,109 @@ class QMapPermalink:
             text_edit.setPlainText(result['message'])
             layout.addWidget(text_edit)
             
-            # URLをコピーするボタン（ローカルネットワークURLがある場合）
+            # ファイアウォール警告がある場合、ルール追加ボタンを表示
+            if result.get('firewall_warning') and result.get('port'):
+                firewall_btn = QPushButton(f"ファイアウォールルールを追加 (ポート {result['port']}) - 管理者権限が必要")
+                def add_firewall_rule():
+                    # 確認メッセージを表示
+                    from qgis.PyQt.QtWidgets import QMessageBox
+                    
+                    # Qt5/Qt6互換性のためStandardButtonを取得
+                    try:
+                        Yes = QMessageBox.StandardButton.Yes
+                        No = QMessageBox.StandardButton.No
+                    except AttributeError:
+                        Yes = QMessageBox.Yes
+                        No = QMessageBox.No
+                    
+                    reply = QMessageBox.question(
+                        dialog,
+                        "管理者権限の昇格",
+                        f"ポート {result['port']} を許可するファイアウォールルールを追加します。\n\n"
+                        "この操作には管理者権限が必要です。\n"
+                        "Windowsのユーザーアカウント制御(UAC)ダイアログが表示されます。\n\n"
+                        "続行しますか?",
+                        Yes | No,
+                        No
+                    )
+                    
+                    if reply != Yes:
+                        return
+                    
+                    # ボタンを一時的に無効化
+                    firewall_btn.setEnabled(False)
+                    firewall_btn.setText("実行中...")
+                    QApplication.processEvents()  # UI更新
+                    
+                    # ファイアウォールルールを追加(管理者権限昇格を試みる)
+                    rule_result = self.server_manager.add_firewall_rule(result['port'], request_elevation=True)
+                    
+                    # ボタンを再度有効化
+                    firewall_btn.setEnabled(True)
+                    firewall_btn.setText(f"ファイアウォールルールを追加 (ポート {result['port']}) - 管理者権限が必要")
+                    
+                    if rule_result['success']:
+                        QMessageBox.information(
+                            dialog,
+                            "成功",
+                            rule_result['message']
+                        )
+                        # 再診断して結果を更新
+                        new_result = self.server_manager.check_external_access()
+                        text_edit.setPlainText(new_result['message'])
+                        # ボタンを無効化
+                        firewall_btn.setEnabled(False)
+                        firewall_btn.setText("ルールを追加済み")
+                    elif rule_result.get('admin_required'):
+                        # 管理者権限の昇格がキャンセルされた場合
+                        from qgis.PyQt.QtWidgets import QTextEdit as AdminTextEdit
+                        admin_dialog = QDialog(dialog)
+                        admin_dialog.setWindowTitle("手動での実行が必要")
+                        admin_dialog.setMinimumWidth(500)
+                        admin_dialog.setMinimumHeight(200)
+                        
+                        admin_layout = QVBoxLayout()
+                        
+                        admin_text = AdminTextEdit()
+                        admin_text.setReadOnly(True)
+                        admin_text.setPlainText(rule_result['message'])
+                        admin_layout.addWidget(admin_text)
+                        
+                        # コマンドをコピーするボタン
+                        copy_cmd_btn = QPushButton("コマンドをコピー")
+                        def copy_command():
+                            QApplication.clipboard().setText(rule_result.get('command', ''))
+                            self.iface.messageBar().pushMessage(
+                                "QMap Permalink", "コマンドをコピーしました", duration=2
+                            )
+                        copy_cmd_btn.clicked.connect(copy_command)
+                        admin_layout.addWidget(copy_cmd_btn)
+                        
+                        admin_close_btn = QPushButton("閉じる")
+                        admin_close_btn.clicked.connect(admin_dialog.accept)
+                        admin_layout.addWidget(admin_close_btn)
+                        
+                        admin_dialog.setLayout(admin_layout)
+                        
+                        # Qt5/Qt6互換性
+                        try:
+                            if hasattr(admin_dialog, 'exec'):
+                                admin_dialog.exec()
+                            else:
+                                admin_dialog.exec_()
+                        except Exception:
+                            admin_dialog.exec_()
+                    else:
+                        QMessageBox.warning(
+                            dialog,
+                            "エラー",
+                            rule_result['message']
+                        )
+                
+                firewall_btn.clicked.connect(add_firewall_rule)
+                layout.addWidget(firewall_btn)
+            
+            # URLをコピーするボタン(ローカルネットワークURLがある場合)
             if result.get('local_network_url'):
                 copy_btn = QPushButton(f"ネットワークURLをコピー ({result['local_network_url']})")
                 def copy_url():
