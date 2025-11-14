@@ -334,6 +334,11 @@ class QMapPermalink:
                     self.panel.pushButton_google_maps.clicked.connect(self.on_google_maps_clicked_panel)
                 if hasattr(self.panel, 'pushButton_google_earth'):
                     self.panel.pushButton_google_earth.clicked.connect(self.on_google_earth_clicked_panel)
+                
+                # Check Access ボタンのイベントを接続
+                if hasattr(self.panel, 'pushButton_check_access'):
+                    self.panel.pushButton_check_access.clicked.connect(self.on_check_access_clicked)
+                
                 print("ボタンイベント接続完了")
                 
                 # HTTPサーバーの状態を更新
@@ -2144,6 +2149,62 @@ class QMapPermalink:
         except Exception as e:
             self.iface.messageBar().pushMessage(
                 "QMap Permalink", f"Google Earth起動エラー: {str(e)}", duration=5
+            )
+    
+    def on_check_access_clicked(self):
+        """外部アクセス診断ボタンがクリックされた時の処理"""
+        try:
+            # 診断を実行
+            result = self.server_manager.check_external_access()
+            
+            # 結果をダイアログで表示
+            from qgis.PyQt.QtWidgets import QMessageBox, QTextEdit, QVBoxLayout, QDialog, QPushButton
+            
+            dialog = QDialog(self.iface.mainWindow())
+            dialog.setWindowTitle("外部アクセス診断")
+            dialog.setMinimumWidth(600)
+            dialog.setMinimumHeight(400)
+            
+            layout = QVBoxLayout()
+            
+            # 診断結果をテキストエリアに表示
+            text_edit = QTextEdit()
+            text_edit.setReadOnly(True)
+            text_edit.setPlainText(result['message'])
+            layout.addWidget(text_edit)
+            
+            # URLをコピーするボタン（ローカルネットワークURLがある場合）
+            if result.get('local_network_url'):
+                copy_btn = QPushButton(f"ネットワークURLをコピー ({result['local_network_url']})")
+                def copy_url():
+                    QApplication.clipboard().setText(result['local_network_url'])
+                    self.iface.messageBar().pushMessage(
+                        "QMap Permalink", "URLをコピーしました", duration=2
+                    )
+                copy_btn.clicked.connect(copy_url)
+                layout.addWidget(copy_btn)
+            
+            # 閉じるボタン
+            close_btn = QPushButton("閉じる")
+            close_btn.clicked.connect(dialog.accept)
+            layout.addWidget(close_btn)
+            
+            dialog.setLayout(layout)
+            
+            # Qt5/Qt6互換性: exec_() (Qt5) または exec() (Qt6)
+            try:
+                if hasattr(dialog, 'exec'):
+                    dialog.exec()
+                else:
+                    dialog.exec_()
+            except Exception:
+                dialog.exec_()
+            
+        except Exception as e:
+            QMessageBox.warning(
+                self.iface.mainWindow(),
+                "QMap Permalink",
+                f"診断エラー: {str(e)}"
             )
 
     # テーマ関連のメソッド群
