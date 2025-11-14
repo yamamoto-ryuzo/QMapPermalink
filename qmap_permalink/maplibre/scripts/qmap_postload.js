@@ -530,11 +530,140 @@
         const pitchBtn = document.getElementById('pitchToggle');
         let pitchLocked = true;
         const _enforcePitch = function() { try { if (map.getPitch && Math.abs(map.getPitch()) > 0.0001) { map.setPitch(0); } } catch (e) { } };
-        function lockPitch() { try { map.setPitch(0); } catch (e) {} try { if (map.on) map.on('move', _enforcePitch); } catch(e) {} pitchLocked = true; pitchBtn.textContent = '斜め許可'; }
+        function lockPitch() { try { map.setPitch(0); } catch(e) {} try { if (map.on) map.on('move', _enforcePitch); } catch(e) {} pitchLocked = true; pitchBtn.textContent = '斜め許可'; }
         function unlockPitch() { try { if (map.off) map.off('move', _enforcePitch); } catch(e) {} pitchLocked = false; pitchBtn.textContent = '斜め禁止'; }
         pitchBtn.addEventListener('click', function() { if (!pitchLocked) lockPitch(); else unlockPitch(); });
         try { lockPitch(); } catch(e) {}
       } catch (e) { console.warn('pitch toggle setup failed', e); }
+
+      // --- Theme selector setup ---
+      try {
+        const themeSelect = document.getElementById('qmp-themes');
+        if (themeSelect && typeof themes !== 'undefined' && Array.isArray(themes)) {
+          // Add prompt option
+          const promptOpt = document.createElement('option');
+          promptOpt.value = '';
+          promptOpt.textContent = 'Select theme';
+          promptOpt.selected = true;
+          themeSelect.appendChild(promptOpt);
+          
+          // Add theme options
+          themes.forEach(function(themeName) {
+            try {
+              const opt = document.createElement('option');
+              opt.value = themeName;
+              opt.textContent = themeName;
+              themeSelect.appendChild(opt);
+            } catch (e) { console.warn('Failed to add theme option', e); }
+          });
+          
+          // Theme change handler
+          themeSelect.addEventListener('change', function() {
+            try {
+              const selectedTheme = this.value;
+              if (!selectedTheme) return;
+              
+              console.log('Theme changed to:', selectedTheme);
+              
+              // Request new style with theme parameter
+              const styleUrl = window.__QMAP_CONFIG__ && window.__QMAP_CONFIG__.style 
+                ? window.__QMAP_CONFIG__.style 
+                : '/maplibre-style';
+              
+              // Build new style URL with theme parameter
+              const themeStyleUrl = styleUrl + (styleUrl.indexOf('?') >= 0 ? '&' : '?') + 'theme=' + encodeURIComponent(selectedTheme);
+              
+              console.log('Loading style with theme:', themeStyleUrl);
+              
+              // Reload style (this will trigger a map refresh)
+              map.setStyle(themeStyleUrl);
+              
+              // Reset select to prompt after a delay
+              setTimeout(function() {
+                try { themeSelect.value = ''; } catch (e) {}
+              }, 500);
+            } catch (e) { console.warn('Theme change failed', e); }
+          });
+          
+          console.log('Theme selector initialized with', themes.length, 'themes');
+        } else if (themeSelect) {
+          // No themes available - hide the selector
+          themeSelect.style.display = 'none';
+        }
+      } catch (e) { console.warn('Theme selector setup failed', e); }
+
+      // --- Bookmark selector setup ---
+      try {
+        const bookmarkSelect = document.getElementById('qmp-bookmarks');
+        if (bookmarkSelect && typeof bookmarks !== 'undefined' && Array.isArray(bookmarks)) {
+          // Add prompt option
+          const promptOpt = document.createElement('option');
+          promptOpt.value = '';
+          promptOpt.textContent = 'Select bookmark';
+          promptOpt.selected = true;
+          bookmarkSelect.appendChild(promptOpt);
+          
+          // Add Home option (returns to initial position)
+          const homeOpt = document.createElement('option');
+          homeOpt.value = '__home';
+          homeOpt.textContent = 'Home';
+          bookmarkSelect.appendChild(homeOpt);
+          
+          // Add bookmark options
+          bookmarks.forEach(function(bookmark, index) {
+            try {
+              const opt = document.createElement('option');
+              opt.value = String(index);
+              opt.textContent = bookmark.name || ('Bookmark ' + (index + 1));
+              bookmarkSelect.appendChild(opt);
+            } catch (e) { console.warn('Failed to add bookmark option', e); }
+          });
+          
+          // Bookmark change handler
+          bookmarkSelect.addEventListener('change', function() {
+            try {
+              const selectedValue = this.value;
+              if (!selectedValue) return;
+              
+              if (selectedValue === '__home') {
+                // Return to initial position
+                if (typeof initialX !== 'undefined' && typeof initialY !== 'undefined') {
+                  map.flyTo({
+                    center: [initialX, initialY],
+                    zoom: typeof initialZoom !== 'undefined' ? initialZoom : 12,
+                    duration: 1000
+                  });
+                  console.log('Returned to home position');
+                }
+              } else {
+                // Navigate to selected bookmark
+                const index = parseInt(selectedValue, 10);
+                if (!isNaN(index) && index >= 0 && index < bookmarks.length) {
+                  const bookmark = bookmarks[index];
+                  if (bookmark && typeof bookmark.x !== 'undefined' && typeof bookmark.y !== 'undefined') {
+                    map.flyTo({
+                      center: [bookmark.x, bookmark.y],
+                      zoom: bookmark.zoom || 14,
+                      duration: 1000
+                    });
+                    console.log('Navigated to bookmark:', bookmark.name);
+                  }
+                }
+              }
+              
+              // Reset select to prompt
+              setTimeout(function() {
+                try { bookmarkSelect.value = ''; } catch (e) {}
+              }, 1500);
+            } catch (e) { console.warn('Bookmark navigation failed', e); }
+          });
+          
+          console.log('Bookmark selector initialized with', bookmarks.length, 'bookmarks');
+        } else if (bookmarkSelect) {
+          // No bookmarks available - hide the selector
+          bookmarkSelect.style.display = 'none';
+        }
+      } catch (e) { console.warn('Bookmark selector setup failed', e); }
 
       // --- WMTS identity watch: on map move, re-check GetCapabilities and
       // reload WMTS tile sources when the identity hash changes.
