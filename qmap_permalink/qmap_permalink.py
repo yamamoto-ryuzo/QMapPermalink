@@ -163,7 +163,18 @@ class QMapPermalink:
             self  # メインプラグインインスタンスを渡す
         )
         
-        # 後方互換性のための一時的な属性（削除予定）
+        # 高速サーバーマネージャー (オプション)
+        try:
+            from .bbox import BBoxServerManager
+            self.bbox_manager = BBoxServerManager(self.plugin_dir)
+            print(f"BBoxServerManager initialized successfully: {self.bbox_manager}")
+        except Exception as e:
+            self.bbox_manager = None
+            print(f"Failed to initialize BBoxServerManager: {e}")
+            import traceback
+            traceback.print_exc()
+        
+        # 後方互換性のための一時的な属性(削除予定)
         # server_portアトリビュートエラーを回避
         self.server_port = 8089
 
@@ -354,6 +365,50 @@ class QMapPermalink:
                 print(f"サーバー状態: running={server_running}, port={server_port}")
                 print("パネル更新開始...")
                 self.panel.update_server_status(server_port, server_running)
+                
+                # BBoxサーバーモードの初期化
+                print(f"BBox manager available: {self.bbox_manager is not None}")
+                
+                try:
+                    has_combo = hasattr(self.panel, 'comboBox_server_mode') and self.panel.comboBox_server_mode is not None
+                    has_button = hasattr(self.panel, 'pushButton_download_bbox') and self.panel.pushButton_download_bbox is not None
+                    print(f"Panel has comboBox_server_mode: {has_combo}")
+                    print(f"Panel has pushButton_download_bbox: {has_button}")
+                    
+                    if self.bbox_manager and has_combo and has_button:
+                        print("Initializing BBox server mode controls...")
+                        
+                        # バイナリの有無を確認
+                        has_binary = self.bbox_manager.get_binary_path() is not None
+                        print(f"BBox binary exists: {has_binary}, path: {self.bbox_manager.get_binary_path()}")
+                        
+                        # 初期状態を設定（UIのデフォルト値に基づく）
+                        current_index = self.panel.comboBox_server_mode.currentIndex()
+                        print(f"Initial comboBox index: {current_index}")
+                        
+                        if current_index == 0:  # Standard mode
+                            self.panel.pushButton_download_bbox.setEnabled(False)
+                            if has_binary:
+                                self.panel.pushButton_download_bbox.setText(self.tr("ダウンロード済"))
+                            else:
+                                self.panel.pushButton_download_bbox.setText(self.tr("ダウンロード"))
+                        else:  # High-Speed mode
+                            # バイナリがなければボタン有効化
+                            self.panel.pushButton_download_bbox.setEnabled(not has_binary)
+                            if has_binary:
+                                self.panel.pushButton_download_bbox.setText(self.tr("ダウンロード済"))
+                            else:
+                                self.panel.pushButton_download_bbox.setText(self.tr("ダウンロード"))
+                        
+                        print(f"Button enabled: {self.panel.pushButton_download_bbox.isEnabled()}")
+                        print(f"Button text: {self.panel.pushButton_download_bbox.text()}")
+                    else:
+                        print("BBox controls not initialized (manager or UI missing)")
+                except Exception as e:
+                    print(f"Error initializing BBox controls: {e}")
+                    import traceback
+                    traceback.print_exc()
+                
                 # パネルのトグルチェックボックスをサーバー制御に接続
                 try:
                     def _toggle_server(checked: bool):
@@ -413,19 +468,139 @@ class QMapPermalink:
                                 if reply == QMessageBox.Yes:
                                     self.server_manager.stop_http_server()
                                     self.server_manager.start_http_server(new_port)
-                                    # 更新後の状態をパネルに反映
-                                    pr = self.server_manager.get_server_port() or new_port
-                                    self.panel.update_server_status(pr, self.server_manager.is_server_running())
-                            else:
-                                # サーバーが停止中の場合は、次回起動時に新しいポートを使用
-                                self.server_manager.preferred_port = new_port
                         except Exception as e:
-                            print(f"Port change handler error: {e}")
-
+                            print(f"Port change error: {e}")
+                    
                     if hasattr(self.panel, 'set_port_change_handler'):
                         self.panel.set_port_change_handler(_port_changed)
                 except Exception:
                     pass
+                
+                # BBoxサーバーモード切り替えハンドラ
+                try:
+                    if self.bbox_manager and hasattr(self.panel, 'comboBox_server_mode') and self.panel.comboBox_server_mode is not None:
+                        def _server_mode_changed(index: int):
+                            try:
+                                print(f"Server mode changed to index: {index}")
+                                if index == 0:  # Standard (Python)
+                                    if hasattr(self.panel, 'pushButton_download_bbox') and self.panel.pushButton_download_bbox is not None:
+                                        self.panel.pushButton_download_bbox.setEnabled(False)
+                                        print("Download button disabled (Standard mode)")
+                                    # BBoxサーバーが動いていたら停止
+                                    if self.bbox_manager and self.bbox_manager.is_running():
+                                        self.bbox_manager.stop_server()
+                                elif index == 1:  # High-Speed (Rust)
+                                    if hasattr(self.panel, 'pushButton_download_bbox') and self.panel.pushButton_download_bbox is not None:
+                                        # バイナリがあればボタン無効、なければ有効
+                                        has_binary = self.bbox_manager.get_binary_path() is not None
+                                        print(f"Has binary: {has_binary}, Binary path: {self.bbox_manager.get_binary_path()}")
+                                        self.panel.pushButton_download_bbox.setEnabled(not has_binary)
+                                        print(f"Download button enabled: {not has_binary}")
+                                        if has_binary:
+                                            # バイナリがあれば自動的に起動を提案
+                                            reply = QMessageBox.question(
+                                                self.iface.mainWindow(),
+                                                self.tr("QMap Permalink"),
+                                                self.tr("高速サーバー(Rust)を起動しますか？\n標準サーバーは自動的に停止されます。"),
+                                                QMessageBox.Yes | QMessageBox.No,
+                                                QMessageBox.Yes
+                                            )
+                                            if reply == QMessageBox.Yes:
+                                                # 標準サーバーを停止
+                                                if self.server_manager.is_server_running():
+                                                    self.server_manager.stop_http_server()
+                                                # BBoxサーバーを起動
+                                                self.bbox_manager.start_server(port=8080)
+                            except Exception as e:
+                                print(f"Server mode change error: {e}")
+                                import traceback
+                                traceback.print_exc()
+                        
+                        self.panel.comboBox_server_mode.currentIndexChanged.connect(_server_mode_changed)
+                        print("BBox server mode handler connected")
+                except Exception as e:
+                    print(f"Error connecting BBox server mode handler: {e}")
+                    import traceback
+                    traceback.print_exc()
+                
+                # BBoxダウンロードボタンハンドラ
+                try:
+                    if self.bbox_manager and hasattr(self.panel, 'pushButton_download_bbox') and self.panel.pushButton_download_bbox is not None:
+                        print("Connecting BBox download button handler...")
+                        def _download_bbox_clicked():
+                            try:
+                                print("Download button clicked!")
+                                # ダウンロード開始
+                                self.panel.pushButton_download_bbox.setEnabled(False)
+                                self.panel.pushButton_download_bbox.setText(self.tr("ダウンロード中..."))
+                                print("Starting download...")
+                                
+                                def on_progress(percent):
+                                    # シグナルはintのパーセンテージ値を受け取る
+                                    print(f"Download progress: {percent}%")
+                                    self.panel.pushButton_download_bbox.setText(f"{self.tr('ダウンロード中')} {percent}%")
+                                
+                                def on_complete():
+                                    self.panel.pushButton_download_bbox.setText(self.tr("ダウンロード完了"))
+                                    self.iface.messageBar().pushMessage(
+                                        self.tr("QMap Permalink"),
+                                        self.tr("高速サーバーのダウンロードが完了しました。"),
+                                        level=3,  # SUCCESS
+                                        duration=5
+                                    )
+                                    # ダウンロード完了後は起動を提案
+                                    reply = QMessageBox.question(
+                                        self.iface.mainWindow(),
+                                        self.tr("QMap Permalink"),
+                                        self.tr("高速サーバー(Rust)を起動しますか？\n標準サーバーは自動的に停止されます。"),
+                                        QMessageBox.Yes | QMessageBox.No,
+                                        QMessageBox.Yes
+                                    )
+                                    if reply == QMessageBox.Yes:
+                                        if self.server_manager.is_server_running():
+                                            self.server_manager.stop_http_server()
+                                        self.bbox_manager.start_server(port=8080)
+                                
+                                def on_error(error_msg):
+                                    self.panel.pushButton_download_bbox.setText(self.tr("ダウンロード"))
+                                    self.panel.pushButton_download_bbox.setEnabled(True)
+                                    self.iface.messageBar().pushMessage(
+                                        self.tr("QMap Permalink"),
+                                        self.tr(f"ダウンロード失敗: {error_msg}"),
+                                        level=2,  # WARNING
+                                        duration=10
+                                    )
+                                
+                                # 進捗コールバックを接続
+                                self.bbox_manager.download_progress.connect(on_progress)
+                                
+                                # ダウンロードを実行（別スレッドで）
+                                from qgis.PyQt.QtCore import QTimer
+                                def do_download():
+                                    try:
+                                        success = self.bbox_manager.download_server()
+                                        if success:
+                                            QTimer.singleShot(0, on_complete)
+                                        else:
+                                            QTimer.singleShot(0, lambda: on_error("Unknown error"))
+                                    except Exception as e:
+                                        QTimer.singleShot(0, lambda: on_error(str(e)))
+                                
+                                import threading
+                                thread = threading.Thread(target=do_download)
+                                thread.start()
+                                
+                            except Exception as e:
+                                print(f"Download button error: {e}")
+                                import traceback
+                                traceback.print_exc()
+                        
+                        self.panel.pushButton_download_bbox.clicked.connect(_download_bbox_clicked)
+                        print("BBox download button handler connected")
+                except Exception as e:
+                    print(f"Error connecting BBox download button handler: {e}")
+                    import traceback
+                    traceback.print_exc()
 
                 # If external control is already checked at panel creation, apply last origin
                 try:
@@ -553,6 +728,10 @@ class QMapPermalink:
         """プラグインのアンロード時の処理"""
         # HTTPサーバーを停止
         self.server_manager.stop_http_server()
+        
+        # BBoxサーバーを停止
+        if self.bbox_manager and self.bbox_manager.is_running():
+            self.bbox_manager.stop_server()
         
         # パネルを削除
         if self.panel is not None:

@@ -61,3 +61,11 @@ qmap_permalink/*.py
 qmap_permalink/*.ui
 qmap_permalink/*.png
 qmap_permalink/i18n/*
+
+# BBOX Server integration (plugin level)
+qmap_permalink/bbox/bin/
+qmap_permalink/bbox/data/*.mbtiles
+qmap_permalink/bbox/data/*.gpkg
+qmap_permalink/bbox/data/*.geojson
+qmap_permalink/bbox/data/*.shp
+qmap_permalink/bbox/config/qmap_bbox.toml
