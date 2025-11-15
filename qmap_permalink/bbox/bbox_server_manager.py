@@ -36,6 +36,7 @@ class BBoxServerManager(QObject):
     
     BBOX_VERSION = "0.6.2"
     BBOX_PORT = 8080  # デフォルトポート (OGC API専用、標準サーバーは8089)
+    QGIS_SERVER_VERSION = "3.34.11"  # QGIS LTR version
     
     def __init__(self, plugin_dir: str):
         super().__init__()
@@ -49,18 +50,18 @@ class BBoxServerManager(QObject):
         self.bin_dir = os.path.join(self.bbox_root, 'bin')
         self.config_dir = os.path.join(self.bbox_root, 'config')
         self.data_dir = os.path.join(self.bbox_root, 'data')
+        self.qgis_server_dir = os.path.join(self.bbox_root, 'qgis-server')
         
         print(f"BBox root directory: {self.bbox_root}")
         print(f"BBox bin directory: {self.bin_dir}")
+        print(f"QGIS Server directory: {self.qgis_server_dir}")
         
         # サーバープロセス
         self.process: Optional[subprocess.Popen] = None
         self.current_port: Optional[int] = None
         
         # ディレクトリ作成
-        for d in [self.bin_dir, self.config_dir, self.data_dir]:
-            os.makedirs(d, exist_ok=True)
-        for d in [self.bin_dir, self.config_dir, self.data_dir]:
+        for d in [self.bin_dir, self.config_dir, self.data_dir, self.qgis_server_dir]:
             os.makedirs(d, exist_ok=True)
     
     def get_platform_info(self) -> Tuple[str, str]:
@@ -107,6 +108,77 @@ class BBoxServerManager(QObject):
         """バイナリパスを取得（get_executable_pathのエイリアス）"""
         return self.get_executable_path()
     
+    def get_qgis_server_path(self) -> Optional[str]:
+        """QGIS Server実行ファイルのパスを取得（存在する場合）
+        
+        以下の順序で検索:
+        1. プラグインディレクトリ内（ダウンロード済みの場合）
+        2. 現在実行中のQGIS Desktopのインストールディレクトリ
+        
+        OSGeo4Wパッケージの標準的なディレクトリ構造に対応:
+        - apps/qgis-ltr/bin/qgis_mapserv.fcgi.exe
+        - bin/qgis_mapserv.fcgi.exe
+        - qgis_mapserv.fcgi.exe (直接配置)
+        """
+        if platform.system().lower() == 'windows':
+            exe_name = 'qgis_mapserv.fcgi.exe'
+        else:
+            exe_name = 'qgis_mapserv.fcgi'
+        
+        # 1. プラグインディレクトリ内を検索
+        paths_to_check = [
+            os.path.join(self.qgis_server_dir, 'apps', 'qgis-ltr', 'bin', exe_name),
+            os.path.join(self.qgis_server_dir, 'qgis-ltr', 'apps', 'qgis-ltr', 'bin', exe_name),
+            os.path.join(self.qgis_server_dir, 'qgis-ltr', 'bin', exe_name),
+            os.path.join(self.qgis_server_dir, 'bin', exe_name),
+            os.path.join(self.qgis_server_dir, exe_name),
+        ]
+        
+        for path in paths_to_check:
+            if os.path.exists(path):
+                print(f"Found QGIS Server at: {path}")
+                return path
+        
+        # ディレクトリを再帰的に検索
+        print(f"Searching for {exe_name} in {self.qgis_server_dir}...")
+        try:
+            for root, dirs, files in os.walk(self.qgis_server_dir):
+                if exe_name in files:
+                    found_path = os.path.join(root, exe_name)
+                    print(f"Found QGIS Server via recursive search: {found_path}")
+                    return found_path
+        except Exception as e:
+            print(f"Error during recursive search: {e}")
+        
+        # 2. 現在実行中のQGIS Desktopのインストールディレクトリを検索
+        try:
+            from qgis.core import QgsApplication
+            qgis_prefix = QgsApplication.prefixPath()
+            print(f"QGIS prefix path: {qgis_prefix}")
+            
+            # QGISインストールディレクトリから検索
+            desktop_paths = [
+                os.path.join(qgis_prefix, 'bin', exe_name),
+                os.path.join(qgis_prefix, '..', 'bin', exe_name),
+                os.path.join(qgis_prefix, 'apps', 'qgis-ltr', 'bin', exe_name),
+                os.path.join(qgis_prefix, '..', 'apps', 'qgis-ltr', 'bin', exe_name),
+            ]
+            
+            for path in desktop_paths:
+                normalized_path = os.path.normpath(path)
+                if os.path.exists(normalized_path):
+                    print(f"Found QGIS Server in QGIS Desktop installation: {normalized_path}")
+                    return normalized_path
+        except Exception as e:
+            print(f"Error searching QGIS Desktop installation: {e}")
+        
+        print(f"QGIS Server executable not found in: {self.qgis_server_dir} or QGIS Desktop installation")
+        return None
+    
+    def is_qgis_server_available(self) -> bool:
+        """QGIS Serverが利用可能か確認"""
+        return self.get_qgis_server_path() is not None
+    
     def is_running(self) -> bool:
         """サーバーが起動中か確認"""
         if self.process is None:
@@ -116,7 +188,86 @@ class BBoxServerManager(QObject):
         return self.process.poll() is None
     
     def download_server(self, callback=None) -> bool:
-        """サーバーバイナリをダウンロード
+        """BBoxとQGIS Serverの両方をダウンロード
+        
+        既にダウンロード済みのものはスキップします。
+        
+        Args:
+            callback: 進捗コールバック (percent: int)
+            
+        Returns:
+            bool: 必要なダウンロードが成功した場合True
+        """
+        try:
+            print("Checking download status...")
+            
+            # 既存の状態を確認
+            has_bbox = self.get_binary_path() is not None
+            has_qgis_server = self.is_qgis_server_available()
+            
+            print(f"Current status - BBox: {has_bbox}, QGIS Server: {has_qgis_server}")
+            
+            bbox_success = True
+            qgis_success = True
+            
+            # BBoxが無い場合のみダウンロード
+            if not has_bbox:
+                print("Downloading BBox...")
+                self.status_changed.emit("Downloading BBox Server...")
+                bbox_success = self._download_bbox(callback)
+            else:
+                print("BBox already exists, skipping BBox download...")
+                print(f"Emitting progress: 50% (BBox skipped)")
+                if callback:
+                    callback(50)
+                self.download_progress.emit(50)
+            
+            # QGIS Serverが無い場合のみダウンロード
+            if not has_qgis_server:
+                print("QGIS Server not found in plugin directory or QGIS Desktop installation")
+                print("Downloading QGIS Server...")
+                self.status_changed.emit("Downloading QGIS Server...")
+                qgis_success = self._download_qgis_server(callback)
+            else:
+                print("QGIS Server already available (plugin dir or QGIS Desktop), skipping QGIS Server download...")
+                print(f"Emitting progress: 100% (QGIS Server skipped)")
+                if callback:
+                    callback(100)
+                self.download_progress.emit(100)
+            
+            # 両方成功または既存の場合
+            if bbox_success and qgis_success:
+                if not has_bbox or not has_qgis_server:
+                    # 新規ダウンロードがあった場合
+                    self.status_changed.emit("Download completed!")
+                    QgsMessageLog.logMessage("Download completed successfully", 'QMapPermalink', Qgis.Success)
+                else:
+                    # 全てスキップされた場合
+                    self.status_changed.emit("Already downloaded")
+                    QgsMessageLog.logMessage("BBox and QGIS Server already exist", 'QMapPermalink', Qgis.Info)
+                return True
+            else:
+                # エラーメッセージ
+                error_msg = "Download failed: "
+                if not bbox_success:
+                    error_msg += "BBox "
+                if not qgis_success:
+                    error_msg += "QGIS Server"
+                self.status_changed.emit(error_msg)
+                QgsMessageLog.logMessage(error_msg, 'QMapPermalink', Qgis.Critical)
+                return False
+                
+        except Exception as e:
+            error_msg = f"Download failed: {str(e)}"
+            print(f"download_server() error: {error_msg}")
+            import traceback
+            traceback.print_exc()
+            self.status_changed.emit(error_msg)
+            QgsMessageLog.logMessage(error_msg, 'QMapPermalink', Qgis.Critical)
+            return False
+    
+    def _download_bbox(self, callback=None) -> bool:
+        """BBoxサーバーをダウンロード（内部メソッド）
         
         Args:
             callback: 進捗コールバック (percent: int)
@@ -148,19 +299,27 @@ class BBoxServerManager(QObject):
             
             def report_progress(block_num, block_size, total_size):
                 if total_size > 0:
-                    percent = int((block_num * block_size * 100) / total_size)
-                    print(f"Download progress: {percent}%")
+                    # BBoxは0-50%の範囲で表示
+                    percent = int((block_num * block_size * 50) / total_size)
+                    
+                    # ダウンロード済みサイズを計算
+                    downloaded_mb = (block_num * block_size) / (1024 * 1024)
+                    total_mb = total_size / (1024 * 1024)
+                    
+                    print(f"BBox download: {downloaded_mb:.1f}/{total_mb:.1f} MB ({percent}%)")
+                    self.status_changed.emit(f"BBox Server: {downloaded_mb:.1f}/{total_mb:.1f} MB")
+                    
                     if callback:
-                        callback(min(percent, 100))
-                    self.download_progress.emit(min(percent, 100))
+                        callback(min(percent, 50))
+                    self.download_progress.emit(min(percent, 50))
             
             print(f"Starting urllib.request.urlretrieve...")
             urllib.request.urlretrieve(url, download_path, report_progress)
             print(f"Download completed, file size: {os.path.getsize(download_path)} bytes")
             
             # 解凍
-            self.status_changed.emit("Extracting...")
-            print("Extracting archive...")
+            self.status_changed.emit("Extracting BBox Server...")
+            print("Extracting BBox archive...")
             QgsMessageLog.logMessage(f"Extracting to: {self.bin_dir}", 'QMapPermalink', Qgis.Info)
             if ext == 'zip':
                 print("Extracting ZIP file...")
@@ -184,17 +343,195 @@ class BBoxServerManager(QObject):
                 print("Setting executable permissions...")
                 os.chmod(exe_path, 0o755)
             
-            self.status_changed.emit("Download completed!")
-            print("BBoxServerManager.download_server() completed successfully")
-            QgsMessageLog.logMessage("BBOX Server downloaded successfully", 'QMapPermalink', Qgis.Success)
+            print("BBox download completed successfully")
+            QgsMessageLog.logMessage("BBox Server downloaded successfully", 'QMapPermalink', Qgis.Success)
             return True
             
         except Exception as e:
-            error_msg = f"Download failed: {str(e)}"
-            print(f"BBoxServerManager.download_server() error: {error_msg}")
+            error_msg = f"BBox download failed: {str(e)}"
+            print(f"_download_bbox() error: {error_msg}")
             import traceback
             traceback.print_exc()
-            self.status_changed.emit(error_msg)
+            QgsMessageLog.logMessage(error_msg, 'QMapPermalink', Qgis.Critical)
+            return False
+    
+    def _download_qgis_server(self, callback=None) -> bool:
+        """QGIS Serverをダウンロード（内部メソッド）
+        
+        OSGeo4WパッケージからQGIS Server関連ファイルを抽出します。
+        
+        Args:
+            callback: 進捗コールバック (percent: int)
+            
+        Returns:
+            bool: 成功した場合True
+        """
+        try:
+            print("=== Starting QGIS Server download from OSGeo4W ===")
+            # ディレクトリが存在することを確認
+            os.makedirs(self.qgis_server_dir, exist_ok=True)
+            print(f"QGIS Server directory created: {self.qgis_server_dir}")
+            
+            # 初期進捗を発火（ダウンロード開始を通知）
+            print("Emitting initial progress: 50%")
+            if callback:
+                callback(50)
+            self.download_progress.emit(50)
+            
+            # OSGeo4W v2 QGIS LTR (3.34.x) のパッケージをダウンロード
+            # QGIS Server は qgis-ltr パッケージに含まれている
+            qgis_major_minor = ".".join(self.QGIS_SERVER_VERSION.split(".")[:2])  # "3.34"
+            
+            # OSGeo4W v2のミラーから必要なパッケージをダウンロード
+            # qgis-ltr-server: QGIS Serverバイナリ (qgis_mapserv.fcgi.exe)のみ
+            # 正しいパス: /qgis/qgis-ltr/qgis-ltr-server/
+            packages = [
+                {
+                    'name': 'qgis-ltr-server',
+                    'url': f'https://download.osgeo.org/osgeo4w/v2/x86_64/release/qgis/qgis-ltr/qgis-ltr-server/qgis-ltr-server-{self.QGIS_SERVER_VERSION}-1.tar.bz2',
+                    'weight': 1.0  # 100%の進捗割当
+                }
+            ]
+            
+            base_progress = 50  # QGIS Serverは50-100%の範囲
+            accumulated_progress = 0
+            
+            for pkg in packages:
+                pkg_name = pkg['name']
+                pkg_url = pkg['url']
+                pkg_weight = pkg['weight']
+                
+                print(f"=== Package: {pkg_name} ===")
+                print(f"URL: {pkg_url}")
+                print(f"Weight: {pkg_weight}")
+                self.status_changed.emit(f"Downloading {pkg_name}...")
+                QgsMessageLog.logMessage(f"Downloading {pkg_name} from: {pkg_url}", 'QMapPermalink', Qgis.Info)
+                
+                # ダウンロード先
+                filename = pkg_url.split('/')[-1]
+                download_path = os.path.join(self.qgis_server_dir, filename)
+                print(f"Download path: {download_path}")
+                
+                # 進捗レポート関数（各パッケージごとに範囲を調整）
+                def report_progress(block_num, block_size, total_size):
+                    if total_size > 0:
+                        pkg_percent = (block_num * block_size * 100) / total_size
+                        # 全体進捗 = 50 + (このパッケージまでの累積 + 現在のパッケージ進捗 * weight) * 50
+                        total_percent = base_progress + int((accumulated_progress + (pkg_percent / 100) * pkg_weight) * 50)
+                        
+                        # ダウンロード済みサイズを計算
+                        downloaded_mb = (block_num * block_size) / (1024 * 1024)
+                        total_mb = total_size / (1024 * 1024)
+                        
+                        print(f"{pkg_name} download: {downloaded_mb:.1f}/{total_mb:.1f} MB ({pkg_percent:.1f}%) - Overall: {total_percent}%")
+                        self.status_changed.emit(f"{pkg_name}: {downloaded_mb:.1f}/{total_mb:.1f} MB")
+                        
+                        if callback:
+                            callback(min(total_percent, 100))
+                        self.download_progress.emit(min(total_percent, 100))
+                
+                # ダウンロード実行
+                try:
+                    print(f"Starting urlretrieve for {pkg_name}...")
+                    print(f"Checking URL accessibility...")
+                    # URLの存在確認
+                    req = urllib.request.Request(pkg_url, method='HEAD')
+                    try:
+                        response = urllib.request.urlopen(req, timeout=10)
+                        print(f"URL is accessible, status: {response.status}")
+                        print(f"Content-Length: {response.headers.get('Content-Length', 'unknown')}")
+                    except urllib.error.HTTPError as e:
+                        print(f"HTTP Error: {e.code} - {e.reason}")
+                        raise Exception(f"URL not found: {pkg_url} (HTTP {e.code})")
+                    except Exception as e:
+                        print(f"URL check failed: {str(e)}")
+                        raise
+                    
+                    print(f"Starting actual download...")
+                    urllib.request.urlretrieve(pkg_url, download_path, report_progress)
+                    print(f"{pkg_name} download completed, file size: {os.path.getsize(download_path)} bytes")
+                except Exception as e:
+                    error_msg = f"Failed to download {pkg_name}: {str(e)}"
+                    print(f"ERROR: {error_msg}")
+                    QgsMessageLog.logMessage(error_msg, 'QMapPermalink', Qgis.Critical)
+                    # ダウンロード失敗は致命的エラー
+                    raise Exception(error_msg)
+                
+                # 解凍
+                self.status_changed.emit(f"Extracting {pkg_name}...")
+                print(f"Extracting {pkg_name} archive...")
+                
+                try:
+                    import tarfile
+                    print(f"Opening tar.bz2 file: {download_path}")
+                    with tarfile.open(download_path, 'r:bz2') as tar_ref:
+                        members = tar_ref.getmembers()
+                        total_files = len(members)
+                        print(f"Extracting {total_files} files from {pkg_name}...")
+                        
+                        # デバッグ: 最初の10ファイルを表示
+                        print("First 10 files in archive:")
+                        for i, member in enumerate(members[:10]):
+                            print(f"  {member.name}")
+                        
+                        tar_ref.extractall(self.qgis_server_dir)
+                    print(f"{pkg_name} extraction completed ({total_files} files)")
+                    
+                    # デバッグ: 展開後のディレクトリ構造を確認
+                    print(f"Directory structure after extraction:")
+                    for root, dirs, files in os.walk(self.qgis_server_dir):
+                        level = root.replace(self.qgis_server_dir, '').count(os.sep)
+                        indent = ' ' * 2 * level
+                        print(f"{indent}{os.path.basename(root)}/")
+                        subindent = ' ' * 2 * (level + 1)
+                        for file in files[:5]:  # 最初の5ファイルのみ表示
+                            print(f"{subindent}{file}")
+                        if len(files) > 5:
+                            print(f"{subindent}... and {len(files) - 5} more files")
+                        if level > 2:  # 深すぎる場合は打ち切り
+                            break
+                    
+                    # ダウンロードファイル削除
+                    os.remove(download_path)
+                    print(f"Removed archive: {download_path}")
+                except Exception as e:
+                    print(f"Warning: Failed to extract {pkg_name}: {str(e)}")
+                    QgsMessageLog.logMessage(f"Failed to extract {pkg_name}: {str(e)}", 'QMapPermalink', Qgis.Warning)
+                
+                # 累積進捗更新
+                accumulated_progress += pkg_weight
+            
+            # qgis_mapserv.fcgi.exeが存在するか確認
+            qgis_exe = self.get_qgis_server_path()
+            if qgis_exe and os.path.exists(qgis_exe):
+                print(f"QGIS Server executable found: {qgis_exe}")
+                QgsMessageLog.logMessage("QGIS Server downloaded successfully", 'QMapPermalink', Qgis.Success)
+                if callback:
+                    callback(100)
+                self.download_progress.emit(100)
+                return True
+            else:
+                # ダウンロードは成功したが、期待する場所にファイルが見つからない
+                print(f"Warning: qgis_mapserv.fcgi.exe not found at expected location")
+                # ディレクトリ内を検索
+                for root, dirs, files in os.walk(self.qgis_server_dir):
+                    for file in files:
+                        if file == 'qgis_mapserv.fcgi.exe':
+                            found_path = os.path.join(root, file)
+                            print(f"Found qgis_mapserv.fcgi.exe at: {found_path}")
+                            QgsMessageLog.logMessage(f"QGIS Server found at: {found_path}", 'QMapPermalink', Qgis.Success)
+                            return True
+                
+                # 見つからない場合は警告
+                print("Warning: QGIS Server binaries not found after extraction")
+                QgsMessageLog.logMessage("QGIS Server binaries not found after extraction. Manual installation may be required.", 'QMapPermalink', Qgis.Warning)
+                return False
+            
+        except Exception as e:
+            error_msg = f"QGIS Server download failed: {str(e)}"
+            print(f"_download_qgis_server() error: {error_msg}")
+            import traceback
+            traceback.print_exc()
             QgsMessageLog.logMessage(error_msg, 'QMapPermalink', Qgis.Critical)
             return False
     
@@ -213,13 +550,46 @@ class BBoxServerManager(QObject):
         
         config_path = os.path.join(self.config_dir, 'bbox.toml')
         
+        # プロジェクトディレクトリを作成
+        projects_dir = os.path.join(self.config_dir, 'projects')
+        os.makedirs(projects_dir, exist_ok=True)
+        
+        # QGISプロジェクトを保存
+        project_saved = False
+        if project:
+            from qgis.core import QgsProject
+            
+            # プロジェクトインスタンスの取得
+            if isinstance(project, QgsProject):
+                qgs_project = project
+            else:
+                qgs_project = QgsProject.instance()
+            
+            # プロジェクトを.qgsファイルとして保存
+            project_file = os.path.join(projects_dir, 'current.qgs')
+            success = qgs_project.write(project_file)
+            
+            if success:
+                project_saved = True
+                QgsMessageLog.logMessage(
+                    f"QGIS project saved for BBox: {project_file}",
+                    'QMapPermalink', Qgis.Info
+                )
+            else:
+                QgsMessageLog.logMessage(
+                    "Failed to save QGIS project for BBox",
+                    'QMapPermalink', Qgis.Warning
+                )
+        
+        # プロジェクトディレクトリをスラッシュに統一
+        projects_dir_normalized = projects_dir.replace('\\', '/')
+        
         # 基本設定を生成
         config_lines = [
             "# BBOX Server Configuration",
             "# Generated by QMapPermalink",
             "",
             "[service]",
-            "# Enable all OGC services",
             'seeding = false',
             "",
             "[webserver]",
@@ -228,59 +598,44 @@ class BBoxServerManager(QObject):
             "",
             "[webserver.cors]",
             'allow_all_origins = true',
-            "",
-            "# OGC WMS Service",
-            "[ogcapi.wms]",
-            'enabled = true',
-            "",
-            "# OGC WMTS Service", 
-            "[ogcapi.wmts]",
-            'enabled = true',
-            "",
-            "# OGC WFS Service",
-            "[ogcapi.wfs]",
-            'enabled = true',
             ""
         ]
         
-        # QGISプロジェクトからレイヤー情報を取得
-        if project:
-            from qgis.core import QgsProject, QgsVectorLayer, QgsRasterLayer, QgsWkbTypes
+        # Map server設定を追加（QGISプロジェクトファイル配信用）
+        if project_saved:
+            # QGIS Serverのパスを取得
+            qgis_server_path = self.get_qgis_server_path()
+            qgis_server_dir = os.path.dirname(qgis_server_path) if qgis_server_path else ""
             
-            # プロジェクトインスタンスの取得
-            if isinstance(project, QgsProject):
-                qgs_project = project
+            # パスをスラッシュに統一
+            qgis_server_dir_normalized = qgis_server_dir.replace('\\', '/') if qgis_server_dir else ""
+            
+            config_lines.extend([
+                "# Map Server (QGIS Backend)",
+                "[mapserver.qgis_backend]",
+                f'project_basedir = "{projects_dir_normalized}"',
+            ])
+            
+            # QGIS Serverが利用可能な場合は、exe_locationを追加
+            if qgis_server_path:
+                qgis_server_path_normalized = qgis_server_path.replace('\\', '/')
+                config_lines.append(f'exe_location = "{qgis_server_path_normalized}"')
+                QgsMessageLog.logMessage(
+                    f"QGIS Server path configured: {qgis_server_path}",
+                    'QMapPermalink', Qgis.Info
+                )
             else:
-                qgs_project = QgsProject.instance()
+                QgsMessageLog.logMessage(
+                    "Warning: QGIS Server not found. Map server features may not work.",
+                    'QMapPermalink', Qgis.Warning
+                )
             
-            # GeoPackageファイルをデータソースとして追加
-            gpkg_files = set()
-            for layer in qgs_project.mapLayers().values():
-                if isinstance(layer, QgsVectorLayer) and layer.isValid():
-                    source = layer.source()
-                    # GeoPackageファイルのパスを抽出
-                    if '.gpkg' in source.lower():
-                        gpkg_path = source.split('|')[0]  # "|layername=..." を除去
-                        if os.path.exists(gpkg_path):
-                            gpkg_files.add(gpkg_path)
-            
-            # GeoPackageデータソースを追加
-            for idx, gpkg_path in enumerate(sorted(gpkg_files)):
-                # パスをスラッシュに統一
-                gpkg_path_normalized = gpkg_path.replace('\\', '/')
-                
-                config_lines.extend([
-                    f"[[datasource]]",
-                    f'name = "gpkg_{idx}"',
-                    f'[datasource.gpkg]',
-                    f'path = "{gpkg_path_normalized}"',
-                    ""
-                ])
-            
-            QgsMessageLog.logMessage(
-                f"BBOX config generated with {len(gpkg_files)} GeoPackage datasources",
-                'QMapPermalink', Qgis.Info
-            )
+            config_lines.extend([
+                "",
+                "[mapserver.qgis_backend.qgs]",
+                'path = "/qgis"',
+                ""
+            ])
         
         config_content = "\n".join(config_lines)
         
@@ -325,6 +680,34 @@ class BBoxServerManager(QObject):
             # 設定ファイル生成（QGISプロジェクト情報を含む）
             config_path = self.create_config(port, project)
             
+            # QGIS Server用の環境変数を準備
+            env = os.environ.copy()
+            qgis_server_path = self.get_qgis_server_path()
+            
+            if qgis_server_path:
+                # QGIS Serverのベースディレクトリ
+                qgis_server_base = os.path.dirname(os.path.dirname(qgis_server_path))  # .../apps/qgis-ltr
+                qgis_root = os.path.dirname(qgis_server_base)  # .../apps
+                
+                # QGIS_PREFIX_PATH を設定（QGIS Serverが依存ファイルを見つけるため）
+                env['QGIS_PREFIX_PATH'] = qgis_server_base
+                
+                # PATH に QGIS Server の bin ディレクトリを追加（DLL検索用）
+                qgis_bin_dir = os.path.dirname(qgis_server_path)
+                if 'PATH' in env:
+                    env['PATH'] = f"{qgis_bin_dir};{env['PATH']}"
+                else:
+                    env['PATH'] = qgis_bin_dir
+                
+                print(f"QGIS Server environment configured:")
+                print(f"  QGIS_PREFIX_PATH: {qgis_server_base}")
+                print(f"  PATH (added): {qgis_bin_dir}")
+                
+                QgsMessageLog.logMessage(
+                    f"QGIS Server environment configured: PREFIX={qgis_server_base}",
+                    'QMapPermalink', Qgis.Info
+                )
+            
             # サーバー起動
             self.status_changed.emit(f"Starting BBOX Server on port {port}...")
             
@@ -335,19 +718,21 @@ class BBoxServerManager(QObject):
                 startupinfo.wShowWindow = subprocess.SW_HIDE
                 
                 self.process = subprocess.Popen(
-                    [exe_path, '--config', config_path, 'serve'],
+                    [exe_path, '--config', config_path, 'serve', config_path],
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
                     startupinfo=startupinfo,
-                    cwd=self.plugin_dir
+                    cwd=self.plugin_dir,
+                    env=env  # 環境変数を渡す
                 )
             else:
                 # Unix系
                 self.process = subprocess.Popen(
-                    [exe_path, '--config', config_path, 'serve'],
+                    [exe_path, '--config', config_path, 'serve', config_path],
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
-                    cwd=self.plugin_dir
+                    cwd=self.plugin_dir,
+                    env=env  # 環境変数を渡す
                 )
             
             self.current_port = port

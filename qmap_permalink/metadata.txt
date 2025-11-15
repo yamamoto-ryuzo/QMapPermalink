@@ -2,13 +2,13 @@
 name = qmap_permalink
 qgisMinimumVersion = 3.00
 qgisMaximumVersion = 3.99
-description = Navigate QGIS map views through external permalink system; includes dynamic WMS/OpenLayers and MapLibre (WMTS/WFS with style injection) endpoints for remote navigation
-supports = WMS, WMTS, WFS, OpenLayers, MapLibre, Google Maps, Google Earth
-version = 3.6.54
+description = Navigate QGIS map views through external permalink system; includes dynamic WMS/OpenLayers and MapLibre (WMTS/WFS with style injection) endpoints for remote navigation. Optional high-speed server mode (BBox/Rust) available.
+supports = WMS, WMTS, WFS, OpenLayers, MapLibre, Google Maps, Google Earth, BBox Server (optional)
+version = 3.6.70
 author = yamamoto-ryuzo
 email = ryu@yamakun.net
 supportsQt6 = True
-about = QMapPermalink enables creation and navigation of map view permalinks in QGIS through a dockable panel interface. Generate fixed links for specific map positions and complete map states including layer visibility, themes, and styles. Navigate directly from external documents (Excel, PDF) to precise map locations with full state restoration. The plugin also runs an embedded HTTP server that exposes dynamic WMS and OpenLayers endpoints ("/wms" and "/qgis-map"), and MapLibre integration (WMTS/WFS with QGIS-style injection via "/maplibre" and "/maplibre-style"). Version 3.5.0 adds external access diagnostics, Windows firewall integration with UAC elevation, dynamic host resolution for external access, flexible port configuration (80-65535), and enhanced MapLibre support with x/y/scale/crs/rotation parameters.
+about = QMapPermalink enables creation and navigation of map view permalinks in QGIS through a dockable panel interface. Generate fixed links for specific map positions and complete map states including layer visibility, themes, and styles. Navigate directly from external documents (Excel, PDF) to precise map locations with full state restoration. The plugin also runs an embedded HTTP server that exposes dynamic WMS and OpenLayers endpoints ("/wms" and "/qgis-map"), and MapLibre integration (WMTS/WFS with QGIS-style injection via "/maplibre" and "/maplibre-style"). Version 3.5.0 adds external access diagnostics, Windows firewall integration with UAC elevation, dynamic host resolution for external access, flexible port configuration (80-65535), and enhanced MapLibre support with x/y/scale/crs/rotation parameters. Version 3.6.63 adds optional high-speed server mode using BBox (Rust-based OGC server) for 6-10x performance improvement. Note: High-speed mode requires BBox binary (auto-downloaded ~13MB). QGIS Server component will be automatically detected from your QGIS Desktop installation (3.34+) or downloaded separately if needed.
 tracker = https://github.com/yamamoto-ryuzo/QMapPermalink
 repository = https://github.com/yamamoto-ryuzo/QMapPermalink
 homepage = https://github.com/yamamoto-ryuzo/QMapPermalink
