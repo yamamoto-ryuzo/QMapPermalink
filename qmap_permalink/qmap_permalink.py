@@ -37,7 +37,7 @@ except Exception:
     pass
 from qgis.PyQt.QtGui import QIcon, QDesktopServices, QClipboard
 from qgis.PyQt.QtWidgets import QAction, QMessageBox, QApplication, QDockWidget
-from qgis.core import QgsProject, QgsCoordinateReferenceSystem, QgsCoordinateTransform, QgsPointXY, QgsRectangle
+from qgis.core import QgsProject, QgsCoordinateReferenceSystem, QgsCoordinateTransform, QgsPointXY, QgsRectangle, Qgis
 try:
     from qgis.core import qgsfunction
 except Exception:
@@ -169,6 +169,7 @@ class QMapPermalink:
             self.bbox_manager = BBoxServerManager(self.plugin_dir)
             print(f"BBoxServerManager initialized successfully: {self.bbox_manager}")
             print(f"Plugin directory: {self.plugin_dir}")
+            print(f"BBox root directory: {self.bbox_manager.bbox_root}")
             print(f"BBox bin directory: {self.bbox_manager.bin_dir}")
             if self.bbox_manager.get_binary_path():
                 print(f"BBox binary found at: {self.bbox_manager.get_binary_path()}")
@@ -539,8 +540,9 @@ class QMapPermalink:
                                                 # BBoxサーバーはOGC専用で固定ポート8080
                                                 bbox_port = 8080
                                                 # 標準サーバーは停止しない（MapLibre等で使用）
-                                                # BBoxサーバーを別ポートで起動
-                                                success = self.bbox_manager.start_server(port=bbox_port)
+                                                # BBoxサーバーを別ポートで起動（QGISプロジェクト情報を自動設定）
+                                                from qgis.core import QgsProject
+                                                success = self.bbox_manager.start_server(port=bbox_port, project=QgsProject.instance())
                                                 if success:
                                                     self.panel.pushButton_download_bbox.setText(self.tr("起動中"))
                                                     self.iface.messageBar().pushMessage(
@@ -548,6 +550,19 @@ class QMapPermalink:
                                                         self.tr(f"高速サーバー(OGC専用)が起動しました (port {bbox_port})"),
                                                         duration=3
                                                     )
+                                                    # 接続テストを実行
+                                                    import time
+                                                    time.sleep(1)  # サーバー起動待機
+                                                    if self.bbox_manager.test_connection():
+                                                        print("BBox server connection test passed!")
+                                                    else:
+                                                        print("BBox server connection test failed!")
+                                                        self.iface.messageBar().pushMessage(
+                                                            self.tr("QMap Permalink"),
+                                                            self.tr("高速サーバーの接続テストに失敗しました。ログを確認してください。"),
+                                                            level=Qgis.Warning,
+                                                            duration=5
+                                                        )
                                         else:
                                             # バイナリ未ダウンロード
                                             self.panel.pushButton_download_bbox.setEnabled(True)
@@ -612,7 +627,8 @@ class QMapPermalink:
                                         # BBoxサーバーはOGC専用で固定ポート8080
                                         bbox_port = 8080
                                         # 標準サーバーは停止しない（MapLibre等で使用）
-                                        success = self.bbox_manager.start_server(port=bbox_port)
+                                        from qgis.core import QgsProject
+                                        success = self.bbox_manager.start_server(port=bbox_port, project=QgsProject.instance())
                                         print(f"BBox server start result: {success}")
                                         if success:
                                             self.iface.messageBar().pushMessage(
@@ -620,6 +636,19 @@ class QMapPermalink:
                                                 self.tr(f"高速サーバー(OGC専用)が起動しました (port {bbox_port})"),
                                                 duration=3
                                             )
+                                            # 接続テストを実行
+                                            import time
+                                            time.sleep(1)  # サーバー起動待機
+                                            if self.bbox_manager.test_connection():
+                                                print("BBox server connection test passed!")
+                                            else:
+                                                print("BBox server connection test failed!")
+                                                self.iface.messageBar().pushMessage(
+                                                    self.tr("QMap Permalink"),
+                                                    self.tr("高速サーバーの接続テストに失敗しました。ログを確認してください。"),
+                                                    level=Qgis.Warning,
+                                                    duration=5
+                                                )
                                     else:
                                         # ボタンを再有効化 (バイナリは存在するので無効のまま)
                                         pass
