@@ -168,6 +168,12 @@ class QMapPermalink:
             from .bbox import BBoxServerManager
             self.bbox_manager = BBoxServerManager(self.plugin_dir)
             print(f"BBoxServerManager initialized successfully: {self.bbox_manager}")
+            print(f"Plugin directory: {self.plugin_dir}")
+            print(f"BBox bin directory: {self.bbox_manager.bin_dir}")
+            if self.bbox_manager.get_binary_path():
+                print(f"BBox binary found at: {self.bbox_manager.get_binary_path()}")
+            else:
+                print("BBox binary not found")
         except Exception as e:
             self.bbox_manager = None
             print(f"Failed to initialize BBoxServerManager: {e}")
@@ -530,16 +536,18 @@ class QMapPermalink:
                                                 QMessageBox.StandardButton.Yes
                                             )
                                             if reply == QMessageBox.StandardButton.Yes:
+                                                # UIのポート番号を取得
+                                                port = self.panel.spinBox_port.value() if hasattr(self.panel, 'spinBox_port') else 8089
                                                 # 標準サーバーを停止
                                                 if self.server_manager.is_server_running():
                                                     self.server_manager.stop_http_server()
-                                                # BBoxサーバーを起動
-                                                success = self.bbox_manager.start_server(port=8080)
+                                                # BBoxサーバーを同じポートで起動
+                                                success = self.bbox_manager.start_server(port=port)
                                                 if success:
                                                     self.panel.pushButton_download_bbox.setText(self.tr("起動中"))
                                                     self.iface.messageBar().pushMessage(
                                                         self.tr("QMap Permalink"),
-                                                        self.tr("高速サーバーが起動しました (port 8080)"),
+                                                        self.tr(f"高速サーバーが起動しました (port {port})"),
                                                         duration=3
                                                     )
                                         else:
@@ -603,14 +611,16 @@ class QMapPermalink:
                                     )
                                     if reply == QMessageBox.StandardButton.Yes:
                                         print("Starting BBox server...")
+                                        # UIのポート番号を取得
+                                        port = self.panel.spinBox_port.value() if hasattr(self.panel, 'spinBox_port') else 8089
                                         if self.server_manager.is_server_running():
                                             self.server_manager.stop_http_server()
-                                        success = self.bbox_manager.start_server(port=8080)
+                                        success = self.bbox_manager.start_server(port=port)
                                         print(f"BBox server start result: {success}")
                                         if success:
                                             self.iface.messageBar().pushMessage(
                                                 self.tr("QMap Permalink"),
-                                                self.tr("高速サーバーが起動しました (port 8080)"),
+                                                self.tr(f"高速サーバーが起動しました (port {port})"),
                                                 duration=3
                                             )
                                     else:
