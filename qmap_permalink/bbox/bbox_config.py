@@ -20,7 +20,8 @@ class BBoxConfig:
         """
         if config_path is None:
             plugin_dir = Path(__file__).parent.parent
-            self.config_path = plugin_dir / "bbox" / "config" / "qmap_bbox.toml"
+            # Use the same default filename as BBoxServerManager.create_config()
+            self.config_path = plugin_dir / "bbox" / "config" / "bbox.toml"
         else:
             self.config_path = Path(config_path)
         
@@ -59,11 +60,36 @@ class BBoxConfig:
             minzoom: 最小ズームレベル
             maxzoom: 最大ズームレベル
         """
-        # 相対パスに変換（設定ファイルからの相対）
+        # 相対パスに変換（設定ファイルからの相対）。
+        # - まず config ファイル親（config/） を基準に相対化を試みる
+        # - 次に bbox ルート（config/ の親）を基準に相対化を試みる
+        # - どちらも無理なら絶対パスのまま保存する
+        relative_source = source
+        # 1) 可能なら QGIS プロジェクトのディレクトリを基準に相対化
         try:
-            relative_source = source.relative_to(self.config_path.parent)
-        except ValueError:
-            relative_source = source
+            from qgis.core import QgsProject
+            proj_file = QgsProject.instance().fileName()
+            if proj_file:
+                proj_dir = Path(proj_file).parent
+                try:
+                    relative_source = source.relative_to(proj_dir)
+                except Exception:
+                    relative_source = relative_source
+        except Exception:
+            # QGIS が利用できない環境やプロジェクト情報が取れない場合は無視
+            pass
+
+        # 2) 続けて config/ を基準に相対化
+        if relative_source == source:
+            try:
+                relative_source = source.relative_to(self.config_path.parent)
+            except ValueError:
+                try:
+                    # bbox root (config parent の親) を基準にする
+                    bbox_root = self.config_path.parent.parent
+                    relative_source = source.relative_to(bbox_root)
+                except Exception:
+                    relative_source = source
         
         tileset = {
             "name": name,
@@ -88,15 +114,35 @@ class BBoxConfig:
             source: データソースパス（GeoJSON, GeoPackage等）
             srs: 座標参照系
         """
-        # 相対パスに変換
+        # 相対パスに変換（同上）
+        relative_source = source
+        # 1) 可能なら QGIS プロジェクトのディレクトリを基準に相対化（優先）
         try:
-            relative_source = source.relative_to(self.config_path.parent)
-        except ValueError:
-            relative_source = source
+            from qgis.core import QgsProject
+            proj_file = QgsProject.instance().fileName()
+            if proj_file:
+                proj_dir = Path(proj_file).parent
+                try:
+                    relative_source = source.relative_to(proj_dir)
+                except Exception:
+                    relative_source = relative_source
+        except Exception:
+            pass
+
+        # 2) 次に設定ファイルの親（config/）を基準に相対化
+        if relative_source == source:
+            try:
+                relative_source = source.relative_to(self.config_path.parent)
+            except ValueError:
+                try:
+                    bbox_root = self.config_path.parent.parent
+                    relative_source = source.relative_to(bbox_root)
+                except Exception:
+                    relative_source = source
         
         collection = {
             "name": name,
-            "source": str(relative_source),
+            "source": str(relative_source).replace('\\', '/'),
             "srs": srs
         }
         

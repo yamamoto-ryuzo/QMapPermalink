@@ -87,6 +87,36 @@ class BBoxManager:
         try:
             # ベクターレイヤーをエクスポート
             exported_files = self.exporter.export_vector_layers(format=format)
+
+            # 可能であれば、プロジェクト直下にコピーして
+            # 設定ファイルにはプロジェクト基準の相対パスを書き込む
+            try:
+                from qgis.core import QgsProject
+                proj_file = QgsProject.instance().fileName()
+            except Exception:
+                proj_file = None
+
+            copied_files = []
+            if proj_file:
+                try:
+                    import shutil
+                    proj_dir = Path(proj_file).parent
+                    target_dir = proj_dir / 'qmap_permalink_bbox_data'
+                    target_dir.mkdir(parents=True, exist_ok=True)
+
+                    for src in exported_files:
+                        dst = target_dir / src.name
+                        try:
+                            shutil.copy2(src, dst)
+                            copied_files.append(dst)
+                        except Exception:
+                            # コピーに失敗したら元のファイルパスを使う
+                            copied_files.append(src)
+
+                except Exception:
+                    copied_files = exported_files
+            else:
+                copied_files = exported_files
             
             if not exported_files:
                 QgsMessageLog.logMessage(
@@ -98,11 +128,13 @@ class BBoxManager:
             # 設定ファイル生成
             self.config_manager.config["collections"].clear()
             
-            for file_path in exported_files:
-                layer_name = file_path.stem
+            # 設定には、プロジェクト基準で相対化されるように
+            # コピー済みファイル（あれば）を優先して渡す
+            for file_path in (copied_files or exported_files):
+                layer_name = Path(file_path).stem
                 self.config_manager.add_collection(
                     name=layer_name,
-                    source=file_path,
+                    source=Path(file_path),
                     srs="EPSG:4326"
                 )
             

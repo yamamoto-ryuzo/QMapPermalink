@@ -48,6 +48,21 @@ class BBoxProcessManager:
                 "QMapPermalink", Qgis.Info
             )
             return local_binary
+
+        # 1b. プラグインの親ディレクトリ（plugins/）にある別プラグイン 'bbox' の bin/ を確認
+        try:
+            plugins_root = plugin_dir.parent
+            alt_binary = plugins_root / 'bbox' / 'bin' / binary_name
+            if alt_binary.exists():
+                self.bbox_binary = alt_binary
+                QgsMessageLog.logMessage(
+                    f"✅ BBOX Server found in sibling plugin: {alt_binary}",
+                    "QMapPermalink", Qgis.Info
+                )
+                return alt_binary
+        except Exception:
+            # issue in path resolution - ignore and continue search
+            pass
         
         # 2. PATH環境変数を確認
         import shutil

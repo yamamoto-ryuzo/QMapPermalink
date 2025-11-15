@@ -550,40 +550,70 @@ class BBoxServerManager(QObject):
         
         config_path = os.path.join(self.config_dir, 'bbox.toml')
         
-        # プロジェクトディレクトリを作成
+        # Projects dir is still created for backward compatibility, but
+        # we prefer using the actual project directory as project_basedir
         projects_dir = os.path.join(self.config_dir, 'projects')
         os.makedirs(projects_dir, exist_ok=True)
-        
-        # QGISプロジェクトを保存
+
+        # (project_dir will be determined after we resolve project_used_path)
+
+        # プロジェクトのパス決定ロジック:
+        # 1) 引数 `project` が与えられ、ファイルパスを指定している場合はそれを使う
+        # 2) 可能なら現在開いている QGIS プロジェクトのパスを使う
+        # 3) プロジェクトが未保存の場合は plugin 内に保存 (projects/current.qgs)
         project_saved = False
-        if project:
+        project_used_path = None
+
+        try:
             from qgis.core import QgsProject
-            
-            # プロジェクトインスタンスの取得
-            if isinstance(project, QgsProject):
-                qgs_project = project
-            else:
+        except Exception:
+            QgsProject = None
+
+        # 1) project がファイルパス文字列なら優先
+        if project and isinstance(project, str) and os.path.exists(project):
+            project_used_path = project
+
+        # 2) project が QgsProject インスタンス
+        if project and QgsProject and isinstance(project, QgsProject):
+            qgs_project = project
+            proj_file = qgs_project.fileName()
+            if proj_file:
+                project_used_path = proj_file
+
+        # 3) 引数がない場合は現在のプロジェクトを試す
+        if project_used_path is None and QgsProject:
+            try:
                 qgs_project = QgsProject.instance()
-            
-            # プロジェクトを.qgsファイルとして保存
-            project_file = os.path.join(projects_dir, 'current.qgs')
-            success = qgs_project.write(project_file)
-            
-            if success:
-                project_saved = True
-                QgsMessageLog.logMessage(
-                    f"QGIS project saved for BBox: {project_file}",
-                    'QMapPermalink', Qgis.Info
-                )
-            else:
-                QgsMessageLog.logMessage(
-                    "Failed to save QGIS project for BBox",
-                    'QMapPermalink', Qgis.Warning
-                )
+                proj_file = qgs_project.fileName()
+                if proj_file:
+                    project_used_path = proj_file
+                else:
+                    # プロジェクトが未保存の場合は自動保存せずエラー扱いにする
+                    error_msg = "Current QGIS project is not saved. Please save the project before creating BBox config."
+                    QgsMessageLog.logMessage(error_msg, 'QMapPermalink', Qgis.Critical)
+                    self.status_changed.emit(error_msg)
+                    return None
+            except Exception:
+                # QgsProject.instance() が取得できない環境ではエラー
+                error_msg = "Failed to access current QGIS project."
+                QgsMessageLog.logMessage(error_msg, 'QMapPermalink', Qgis.Critical)
+                self.status_changed.emit(error_msg)
+                return None
+
+        # project_used_path が決まったらプロジェクトは "保存済み" とみなす
+        if project_used_path:
+            project_saved = True
+        # Determine project directory (parent of project_used_path) if available
+        project_dir = None
+        if project_used_path:
+            try:
+                project_dir = os.path.dirname(os.path.abspath(project_used_path))
+            except Exception:
+                project_dir = None
         
         # プロジェクトディレクトリをスラッシュに統一
         projects_dir_normalized = projects_dir.replace('\\', '/')
-        
+
         # 基本設定を生成
         config_lines = [
             "# BBOX Server Configuration",
@@ -606,16 +636,29 @@ class BBoxServerManager(QObject):
             # QGIS Serverのパスを取得
             qgis_server_path = self.get_qgis_server_path()
             qgis_server_dir = os.path.dirname(qgis_server_path) if qgis_server_path else ""
-            
-            # パスをスラッシュに統一
-            qgis_server_dir_normalized = qgis_server_dir.replace('\\', '/') if qgis_server_dir else ""
-            
+
+            # project_basedir: prefer actual project directory. If project_dir is
+            # not available, treat this as an error (do not silently fall back).
+            if project_dir:
+                project_basedir_value = project_dir.replace('\\', '/')
+            else:
+                error_msg = (
+                    "Failed to determine project directory. "
+                    "Please save your QGIS project and try again."
+                )
+                QgsMessageLog.logMessage(error_msg, 'QMapPermalink', Qgis.Critical)
+                try:
+                    self.status_changed.emit(error_msg)
+                except Exception:
+                    pass
+                return None
+
             config_lines.extend([
                 "# Map Server (QGIS Backend)",
                 "[mapserver.qgis_backend]",
-                f'project_basedir = "{projects_dir_normalized}"',
+                f'project_basedir = "{project_basedir_value}"',
             ])
-            
+
             # QGIS Serverが利用可能な場合は、exe_locationを追加
             if qgis_server_path:
                 qgis_server_path_normalized = qgis_server_path.replace('\\', '/')
@@ -629,7 +672,7 @@ class BBoxServerManager(QObject):
                     "Warning: QGIS Server not found. Map server features may not work.",
                     'QMapPermalink', Qgis.Warning
                 )
-            
+
             config_lines.extend([
                 "",
                 "[mapserver.qgis_backend.qgs]",
@@ -679,6 +722,9 @@ class BBoxServerManager(QObject):
             
             # 設定ファイル生成（QGISプロジェクト情報を含む）
             config_path = self.create_config(port, project)
+            if not config_path:
+                QgsMessageLog.logMessage("BBox config creation failed. Aborting start.", 'QMapPermalink', Qgis.Critical)
+                return False
             
             # QGIS Server用の環境変数を準備
             env = os.environ.copy()
