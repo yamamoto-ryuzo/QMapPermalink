@@ -508,71 +508,29 @@ class QMapPermalink:
                                         self.bbox_manager.stop_server()
                                 elif index == 1:  # High-Speed (Rust)
                                     if hasattr(self.panel, 'pushButton_download_bbox') and self.panel.pushButton_download_bbox is not None:
-                                        # バイナリがあればボタン無効、なければ有効
                                         has_binary = self.bbox_manager.get_binary_path() is not None
                                         is_running = self.bbox_manager.is_running()
                                         print(f"Has binary: {has_binary}, Binary path: {self.bbox_manager.get_binary_path()}")
                                         print(f"BBox server running: {is_running}")
                                         
                                         # ボタンの状態とテキストを設定
-                                        if is_running:
-                                            # 既に起動中
-                                            self.panel.pushButton_download_bbox.setEnabled(False)
-                                            self.panel.pushButton_download_bbox.setText(self.tr("起動中"))
-                                            self.iface.messageBar().pushMessage(
-                                                self.tr("QMap Permalink"),
-                                                self.tr("高速サーバーは既に起動しています (port 8080)"),
-                                                duration=3
-                                            )
-                                        elif has_binary:
-                                            # ダウンロード済みだが未起動
-                                            self.panel.pushButton_download_bbox.setEnabled(False)
-                                            self.panel.pushButton_download_bbox.setText(self.tr("ダウンロード済"))
-                                            # 起動を提案
-                                            reply = QMessageBox.question(
-                                                self.iface.mainWindow(),
-                                                self.tr("QMap Permalink"),
-                                                self.tr("高速サーバー(Rust)を起動しますか？\nOGC API専用でポート8080で動作します。\n標準サーバー(MapLibre等)は8089で継続します。"),
-                                                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-                                                QMessageBox.StandardButton.Yes
-                                            )
-                                            if reply == QMessageBox.StandardButton.Yes:
-                                                # BBoxサーバーはOGC専用で固定ポート8080
-                                                bbox_port = 8080
-                                                # 標準サーバーは停止しない（MapLibre等で使用）
-                                                # BBoxサーバーを別ポートで起動（QGISプロジェクト情報を自動設定）
-                                                from qgis.core import QgsProject
-                                                success = self.bbox_manager.start_server(port=bbox_port, project=QgsProject.instance())
-                                                if success:
-                                                    self.panel.pushButton_download_bbox.setText(self.tr("起動中"))
-                                                    self.iface.messageBar().pushMessage(
-                                                        self.tr("QMap Permalink"),
-                                                        self.tr(f"高速サーバー(OGC専用)が起動しました (port {bbox_port})"),
-                                                        duration=3
-                                                    )
-                                                    # 接続テストを実行
-                                                    import time
-                                                    time.sleep(1)  # サーバー起動待機
-                                                    if self.bbox_manager.test_connection():
-                                                        print("BBox server connection test passed!")
-                                                    else:
-                                                        print("BBox server connection test failed!")
-                                                        self.iface.messageBar().pushMessage(
-                                                            self.tr("QMap Permalink"),
-                                                            self.tr("高速サーバーの接続テストに失敗しました。ログを確認してください。"),
-                                                            level=Qgis.Warning,
-                                                            duration=5
-                                                        )
-                                        else:
-                                            # バイナリ未ダウンロード
+                                        if not has_binary:
+                                            # バイナリ未ダウンロード - ダウンロードボタンとして機能
                                             self.panel.pushButton_download_bbox.setEnabled(True)
                                             self.panel.pushButton_download_bbox.setText(self.tr("ダウンロード"))
-                                            # ダウンロードを提案
                                             self.iface.messageBar().pushMessage(
                                                 self.tr("QMap Permalink"),
                                                 self.tr("高速サーバー(Rust)を使用するには、まずダウンロードボタンをクリックしてください"),
                                                 duration=5
                                             )
+                                        elif is_running:
+                                            # 起動中 - 停止ボタンとして機能
+                                            self.panel.pushButton_download_bbox.setEnabled(True)
+                                            self.panel.pushButton_download_bbox.setText(self.tr("停止"))
+                                        else:
+                                            # ダウンロード済みだが未起動 - 起動ボタンとして機能
+                                            self.panel.pushButton_download_bbox.setEnabled(True)
+                                            self.panel.pushButton_download_bbox.setText(self.tr("起動"))
                                         
                                         print(f"Download button enabled: {self.panel.pushButton_download_bbox.isEnabled()}")
                                         print(f"Download button text: {self.panel.pushButton_download_bbox.text()}")
@@ -588,126 +546,35 @@ class QMapPermalink:
                     import traceback
                     traceback.print_exc()
                 
-                # BBoxダウンロードボタンハンドラ
+                # BBoxボタンハンドラ（ダウンロード/起動/停止を状態に応じて切り替え）
                 try:
                     if self.bbox_manager and hasattr(self.panel, 'pushButton_download_bbox') and self.panel.pushButton_download_bbox is not None:
-                        print("Connecting BBox download button handler...")
-                        def _download_bbox_clicked():
+                        print("Connecting BBox control button handler...")
+                        def _bbox_button_clicked():
                             try:
-                                print("Download button clicked!")
-                                # ダウンロード開始
-                                self.panel.pushButton_download_bbox.setEnabled(False)
-                                self.panel.pushButton_download_bbox.setText(self.tr("ダウンロード中..."))
-                                print("Starting download...")
+                                print("BBox button clicked!")
+                                button_text = self.panel.pushButton_download_bbox.text()
+                                print(f"Button text: {button_text}")
                                 
-                                def on_progress(percent):
-                                    # シグナルはintのパーセンテージ値を受け取る
-                                    print(f"Download progress: {percent}%")
-                                    self.panel.pushButton_download_bbox.setText(f"{self.tr('ダウンロード中')} {percent}%")
-                                
-                                def on_complete():
-                                    print("Download completed callback")
-                                    self.panel.pushButton_download_bbox.setText(self.tr("ダウンロード完了"))
-                                    self.panel.pushButton_download_bbox.setEnabled(False)
-                                    self.iface.messageBar().pushMessage(
-                                        self.tr("QMap Permalink"),
-                                        self.tr("高速サーバーのダウンロードが完了しました。"),
-                                        duration=5
-                                    )
-                                    # ダウンロード完了後は起動を提案
-                                    reply = QMessageBox.question(
-                                        self.iface.mainWindow(),
-                                        self.tr("QMap Permalink"),
-                                        self.tr("高速サーバー(Rust)を起動しますか？\nOGC API専用でポート8080で動作します。\n標準サーバー(MapLibre等)は8089で継続します。"),
-                                        QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-                                        QMessageBox.StandardButton.Yes
-                                    )
-                                    if reply == QMessageBox.StandardButton.Yes:
-                                        print("Starting BBox server...")
-                                        # BBoxサーバーはOGC専用で固定ポート8080
-                                        bbox_port = 8080
-                                        # 標準サーバーは停止しない（MapLibre等で使用）
-                                        from qgis.core import QgsProject
-                                        success = self.bbox_manager.start_server(port=bbox_port, project=QgsProject.instance())
-                                        print(f"BBox server start result: {success}")
-                                        if success:
-                                            self.iface.messageBar().pushMessage(
-                                                self.tr("QMap Permalink"),
-                                                self.tr(f"高速サーバー(OGC専用)が起動しました (port {bbox_port})"),
-                                                duration=3
-                                            )
-                                            # 接続テストを実行
-                                            import time
-                                            time.sleep(1)  # サーバー起動待機
-                                            if self.bbox_manager.test_connection():
-                                                print("BBox server connection test passed!")
-                                            else:
-                                                print("BBox server connection test failed!")
-                                                self.iface.messageBar().pushMessage(
-                                                    self.tr("QMap Permalink"),
-                                                    self.tr("高速サーバーの接続テストに失敗しました。ログを確認してください。"),
-                                                    level=Qgis.Warning,
-                                                    duration=5
-                                                )
-                                    else:
-                                        # ボタンを再有効化 (バイナリは存在するので無効のまま)
-                                        pass
-                                
-                                def on_error(error_msg):
-                                    self.panel.pushButton_download_bbox.setText(self.tr("ダウンロード"))
-                                    self.panel.pushButton_download_bbox.setEnabled(True)
-                                    self.iface.messageBar().pushMessage(
-                                        self.tr("QMap Permalink"),
-                                        self.tr(f"ダウンロード失敗: {error_msg}"),
-                                        duration=10
-                                    )
-                                
-                                # 進捗コールバックを接続
-                                self.bbox_manager.download_progress.connect(on_progress)
-                                
-                                # ダウンロードを実行（別スレッドで）
-                                from qgis.PyQt.QtCore import QTimer
-                                from qgis.core import QgsTask, QgsApplication
-                                
-                                class DownloadTask(QgsTask):
-                                    def __init__(self, bbox_manager):
-                                        super().__init__('BBOX Server Download', QgsTask.CanCancel)
-                                        self.bbox_manager = bbox_manager
-                                        self.success = False
-                                        self.error = None
+                                if button_text == self.tr("ダウンロード"):
+                                    # ダウンロード処理
+                                    self._start_bbox_download()
+                                elif button_text == self.tr("起動"):
+                                    # 起動処理
+                                    self._start_bbox_server()
+                                elif button_text == self.tr("停止"):
+                                    # 停止処理
+                                    self._stop_bbox_server()
                                     
-                                    def run(self):
-                                        try:
-                                            print("DownloadTask.run() started")
-                                            self.success = self.bbox_manager.download_server()
-                                            print(f"DownloadTask.run() finished: {self.success}")
-                                            return self.success
-                                        except Exception as e:
-                                            print(f"DownloadTask.run() error: {e}")
-                                            import traceback
-                                            traceback.print_exc()
-                                            self.error = str(e)
-                                            return False
-                                    
-                                    def finished(self, result):
-                                        print(f"DownloadTask.finished() called: result={result}")
-                                        if result:
-                                            on_complete()
-                                        else:
-                                            on_error(self.error or "Unknown error")
-                                
-                                task = DownloadTask(self.bbox_manager)
-                                QgsApplication.taskManager().addTask(task)
-                                
                             except Exception as e:
-                                print(f"Download button error: {e}")
+                                print(f"BBox button click error: {e}")
                                 import traceback
                                 traceback.print_exc()
                         
-                        self.panel.pushButton_download_bbox.clicked.connect(_download_bbox_clicked)
-                        print("BBox download button handler connected")
+                        self.panel.pushButton_download_bbox.clicked.connect(_bbox_button_clicked)
+                        print("BBox control button handler connected")
                 except Exception as e:
-                    print(f"Error connecting BBox download button handler: {e}")
+                    print(f"Error connecting BBox button handler: {e}")
                     import traceback
                     traceback.print_exc()
 
@@ -2833,6 +2700,152 @@ class QMapPermalink:
             print(f"テーマ適用エラー: {e}")
             return False
     
+    def _start_bbox_download(self):
+        """BBoxサーバーバイナリのダウンロードを開始"""
+        try:
+            print("Starting BBox server download...")
+            self.panel.pushButton_download_bbox.setEnabled(False)
+            self.panel.pushButton_download_bbox.setText(self.tr("ダウンロード中..."))
+            
+            def on_progress(percent):
+                print(f"Download progress: {percent}%")
+                self.panel.pushButton_download_bbox.setText(f"{self.tr('ダウンロード中')} {percent}%")
+            
+            def on_complete():
+                print("Download completed")
+                self.panel.pushButton_download_bbox.setText(self.tr("起動"))
+                self.panel.pushButton_download_bbox.setEnabled(True)
+                self.iface.messageBar().pushMessage(
+                    self.tr("QMap Permalink"),
+                    self.tr("高速サーバーのダウンロードが完了しました。「起動」ボタンで開始できます。"),
+                    duration=5
+                )
+            
+            def on_error(error_msg):
+                print(f"Download error: {error_msg}")
+                self.panel.pushButton_download_bbox.setText(self.tr("ダウンロード"))
+                self.panel.pushButton_download_bbox.setEnabled(True)
+                self.iface.messageBar().pushMessage(
+                    self.tr("QMap Permalink"),
+                    self.tr(f"ダウンロード失敗: {error_msg}"),
+                    level=Qgis.Warning,
+                    duration=10
+                )
+            
+            # 進捗シグナルを接続
+            self.bbox_manager.download_progress.connect(on_progress)
+            
+            # ダウンロードタスクを作成
+            from qgis.core import QgsTask, QgsApplication
+            
+            class DownloadTask(QgsTask):
+                def __init__(self, bbox_manager):
+                    super().__init__('BBOX Server Download', QgsTask.CanCancel)
+                    self.bbox_manager = bbox_manager
+                    self.success = False
+                    self.error = None
+                
+                def run(self):
+                    try:
+                        self.success = self.bbox_manager.download_server()
+                        return self.success
+                    except Exception as e:
+                        self.error = str(e)
+                        return False
+                
+                def finished(self, result):
+                    if result:
+                        on_complete()
+                    else:
+                        on_error(self.error or "Unknown error")
+            
+            task = DownloadTask(self.bbox_manager)
+            QgsApplication.taskManager().addTask(task)
+            
+        except Exception as e:
+            print(f"_start_bbox_download error: {e}")
+            import traceback
+            traceback.print_exc()
+    
+    def _start_bbox_server(self):
+        """BBoxサーバーを起動"""
+        try:
+            print("Starting BBox server...")
+            from qgis.core import QgsProject
+            
+            # ボタンを一時的に無効化
+            self.panel.pushButton_download_bbox.setEnabled(False)
+            self.panel.pushButton_download_bbox.setText(self.tr("起動中..."))
+            
+            # BBoxはOGC専用、固定ポート8080
+            bbox_port = 8080
+            success = self.bbox_manager.start_server(port=bbox_port, project=QgsProject.instance())
+            
+            if success:
+                self.panel.pushButton_download_bbox.setText(self.tr("停止"))
+                self.panel.pushButton_download_bbox.setEnabled(True)
+                self.iface.messageBar().pushMessage(
+                    self.tr("QMap Permalink"),
+                    self.tr(f"高速サーバー(OGC専用)が起動しました (port {bbox_port})"),
+                    duration=3
+                )
+                
+                # 接続テストを実行
+                import time
+                time.sleep(1)
+                if self.bbox_manager.test_connection():
+                    print("BBox server connection test passed!")
+                else:
+                    print("BBox server connection test failed!")
+                    self.iface.messageBar().pushMessage(
+                        self.tr("QMap Permalink"),
+                        self.tr("高速サーバーの接続テストに失敗しました。ログを確認してください。"),
+                        level=Qgis.Warning,
+                        duration=5
+                    )
+            else:
+                self.panel.pushButton_download_bbox.setText(self.tr("起動"))
+                self.panel.pushButton_download_bbox.setEnabled(True)
+                self.iface.messageBar().pushMessage(
+                    self.tr("QMap Permalink"),
+                    self.tr("高速サーバーの起動に失敗しました。ログを確認してください。"),
+                    level=Qgis.Warning,
+                    duration=5
+                )
+                
+        except Exception as e:
+            print(f"_start_bbox_server error: {e}")
+            import traceback
+            traceback.print_exc()
+            self.panel.pushButton_download_bbox.setText(self.tr("起動"))
+            self.panel.pushButton_download_bbox.setEnabled(True)
+    
+    def _stop_bbox_server(self):
+        """BBoxサーバーを停止"""
+        try:
+            print("Stopping BBox server...")
+            
+            # ボタンを一時的に無効化
+            self.panel.pushButton_download_bbox.setEnabled(False)
+            self.panel.pushButton_download_bbox.setText(self.tr("停止中..."))
+            
+            self.bbox_manager.stop_server()
+            
+            self.panel.pushButton_download_bbox.setText(self.tr("起動"))
+            self.panel.pushButton_download_bbox.setEnabled(True)
+            self.iface.messageBar().pushMessage(
+                self.tr("QMap Permalink"),
+                self.tr("高速サーバーを停止しました"),
+                duration=3
+            )
+            
+        except Exception as e:
+            print(f"_stop_bbox_server error: {e}")
+            import traceback
+            traceback.print_exc()
+            # エラー時もボタンを復元
+            self.panel.pushButton_download_bbox.setText(self.tr("停止"))
+            self.panel.pushButton_download_bbox.setEnabled(True)
 
     def update_theme_list(self):
         """パネルのテーマ一覧を更新"""
