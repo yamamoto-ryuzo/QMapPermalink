@@ -63,6 +63,51 @@ class BBoxServerManager(QObject):
         # ディレクトリ作成
         for d in [self.bin_dir, self.config_dir, self.data_dir, self.qgis_server_dir]:
             os.makedirs(d, exist_ok=True)
+
+        # プロジェクト読み込み後に設定を更新するためのフック
+        try:
+            from qgis.core import QgsProject
+            self._qgs = QgsProject.instance()
+
+            # Try to connect to several possible project-related signals.
+            # QGIS API names vary; attempt multiple common signals and ignore
+            # failures. Also provide a polling fallback if no signal is available.
+            try:
+                # emitted when a project is loaded from disk
+                self._qgs.projectLoaded.connect(self._on_project_loaded)
+            except Exception:
+                pass
+            try:
+                # emitted after project is read (older API)
+                self._qgs.readProject.connect(self._on_project_loaded)
+            except Exception:
+                pass
+            try:
+                # emitted when project is saved
+                self._qgs.projectSaved.connect(self._on_project_saved)
+            except Exception:
+                pass
+
+            # If no project file is currently available, start a short-lived
+            # polling timer to detect when the user opens/saves a project and
+            # then update the BBox config. This is a safe fallback across
+            # QGIS versions.
+            try:
+                from qgis.PyQt.QtCore import QTimer
+                if not self._qgs.fileName():
+                    self._project_poll_timer = QTimer()
+                    self._project_poll_timer.setInterval(1000)  # 1s
+                    self._project_poll_timer.timeout.connect(self._check_project_file)
+                    self._project_poll_timer.setSingleShot(False)
+                    self._project_poll_timer.start()
+                else:
+                    self._project_poll_timer = None
+            except Exception:
+                self._project_poll_timer = None
+
+        except Exception:
+            self._qgs = None
+            self._project_poll_timer = None
     
     def get_platform_info(self) -> Tuple[str, str]:
         """プラットフォーム情報を取得
@@ -655,6 +700,9 @@ class BBoxServerManager(QObject):
 
             config_lines.extend([
                 "# Map Server (QGIS Backend)",
+                "[mapserver]",
+                'backend = "qgis_backend"',
+                "",
                 "[mapserver.qgis_backend]",
                 f'project_basedir = "{project_basedir_value}"',
             ])
@@ -673,10 +721,39 @@ class BBoxServerManager(QObject):
                     'QMapPermalink', Qgis.Warning
                 )
 
+            # Ensure the backend section is explicitly enabled so bbox-server
+            # recognizes and attempts to start the QGIS backend.
+            config_lines.append('enabled = true')
+
+            # Decide what to write for the QGS path. Prefer the project file
+            # name relative to project_basedir when possible; otherwise use the
+            # absolute project file path.
+            try:
+                proj_basename = os.path.basename(project_used_path)
+            except Exception:
+                proj_basename = None
+
+            qgs_path_value = None
+            try:
+                # If project_basedir_value matches the project file's parent,
+                # write only the basename so BBOX will resolve it relative to
+                # project_basedir. Otherwise write the absolute path.
+                if project_dir and proj_basename:
+                    parent_norm = os.path.normpath(project_dir)
+                    cfg_parent_norm = os.path.normpath(project_basedir_value)
+                    if parent_norm == cfg_parent_norm:
+                        qgs_path_value = proj_basename
+                    else:
+                        qgs_path_value = project_used_path.replace('\\', '/')
+                else:
+                    qgs_path_value = project_used_path.replace('\\', '/') if project_used_path else '/qgis'
+            except Exception:
+                qgs_path_value = project_used_path.replace('\\', '/') if project_used_path else '/qgis'
+
             config_lines.extend([
                 "",
                 "[mapserver.qgis_backend.qgs]",
-                'path = "/qgis"',
+                f'path = "{qgs_path_value}"',
                 ""
             ])
         
@@ -914,3 +991,53 @@ class BBoxServerManager(QObject):
     def cleanup(self):
         """クリーンアップ"""
         self.stop_server()
+
+    # ---- Project load/save handlers ----
+    def _on_project_loaded(self, *args, **kwargs):
+        """Called when a QGIS project is loaded; regenerate bbox config."""
+        try:
+            from qgis.core import QgsProject, QgsMessageLog, Qgis
+            proj_file = QgsProject.instance().fileName()
+            if proj_file:
+                # regenerate config using the newly loaded project
+                try:
+                    self.create_config(self.current_port or self.BBOX_PORT, project=proj_file)
+                    QgsMessageLog.logMessage('BBox config updated after project load', 'QMapPermalink', Qgis.Info)
+                except Exception as e:
+                    QgsMessageLog.logMessage(f'Failed to update BBox config after project load: {e}', 'QMapPermalink', Qgis.Warning)
+
+                # stop polling if it was active
+                try:
+                    if getattr(self, '_project_poll_timer', None):
+                        self._project_poll_timer.stop()
+                        self._project_poll_timer = None
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
+    def _on_project_saved(self, *args, **kwargs):
+        """Called when a QGIS project is saved; regenerate bbox config."""
+        try:
+            from qgis.core import QgsProject, QgsMessageLog, Qgis
+            proj_file = QgsProject.instance().fileName()
+            if proj_file:
+                try:
+                    self.create_config(self.current_port or self.BBOX_PORT, project=proj_file)
+                    QgsMessageLog.logMessage('BBox config updated after project save', 'QMapPermalink', Qgis.Info)
+                except Exception as e:
+                    QgsMessageLog.logMessage(f'Failed to update BBox config after project save: {e}', 'QMapPermalink', Qgis.Warning)
+        except Exception:
+            pass
+
+    def _check_project_file(self):
+        """Polling fallback: check whether a project file has appeared."""
+        try:
+            from qgis.core import QgsProject
+            if not self._qgs:
+                self._qgs = QgsProject.instance()
+            if self._qgs and self._qgs.fileName():
+                # call loaded handler
+                self._on_project_loaded()
+        except Exception:
+            pass
