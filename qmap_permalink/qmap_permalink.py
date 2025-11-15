@@ -531,23 +531,21 @@ class QMapPermalink:
                                             reply = QMessageBox.question(
                                                 self.iface.mainWindow(),
                                                 self.tr("QMap Permalink"),
-                                                self.tr("高速サーバー(Rust)を起動しますか？\n標準サーバーは自動的に停止されます。"),
+                                                self.tr("高速サーバー(Rust)を起動しますか？\nOGC API専用でポート8080で動作します。\n標準サーバー(MapLibre等)は8089で継続します。"),
                                                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                                                 QMessageBox.StandardButton.Yes
                                             )
                                             if reply == QMessageBox.StandardButton.Yes:
-                                                # UIのポート番号を取得
-                                                port = self.panel.spinBox_port.value() if hasattr(self.panel, 'spinBox_port') else 8089
-                                                # 標準サーバーを停止
-                                                if self.server_manager.is_server_running():
-                                                    self.server_manager.stop_http_server()
-                                                # BBoxサーバーを同じポートで起動
-                                                success = self.bbox_manager.start_server(port=port)
+                                                # BBoxサーバーはOGC専用で固定ポート8080
+                                                bbox_port = 8080
+                                                # 標準サーバーは停止しない（MapLibre等で使用）
+                                                # BBoxサーバーを別ポートで起動
+                                                success = self.bbox_manager.start_server(port=bbox_port)
                                                 if success:
                                                     self.panel.pushButton_download_bbox.setText(self.tr("起動中"))
                                                     self.iface.messageBar().pushMessage(
                                                         self.tr("QMap Permalink"),
-                                                        self.tr(f"高速サーバーが起動しました (port {port})"),
+                                                        self.tr(f"高速サーバー(OGC専用)が起動しました (port {bbox_port})"),
                                                         duration=3
                                                     )
                                         else:
@@ -605,22 +603,21 @@ class QMapPermalink:
                                     reply = QMessageBox.question(
                                         self.iface.mainWindow(),
                                         self.tr("QMap Permalink"),
-                                        self.tr("高速サーバー(Rust)を起動しますか？\n標準サーバーは自動的に停止されます。"),
+                                        self.tr("高速サーバー(Rust)を起動しますか？\nOGC API専用でポート8080で動作します。\n標準サーバー(MapLibre等)は8089で継続します。"),
                                         QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                                         QMessageBox.StandardButton.Yes
                                     )
                                     if reply == QMessageBox.StandardButton.Yes:
                                         print("Starting BBox server...")
-                                        # UIのポート番号を取得
-                                        port = self.panel.spinBox_port.value() if hasattr(self.panel, 'spinBox_port') else 8089
-                                        if self.server_manager.is_server_running():
-                                            self.server_manager.stop_http_server()
-                                        success = self.bbox_manager.start_server(port=port)
+                                        # BBoxサーバーはOGC専用で固定ポート8080
+                                        bbox_port = 8080
+                                        # 標準サーバーは停止しない（MapLibre等で使用）
+                                        success = self.bbox_manager.start_server(port=bbox_port)
                                         print(f"BBox server start result: {success}")
                                         if success:
                                             self.iface.messageBar().pushMessage(
                                                 self.tr("QMap Permalink"),
-                                                self.tr(f"高速サーバーが起動しました (port {port})"),
+                                                self.tr(f"高速サーバー(OGC専用)が起動しました (port {bbox_port})"),
                                                 duration=3
                                             )
                                     else:

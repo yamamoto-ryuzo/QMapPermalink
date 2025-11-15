@@ -35,7 +35,7 @@ class BBoxServerManager(QObject):
     status_changed = pyqtSignal(str)
     
     BBOX_VERSION = "0.6.2"
-    BBOX_PORT = 8000  # デフォルトポート (標準サーバーと同じ)
+    BBOX_PORT = 8080  # デフォルトポート (OGC API専用、標準サーバーは8089)
     
     def __init__(self, plugin_dir: str):
         super().__init__()
