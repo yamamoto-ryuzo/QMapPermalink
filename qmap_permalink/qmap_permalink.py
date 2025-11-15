@@ -526,10 +526,10 @@ class QMapPermalink:
                                                 self.iface.mainWindow(),
                                                 self.tr("QMap Permalink"),
                                                 self.tr("高速サーバー(Rust)を起動しますか？\n標準サーバーは自動的に停止されます。"),
-                                                QMessageBox.Yes | QMessageBox.No,
-                                                QMessageBox.Yes
+                                                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                                                QMessageBox.StandardButton.Yes
                                             )
-                                            if reply == QMessageBox.Yes:
+                                            if reply == QMessageBox.StandardButton.Yes:
                                                 # 標準サーバーを停止
                                                 if self.server_manager.is_server_running():
                                                     self.server_manager.stop_http_server()
@@ -598,10 +598,10 @@ class QMapPermalink:
                                         self.iface.mainWindow(),
                                         self.tr("QMap Permalink"),
                                         self.tr("高速サーバー(Rust)を起動しますか？\n標準サーバーは自動的に停止されます。"),
-                                        QMessageBox.Yes | QMessageBox.No,
-                                        QMessageBox.Yes
+                                        QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                                        QMessageBox.StandardButton.Yes
                                     )
-                                    if reply == QMessageBox.Yes:
+                                    if reply == QMessageBox.StandardButton.Yes:
                                         print("Starting BBox server...")
                                         if self.server_manager.is_server_running():
                                             self.server_manager.stop_http_server()
