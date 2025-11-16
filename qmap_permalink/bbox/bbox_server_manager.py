@@ -758,7 +758,88 @@ class BBoxServerManager(QObject):
             ])
         
         config_content = "\n".join(config_lines)
-        
+        # If an existing config file contains [[collection]] blocks, preserve them
+        try:
+            if os.path.exists(config_path):
+                with open(config_path, 'r', encoding='utf-8') as ef:
+                    existing = ef.read()
+
+                # extract any existing [[collection]] blocks and normalize them
+                collection_entries = []
+                lines = existing.splitlines()
+                i = 0
+                while i < len(lines):
+                    if lines[i].strip() == '[[collection]]':
+                        # parse following key/value lines for name, source, srs
+                        i += 1
+                        entry = {"name": None, "source": None, "srs": None}
+                        while i < len(lines):
+                            ln = lines[i].strip()
+                            if ln == '' or ln.startswith('['):
+                                break
+                            # parse key = value
+                            if '=' in ln:
+                                parts = ln.split('=', 1)
+                                key = parts[0].strip()
+                                val = parts[1].strip()
+                                # remove surrounding quotes if present
+                                if val.startswith('"') and val.endswith('"'):
+                                    val_unq = val[1:-1]
+                                else:
+                                    val_unq = val
+                                if key == 'name':
+                                    entry['name'] = val_unq
+                                elif key == 'srs':
+                                    entry['srs'] = val_unq
+                                elif key == 'source':
+                                    # source may be a simple string or an inline table
+                                    if val_unq.startswith('{'):
+                                        # attempt to extract file or path from inline table
+                                        inner = val_unq.strip('{} ').strip()
+                                        # split by commas
+                                        parts2 = [p.strip() for p in inner.split(',') if '=' in p]
+                                        src_path = None
+                                        for p2 in parts2:
+                                            k2, v2 = p2.split('=', 1)
+                                            k2 = k2.strip()
+                                            v2 = v2.strip()
+                                            if v2.startswith('"') and v2.endswith('"'):
+                                                v2 = v2[1:-1]
+                                            if k2 in ('file', 'path', 'source'):
+                                                src_path = v2
+                                                break
+                                        entry['source'] = src_path
+                                    else:
+                                        # plain string path
+                                        if val_unq.startswith('"') and val_unq.endswith('"'):
+                                            entry['source'] = val_unq[1:-1]
+                                        else:
+                                            entry['source'] = val_unq
+                            i += 1
+                        if entry['name'] or entry['source']:
+                            collection_entries.append(entry)
+                    else:
+                        i += 1
+
+                if collection_entries:
+                    # Append normalized collection entries using file+format form
+                    config_content = config_content + "\n"
+                    for e in collection_entries:
+                        src = e.get('source') or ''
+                        src = src.replace('\\', '/')
+                        name = e.get('name') or ''
+                        srs = e.get('srs') or 'EPSG:4326'
+                        # default format detection from extension
+                        fmt = 'geojson' if src.lower().endswith('.geojson') or src.lower().endswith('.json') else ''
+                        if not fmt:
+                            fmt = 'geojson'
+                        config_content += f"[[collection]]\n"
+                        config_content += f"name = \"{name}\"\n"
+                        config_content += f"source = {{ path = \"{src}\", format = \"{fmt}\" }}\n"
+                        config_content += f"srs = \"{srs}\"\n\n"
+        except Exception as e:
+            print(f"Warning: failed to preserve existing collections: {e}")
+
         with open(config_path, 'w', encoding='utf-8') as f:
             f.write(config_content)
         
@@ -845,7 +926,7 @@ class BBoxServerManager(QObject):
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
                     startupinfo=startupinfo,
-                    cwd=self.plugin_dir,
+                    cwd=self.bbox_root,
                     env=env  # 環境変数を渡す
                 )
             else:
@@ -854,7 +935,7 @@ class BBoxServerManager(QObject):
                     [exe_path, '--config', config_path, 'serve', config_path],
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
-                    cwd=self.plugin_dir,
+                    cwd=self.bbox_root,
                     env=env  # 環境変数を渡す
                 )
             

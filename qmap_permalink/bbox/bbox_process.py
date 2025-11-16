@@ -20,6 +20,14 @@ class BBoxProcessManager:
         """プロセスマネージャーを初期化"""
         self.process: Optional[subprocess.Popen] = None
         self.bbox_binary: Optional[Path] = None
+        # Determine plugin root and bbox root so we can set cwd when starting
+        plugin_dir = Path(__file__).parent.parent
+        try:
+            plugins_root = plugin_dir.parent
+            self.bbox_root = plugins_root / 'bbox'
+        except Exception:
+            self.bbox_root = plugin_dir / 'bbox'
+
         self._find_bbox_binary()
         
     def _find_bbox_binary(self) -> Optional[Path]:
@@ -135,12 +143,22 @@ class BBoxProcessManager:
             )
             
             # プロセス起動
+            cwd = None
+            try:
+                # Prefer starting the server from the sibling 'bbox' plugin root so
+                # relative paths in the config (e.g. 'data/...') resolve correctly.
+                if hasattr(self, 'bbox_root') and self.bbox_root and self.bbox_root.exists():
+                    cwd = str(self.bbox_root)
+            except Exception:
+                cwd = None
+
             self.process = subprocess.Popen(
                 cmd,
                 env=env,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 stdin=subprocess.DEVNULL,
+                cwd=cwd,
                 creationflags=subprocess.CREATE_NO_WINDOW if platform.system() == "Windows" else 0
             )
             

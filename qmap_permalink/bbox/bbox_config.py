@@ -19,9 +19,17 @@ class BBoxConfig:
             config_path: 設定ファイルパス（Noneの場合は自動生成）
         """
         if config_path is None:
-            plugin_dir = Path(__file__).parent.parent
-            # Use the same default filename as BBoxServerManager.create_config()
-            self.config_path = plugin_dir / "bbox" / "config" / "bbox.toml"
+            try:
+                # Prefer installed plugin location so sibling plugins/bbox is used
+                import qmap_permalink as _pkg
+                plugin_dir = Path(_pkg.__file__).resolve().parent
+                plugins_root = plugin_dir.parent
+                bbox_root = plugins_root / 'bbox'
+                # Use the same default filename as BBoxServerManager.create_config()
+                self.config_path = bbox_root / 'config' / 'bbox.toml'
+            except Exception:
+                plugin_dir = Path(__file__).parent.parent
+                self.config_path = plugin_dir / "bbox" / "config" / "bbox.toml"
         else:
             self.config_path = Path(config_path)
         
@@ -187,10 +195,18 @@ class BBoxConfig:
         
         # フィーチャーコレクション
         for collection in self.config["collections"]:
+            # Use table-style source so implementations that expect structured
+            # collection sources (e.g. file path + format) can parse it more
+            # reliably. Many BBOX server configs accept a 'source' table.
+            src = collection["source"].replace('\\', '/')
+            # Try to emit a 'file' style source with explicit format to match
+            # possible BBOX server expected variants.
+            # Example: source = { file = "data/foo.geojson", format = "geojson" }
+            fmt = "geojson"
             lines.extend([
                 "[[collection]]",
                 f'name = "{collection["name"]}"',
-                f'source = "{collection["source"]}"',
+                f'source = {{ path = "{src}", format = "{fmt}" }}',
                 f'srs = "{collection["srs"]}"',
                 ""
             ])

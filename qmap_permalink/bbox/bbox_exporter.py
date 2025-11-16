@@ -23,8 +23,16 @@ class BBoxExporter:
             output_dir: 出力先ディレクトリ（Noneの場合は自動設定）
         """
         if output_dir is None:
-            plugin_dir = Path(__file__).parent.parent
-            self.output_dir = plugin_dir / "bbox" / "data"
+            try:
+                # Prefer installed plugin location so sibling plugins/bbox is used
+                import qmap_permalink as _pkg
+                plugin_dir = Path(_pkg.__file__).resolve().parent
+                plugins_root = plugin_dir.parent
+                bbox_root = plugins_root / 'bbox'
+                self.output_dir = bbox_root / 'data'
+            except Exception:
+                plugin_dir = Path(__file__).parent.parent
+                self.output_dir = plugin_dir / "bbox" / "data"
         else:
             self.output_dir = Path(output_dir)
         

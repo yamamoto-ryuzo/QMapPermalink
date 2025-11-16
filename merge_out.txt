@@ -1,0 +1,1 @@
+C:\Users\ryu.RYU-NOTE\AppData\Local\Microsoft\WindowsApps\python.exe: can't open file 'C:\\github\\QMapPermalink\\qmap_permalink\\scripts\\merge_bbox_configs.py': [Errno 2] No such file or directory

@@ -96,27 +96,14 @@ class BBoxManager:
             except Exception:
                 proj_file = None
 
-            copied_files = []
-            if proj_file:
-                try:
-                    import shutil
-                    proj_dir = Path(proj_file).parent
-                    target_dir = proj_dir / 'qmap_permalink_bbox_data'
-                    target_dir.mkdir(parents=True, exist_ok=True)
-
-                    for src in exported_files:
-                        dst = target_dir / src.name
-                        try:
-                            shutil.copy2(src, dst)
-                            copied_files.append(dst)
-                        except Exception:
-                            # コピーに失敗したら元のファイルパスを使う
-                            copied_files.append(src)
-
-                except Exception:
-                    copied_files = exported_files
-            else:
-                copied_files = exported_files
+            # Prefer using exporter output directory (usually plugins/bbox/data).
+            # Historically we copied exports into the project directory and
+            # wrote collection sources relative to the project. That caused
+            # the BBOX server to be unable to resolve paths when the
+            # server's config did not include the project_basedir. To avoid
+            # that, do not copy files into the project by default — use the
+            # exporter output location which is the canonical bbox/data.
+            copied_files = exported_files
             
             if not exported_files:
                 QgsMessageLog.logMessage(
