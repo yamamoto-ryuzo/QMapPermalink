@@ -23,16 +23,27 @@ class BBoxExporter:
             output_dir: 出力先ディレクトリ（Noneの場合は自動設定）
         """
         if output_dir is None:
+            # Prefer project-local storage: put exported data under the current
+            # QGIS project's folder so collections reference project-relative paths.
             try:
-                # Prefer installed plugin location so sibling plugins/bbox is used
-                import qmap_permalink as _pkg
-                plugin_dir = Path(_pkg.__file__).resolve().parent
-                plugins_root = plugin_dir.parent
-                bbox_root = plugins_root / 'bbox'
-                self.output_dir = bbox_root / 'data'
+                from qgis.core import QgsProject
+                proj_file = QgsProject.instance().fileName()
+                if proj_file:
+                    proj_dir = Path(proj_file).resolve().parent
+                    self.output_dir = proj_dir / 'bbox' / 'data'
+                else:
+                    raise Exception("Project file not saved")
             except Exception:
-                plugin_dir = Path(__file__).parent.parent
-                self.output_dir = plugin_dir / "bbox" / "data"
+                # Fallback: use installed plugin sibling 'bbox/data'
+                try:
+                    import qmap_permalink as _pkg
+                    plugin_dir = Path(_pkg.__file__).resolve().parent
+                    plugins_root = plugin_dir.parent
+                    bbox_root = plugins_root / 'bbox'
+                    self.output_dir = bbox_root / 'data'
+                except Exception:
+                    plugin_dir = Path(__file__).parent.parent
+                    self.output_dir = plugin_dir / "bbox" / "data"
         else:
             self.output_dir = Path(output_dir)
         
