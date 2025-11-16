@@ -122,6 +122,41 @@ WMTS GetCapabilities と TileMatrix
   - `MatrixWidth` / `MatrixHeight`（各ズームで `2**z`）
 - 実務上は完全な WMTS 仕様を満たすためにさらに `OperationsMetadata` 等を含めることが望ましいが、本実装はクライアント互換性を優先して `ResourceURL` と `TileMatrix` を提供することで多くのクライアントが利用可能になる。
 
+### 補足: 実装上の最新修正 (2025-11-16)
+
+- 本リポジトリでは軽量な「WMTS 風」ハンドラを提供しており、以下の点を優先して実装・改善を行いました:
+  - GetCapabilities 応答を OWS 名前空間や `OperationsMetadata`、`ResourceURL`、`TileMatrixSet` / `TileMatrix`、および `TileMatrixSetLimits` を含む形で拡張し、より多くのクライアントとの互換性を高めました。
+  - `ResourceURL` と `ServiceMetadataURL` にはサーバ側で算出した短い identity（`?v=<identity_short>`）を付与するオプションを導入し、クライアント側でタイルのキャッシュ更新を検知できるようにしています。identity は表示中のレイヤ ID とスタイル ID を組み合わせたハッシュに基づきます（実装関数名: `_get_identity_info()`）。
+  - 既存の利便性のため、必ず `/wmts/{z}/{x}/{y}.png`（XYZ）パスベースのエンドポイントを提供します。これは WMTS ResourceURL のテンプレートとは別に維持され、MapLibre 等のクライアントが直接参照できます。
+  - TMS 互換のため `tms=1`（または `tms=true`）クエリパラメータをサポートし、必要に応じて内部で `y` を反転してレンダリングします。
+
+- 実装上の注意点と最近の修正:
+  - GetCapabilities を生成する際に大きなインライン文字列を扱うため、編集でインデントや波括弧の扱いに注意が必要です（実際に編集時にインデント不整合が発生したため修正パッチを適用済み）。
+  - `qmap_permalink/qmap_wmts_service.py` 側で次の補強を行いました: `_validate_tile_coords` ヘルパの追加、GetCapabilities 分岐からの不適切なコード断片削除、`z/x/y` のローカル変数初期化、コメント内の波括弧エスケープ等。
+  - これらの変更を反映するには、プラグインの HTTP サーバー（または QGIS）を再起動する必要があります。稼働中の Python プロセスはディスク上のモジュールを自動で再読み込みしないためです。
+
+### GetCapabilities の検証
+
+- リポジトリに検証用スクリプト `tools/validate_wmts_capabilities.py` を追加しています。ローカルの実行手順は次の通りです。
+
+  1. GetCapabilities をダウンロードして一時ファイルに保存します（スクリプトが自動で行います）。
+  2. XSD による検証を行うには `lxml` をインストールするか、`xmlschema` によるフォールバックを使います。
+
+  推奨コマンド（PowerShell）:
+  ```powershell
+  # lxml を使う（推奨）
+  python -m pip install lxml
+  python .\tools\validate_wmts_capabilities.py --url "http://localhost:8089/wmts?SERVICE=WMTS&REQUEST=GetCapabilities"
+
+  # あるいは xmlschema を使う（ビルド不要）
+  python -m pip install xmlschema
+  python -c "import xmlschema; xmlschema.XMLSchema('http://schemas.opengis.net/wmts/1.0/wmtsGetCapabilities_response.xsd').validate(r'C:\\Users\\<you>\\AppData\\Local\\Temp\\wmts_cap_<id>.xml'); print('validation OK')"
+  ```
+
+  - 検証中に HTTP 500 や Import/Indentation のトレースバックが出る場合は、QGIS の Message Log を確認してください（カテゴリ: `QMapPermalink`）。プラグインの初期化時にモジュールの文法エラーや例外が発生すると WMTS サービスが None となり HTTP 501 を返すため、トレースバックの共有が迅速な修正に役立ちます。
+
+---
+
 TMS（y 反転）オプション
 - 背景: 一部のタイル配列（TMS）ではタイルの Y 起点が bottom-left（左下）であるのに対し、一般的な XYZ（slippy map）では top-left（左上）を起点とする。
 - 影響: クライアントとサーバで起点解釈が一致しないと、同じ z/x/y で上下逆の領域が返却される。
