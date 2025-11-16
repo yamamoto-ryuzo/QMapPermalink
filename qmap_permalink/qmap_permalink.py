@@ -2208,12 +2208,56 @@ class QMapPermalink:
         clipboard = QApplication.clipboard()
         success = False
 
+        # Qt enum compatibility: QClipboard.Clipboard / QClipboard.Selection may
+        # be scoped differently depending on PyQt/Qt version (Qt5 vs Qt6).
+        try:
+            CLIP_MODE = QClipboard.Clipboard
+            SEL_MODE = QClipboard.Selection
+        except Exception:
+            try:
+                CLIP_MODE = QClipboard.Mode.Clipboard
+                SEL_MODE = QClipboard.Mode.Selection
+            except Exception:
+                CLIP_MODE = None
+                SEL_MODE = None
+
         for _ in range(3):
-            clipboard.setText(permalink_url, mode=QClipboard.Clipboard)
+            # Use mode argument only if available; some bindings don't accept it.
+            try:
+                if CLIP_MODE is not None:
+                    clipboard.setText(permalink_url, mode=CLIP_MODE)
+                else:
+                    clipboard.setText(permalink_url)
+            except TypeError:
+                # Fallback if signature differs
+                try:
+                    clipboard.setText(permalink_url)
+                except Exception:
+                    pass
+
             QApplication.processEvents()
-            if clipboard.text(mode=QClipboard.Clipboard) == permalink_url:
-                if clipboard.supportsSelection():
-                    clipboard.setText(permalink_url, mode=QClipboard.Selection)
+
+            try:
+                current_text = clipboard.text(mode=CLIP_MODE) if CLIP_MODE is not None else clipboard.text()
+            except TypeError:
+                current_text = clipboard.text()
+
+            if current_text == permalink_url:
+                try:
+                    if SEL_MODE is not None and clipboard.supportsSelection():
+                        try:
+                            clipboard.setText(permalink_url, mode=SEL_MODE)
+                        except TypeError:
+                            clipboard.setText(permalink_url)
+                    elif clipboard.supportsSelection():
+                        # older bindings may accept selection via keywordless call
+                        try:
+                            clipboard.setText(permalink_url)
+                        except Exception:
+                            pass
+                except Exception:
+                    # ignore selection-related failures
+                    pass
                 success = True
                 break
             QThread.msleep(50)
