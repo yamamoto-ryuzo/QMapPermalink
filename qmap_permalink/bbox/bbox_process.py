@@ -100,7 +100,7 @@ class BBoxProcessManager:
             return False
         return self.process.poll() is None
     
-    def start(self, config_file: Optional[Path] = None, port: int = 8080) -> bool:
+    def start(self, config_file: Optional[Path] = None, port: int = 8080, cwd: Optional[Path] = None) -> bool:
         """BBOX Serverを起動
         
         Args:
@@ -143,14 +143,18 @@ class BBoxProcessManager:
             )
             
             # プロセス起動
-            cwd = None
+            proc_cwd = None
             try:
-                # Prefer starting the server from the sibling 'bbox' plugin root so
-                # relative paths in the config (e.g. 'data/...') resolve correctly.
-                if hasattr(self, 'bbox_root') and self.bbox_root and self.bbox_root.exists():
-                    cwd = str(self.bbox_root)
+                # If caller provided a cwd (e.g. project_basedir), prefer it.
+                if cwd is not None:
+                    proc_cwd = str(cwd)
+                else:
+                    # Fallback: Prefer starting the server from the sibling 'bbox' plugin root so
+                    # relative paths in the config (e.g. 'data/...') resolve correctly.
+                    if hasattr(self, 'bbox_root') and self.bbox_root and self.bbox_root.exists():
+                        proc_cwd = str(self.bbox_root)
             except Exception:
-                cwd = None
+                proc_cwd = None
 
             self.process = subprocess.Popen(
                 cmd,
@@ -158,7 +162,7 @@ class BBoxProcessManager:
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 stdin=subprocess.DEVNULL,
-                cwd=cwd,
+                cwd=proc_cwd,
                 creationflags=subprocess.CREATE_NO_WINDOW if platform.system() == "Windows" else 0
             )
             

@@ -11,14 +11,12 @@ QMapPermalinkとBBOX Serverを統合し、以下の機能を提供:
 __version__ = "1.0.0"
 __all__ = [
     "BBoxManager",
-    "BBoxExporter", 
     "BBoxConfig",
     "BBoxProcessManager",
     "BBoxServerManager"
 ]
 
 from .bbox_manager import BBoxManager
-from .bbox_exporter import BBoxExporter
 from .bbox_config import BBoxConfig
 from .bbox_process import BBoxProcessManager
 from .bbox_server_manager import BBoxServerManager

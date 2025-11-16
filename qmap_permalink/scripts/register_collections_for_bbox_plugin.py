@@ -57,27 +57,29 @@ def register_project_collections_to_bbox_plugin(auto_restart: bool = False, form
         # Ensure data dir exists
         data_dir.mkdir(parents=True, exist_ok=True)
 
-        # Use exporter but target the bbox plugin's data dir
-        try:
-            from qmap_permalink.bbox.bbox_exporter import BBoxExporter
-        except Exception as e:
-            print(f"Failed to import BBoxExporter: {e}")
-            return False
-
-        # Export using exporter targeting the bbox plugin's data dir, then
-        # generate config using the high-level BBoxManager so that
-        # [[collection]] entries are created.
+        # Note: automatic exporter was removed from the plugin to avoid
+        # unintended data duplication. This script now generates the
+        # BBOX config by scanning the current QGIS project directory for
+        # pre-prepared GeoJSON/GPKG/MBTiles files and writes the config
+        # into the sibling bbox plugin config (same behavior as the
+        # plugin's BBoxManager).
         try:
             from qmap_permalink.bbox.bbox_manager import BBoxManager
+            from pathlib import Path
+
             bm = BBoxManager()
 
-            # Ensure exporter writes into the detected bbox plugin data dir
-            bm.exporter.output_dir = data_dir
-            bm.exporter.output_dir.mkdir(parents=True, exist_ok=True)
+            # If we have a saved project, prefer to set the project_basedir
+            # so generated config uses project-relative paths where possible.
+            try:
+                proj_dir = Path(proj_file).resolve().parent
+                bm.config_manager.project_basedir = proj_dir
+            except Exception:
+                pass
 
             success = bm.export_and_configure(format=format)
             if not success:
-                print("export_and_configure failed. Check QGIS Python Console for errors.")
+                print("export_and_configure failed. Check QGIS Python Console for messages.")
                 return False
 
             cfg = bm.config_manager.config_path
@@ -90,14 +92,14 @@ def register_project_collections_to_bbox_plugin(auto_restart: bool = False, form
                         print("Restarting BBox server to pick up new config...")
                         pm.stop()
                     print("Starting BBox server...")
-                    pm.start(config_file=cfg)
+                    pm.start(config_file=cfg, cwd=bm.config_manager.project_basedir)
                     print("BBox server started via process_manager.")
                 except Exception as e:
                     print(f"Failed to restart/start BBox server via process_manager: {e}")
 
             return True
         except Exception as e:
-            print(f"Unexpected error while exporting/configuring via BBoxManager: {e}")
+            print(f"Unexpected error while generating config via BBoxManager: {e}")
             return False
 
     except Exception as e:
