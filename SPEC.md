@@ -211,8 +211,9 @@ WMTS キャッシュと identity（V3.1.0）
 - **WMTS タイルサイズ（TileWidth/TileHeight）**: `256`（`qmap_wmts_service.py` 内の `tile_size = 256` を既定として GetCapabilities 出力や座標変換で使用）。
 - **WMTS キャッシュディレクトリ**: モジュール相対の `.cache/wmts/`（`qmap_wmts_service.py` 内で `os.path.join(os.path.dirname(__file__), '.cache', 'wmts')` により作成）。identity 毎のサブディレクトリに分離される。
 - **内部推奨値（実装済み）**: 本仕様で設計上の推奨値として示している各パラメータは、実装側で環境変数またはコンストラクタ引数により上書き可能になりました。利用可能な設定と対応する環境変数は以下の通りです。
-  - `max_render_workers` — (デフォルト: cpu_count() - 1 相当)、環境変数: `QMAP_MAX_RENDER_WORKERS`
+  - `max_render_workers` — (計算: `cpu_count() - 1`、ただし最低値 `6` を採用)。
   - `max_io_workers` — (デフォルト: 20)、環境変数: `QMAP_MAX_IO_WORKERS`
+  - `wmts_prewarm_workers` — (計算: `cpu_count() - 1`、ただし最低値 `6` を採用)。
   - `request_timeout_s` — (デフォルト: 10 秒)、環境変数: `QMAP_REQUEST_TIMEOUT_S`
   - `retry_count` — (デフォルト: 2)、環境変数: `QMAP_RETRY_COUNT`
   - `max_image_dimension` — (デフォルト: 4096)、環境変数: `QMAP_MAX_IMAGE_DIMENSION`（WMS 出力ピクセル上限）
