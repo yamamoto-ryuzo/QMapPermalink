@@ -95,6 +95,7 @@ MapLibre（`/maplibre`）
 WMS (`/wms`):
 - GetCapabilities を返す（WMS 1.3.0 準拠）
 - GetMap の必須パラメータ: `CRS`（または `SRS`）、`BBOX`、`WIDTH`、`HEIGHT`、`FORMAT`。
+- エラー応答: WMS のエラーは OWS スタイルの `ExceptionReport`（XML）で返却するよう改善しました。これにより多くの OGC クライアントが期待する形式で詳細なエラー情報を受け取れます。
 - `ANGLE` パラメータを受け付ける（デフォルト 0）。
 - `BBOX` が無い、またはパース失敗の場合はエラー（MissingParameterValue 等）を返す。暗黙のフォールバックは行わない。
 

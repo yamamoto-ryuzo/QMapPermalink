@@ -23,6 +23,28 @@
  This script initializes the plugin, making it known to QGIS.
 """
 
+# Ensure sys.stderr is usable at import time. Some host environments set
+# sys.stderr to None which causes third-party modules (e.g. numpy) to fail
+# when they attempt to write diagnostic messages during import. Protect
+# against that by providing a safe fallback as early as possible.
+try:
+    import sys, io, os
+    if getattr(sys, 'stderr', None) is None:
+        if getattr(sys, '__stderr__', None) is not None:
+            sys.stderr = sys.__stderr__
+        else:
+            try:
+                sys.stderr = io.TextIOWrapper(open(os.devnull, 'w', encoding='utf-8'))
+            except Exception:
+                try:
+                    sys.stderr = io.StringIO()
+                except Exception:
+                    # give up silently; later imports may still fail
+                    pass
+except Exception:
+    # Never raise from import-time guard
+    pass
+
 
 # noinspection PyPep8Naming
 def classFactory(iface):  # pylint: disable=invalid-name
@@ -34,5 +56,27 @@ def classFactory(iface):  # pylint: disable=invalid-name
     Returns:
         QMapPermalinkクラスのインスタンス
     """
+    # Ensure sys.stderr is usable: some host environments (embedders
+    # or GUI apps) may set sys.stderr to None which causes libraries
+    # (e.g. numpy) to fail when they attempt to write error messages.
+    try:
+        import sys, io, os
+        if getattr(sys, 'stderr', None) is None:
+            if getattr(sys, '__stderr__', None) is not None:
+                sys.stderr = sys.__stderr__
+            else:
+                # Fallback to a devnull text wrapper so write() exists.
+                try:
+                    sys.stderr = io.TextIOWrapper(open(os.devnull, 'w', encoding='utf-8'))
+                except Exception:
+                    # Last-resort: an in-memory stream
+                    try:
+                        sys.stderr = io.StringIO()
+                    except Exception:
+                        pass
+    except Exception:
+        # Don't let secondary errors prevent plugin loading
+        pass
+
     from .qmap_permalink import QMapPermalink
     return QMapPermalink(iface)
