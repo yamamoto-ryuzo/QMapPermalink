@@ -498,8 +498,3 @@ WMTS キャッシュと identity（V3.1.0）
   `http://localhost:8089/wmts/15/17500/10600.png`
 - Google Earth 例:
   `https://earth.google.com/web/@35.683709,139.759407,32.0367a,160699.3553d,1y,0h,0t,0r`
-
----
-## 完了条件 / 次のステップ
-- この `SPEC.md` をレビューして承認を得る。
-- 承認後、必要に応じて `qmap_permalink` の各モジュールに単体テストを追加する（特に URL パーサと WMTS タイル計算）。
