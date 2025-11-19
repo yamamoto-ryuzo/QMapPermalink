@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<WMS_Capabilities version="1.3.0" xmlns="http://www.opengis.net/wms" xmlns:ows="http://www.opengis.net/ows" xmlns:xlink="http://www.w3.org/1999/xlink">
+    <Service>
+        <Name>WMS</Name>
+        <Title>QMap</Title>
+        <Abstract>Dynamic WMS service exposing the current QGIS map view</Abstract>
+        <OnlineResource xlink:href="http://localhost:8089/wms"/>
+    </Service>
+    <Capability>
+        <Request>
+            <GetCapabilities>
+                <Format>text/xml</Format>
+                <DCPType>
+                    <HTTP>
+                        <Get><OnlineResource xlink:href="http://localhost:8089/wms"/></Get>
+                        <Post><OnlineResource xlink:href="http://localhost:8089/wms"/></Post>
+                    </HTTP>
+                </DCPType>
+            </GetCapabilities>
+            <GetMap>
+                <Format>image/png</Format>
+                <Format>image/jpeg</Format>
+                <Format>image/png; mode=8bit</Format>
+                <DCPType>
+                    <HTTP>
+                        <Get><OnlineResource xlink:href="http://localhost:8089/wms"/></Get>
+                        <Post><OnlineResource xlink:href="http://localhost:8089/wms"/></Post>
+                    </HTTP>
+                </DCPType>
+            </GetMap>
+        </Request>
+        <Exception>
+            <Format>application/vnd.ogc.se_xml</Format>
+            <Format>text/xml</Format>
+        </Exception>
+        <Layer>
+            <Title>QMap</Title>
+            <Abstract>Current QGIS map view exported by QMapPermalink</Abstract>
+      <CRS>EPSG:3857</CRS>
+      <CRS>EPSG:4326</CRS>
+      <EX_GeographicBoundingBox>
+        <westBoundLongitude>-180</westBoundLongitude>
+        <eastBoundLongitude>180</eastBoundLongitude>
+        <southBoundLatitude>-90</southBoundLatitude>
+        <northBoundLatitude>90</northBoundLatitude>
+      </EX_GeographicBoundingBox>
+      <BoundingBox CRS="EPSG:3857" minx="-20037508.34" miny="-20037508.34" maxx="20037508.34" maxy="20037508.34"/>
+      <BoundingBox CRS="EPSG:4326" minx="-180" miny="-90" maxx="180" maxy="90"/>
+      <Layer>
+        <Name>DM_C_e155b9a9_9c15_4ad6_bed8_60341174445f</Name>
+        <Title>DM_C</Title>
+        <CRS>EPSG:3857</CRS>
+        <CRS>EPSG:4326</CRS>
+      </Layer>
+      <Layer>
+        <Name>DM_1_86aab25f_dbf5_47f7_ad0b_2c85f3fd4824</Name>
+        <Title>DM_1</Title>
+        <CRS>EPSG:3857</CRS>
+        <CRS>EPSG:4326</CRS>
+      </Layer>
+      <Layer>
+        <Name>DM_3_2467d90e_df62_495f_b906_28c20df6531f</Name>
+        <Title>DM_3</Title>
+        <CRS>EPSG:3857</CRS>
+        <CRS>EPSG:4326</CRS>
+      </Layer>
+      <Layer>
+        <Name>_____5585fdb6_0644_49cd_a6a9_9b76e7435af8</Name>
+        <Title>行政区域</Title>
+        <CRS>EPSG:3857</CRS>
+        <CRS>EPSG:4326</CRS>
+      </Layer>
+      <Layer>
+        <Name>dummy_b0e38718_9239_496a_b841_c88036adcc32</Name>
+        <Title>都道府県名</Title>
+        <CRS>EPSG:3857</CRS>
+        <CRS>EPSG:4326</CRS>
+      </Layer>
+      <Layer>
+        <Name>______179770f2_142a_426a_bfae_19e640719f55</Name>
+        <Title>市区町村名</Title>
+        <CRS>EPSG:3857</CRS>
+        <CRS>EPSG:4326</CRS>
+      </Layer>
+      <Layer>
+        <Name>_4374df63_59cf_440a_af8e_469ec6ee0c0c</Name>
+        <Title>Google Streets</Title>
+        <CRS>EPSG:3857</CRS>
+        <CRS>EPSG:4326</CRS>
+      </Layer>
+    </Layer>
+  </Capability>
+</WMS_Capabilities>

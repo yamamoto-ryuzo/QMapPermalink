@@ -1,0 +1,37 @@
+{
+  "started_at": "2025-11-19T09:30:59.315492Z",
+  "base_url": "http://localhost:8089",
+  "cases": [
+    {
+      "name": "getcapabilities",
+      "status": 200,
+      "saved": "C:\\github\\QMapPermalink\\tmp\\auto\\getcapabilities.txt",
+      "error": null
+    },
+    {
+      "name": "getmap_epsg4326",
+      "status": 200,
+      "saved": "C:\\github\\QMapPermalink\\tmp\\auto\\getmap_epsg4326.png",
+      "error": null
+    },
+    {
+      "name": "getmap_epsg3857",
+      "status": 200,
+      "saved": "C:\\github\\QMapPermalink\\tmp\\auto\\getmap_epsg3857.png",
+      "error": null
+    },
+    {
+      "name": "getmap_rotated_45",
+      "status": 200,
+      "saved": "C:\\github\\QMapPermalink\\tmp\\auto\\getmap_rotated_45.png",
+      "error": null
+    },
+    {
+      "name": "permalink_style",
+      "status": 200,
+      "saved": "C:\\github\\QMapPermalink\\tmp\\auto\\permalink_style.png",
+      "error": null
+    }
+  ],
+  "finished_at": "2025-11-19T09:31:10.107694Z"
+}

@@ -1,0 +1,32 @@
+{
+  "started_at": "2025-11-19T09:38:19.871713Z",
+  "checked": [
+    {
+      "host": "localhost:8089",
+      "base_url": "http://localhost:8089",
+      "status": 200,
+      "content_type": "text/xml; charset=utf-8"
+    },
+    {
+      "host": "127.0.0.1:8089",
+      "base_url": "http://127.0.0.1:8089",
+      "status": 200,
+      "content_type": "text/xml; charset=utf-8"
+    }
+  ],
+  "found": [
+    {
+      "host": "localhost:8089",
+      "base_url": "http://localhost:8089",
+      "status": 200,
+      "content_type": "text/xml; charset=utf-8"
+    },
+    {
+      "host": "127.0.0.1:8089",
+      "base_url": "http://127.0.0.1:8089",
+      "status": 200,
+      "content_type": "text/xml; charset=utf-8"
+    }
+  ],
+  "finished_at": "2025-11-19T09:38:21.983003Z"
+}
