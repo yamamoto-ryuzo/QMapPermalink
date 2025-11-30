@@ -270,7 +270,14 @@ V3 系では WFS/スタイル注入フローを「安定 API」としてドキ�
 
 ## 免責事項
 
-本ソフトウェアは現状のまま提供されます。明示または黙示を問わず、特定の目的への適合性や商品性を含む一切の保証を行いません。本ツールの利用により生じたいかなる損害（データ損失、業務中断、その他の損害を含む）についても、作者および配布者は責任を負いません。機密データの取り扱いや外部サービスの利用に関しては、所属組織のポリシーに従い、必要な承認を得た上で運用してください。
+本システムは個人のPCで作成・テストされたものです。  
+ご利用によるいかなる損害も責任を負いません。
+
+<p align="center">
+  <a href="https://giphy.com/explore/free-gif" target="_blank">
+    <img src="https://github.com/yamamoto-ryuzo/QGIS_portable_3x/raw/master/imgs/giphy.gif" width="500" title="avvio QGIS">
+  </a>
+</p>
 
 
 
