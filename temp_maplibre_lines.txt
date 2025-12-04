@@ -1,0 +1,13 @@
+
+  temp_old.py:1405:        if include_theme and specific_theme:
+  temp_old.py:1406:            # シンプルなテーマ名をパラメータに追加
+  temp_old.py:1407:            theme_encoded = urllib.parse.quote(specific_theme)
+  temp_old.py:1408:            permalink_url += f"&theme={theme_encoded}"
+  temp_old.py:1409:
+> temp_old.py:1410:        # MapLibre 用のスタイルはクライアント側で個別に取得・注入するため、
+  temp_old.py:1411:        # パーマリンクに typename を付与する処理は行わない（削除）。
+  temp_old.py:1412:        
+  temp_old.py:1413:        return permalink_url
+  temp_old.py:1414:
+  temp_old.py:1415:    def navigate_to_permalink(self, permalink_url):
+

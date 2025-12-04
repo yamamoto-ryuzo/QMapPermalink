@@ -56,7 +56,7 @@ import traceback
 # Optional components: if UI/webmap modules are not present, provide safe defaults
 # Try to import optional UI and webmap generator modules; fall back safely when absent.
 try:
-    from .panel import GeoWebViewPanel  # type: ignore
+    from .qmap_permalink_panel import GeoWebViewPanel  # type: ignore
     PANEL_AVAILABLE = True
     PANEL_IMPORT_ERROR = None
 except Exception:
@@ -70,7 +70,7 @@ except Exception:
         PANEL_IMPORT_ERROR = 'Failed to capture panel import error.'
 
 try:
-    from .webmap_generator import QMapWebMapGenerator  # type: ignore
+    from .qmap_webmap_generator import QMapWebMapGenerator  # type: ignore
     WEBMAP_AVAILABLE = True
 except Exception:
     QMapWebMapGenerator = None
@@ -154,7 +154,7 @@ class GeoWebView:
             self.webmap_generator = None
 
         # HTTPサーバーマネージャー
-        from .server_manager import GeoWebViewServerManager
+        from .qmap_permalink_server_manager import GeoWebViewServerManager
 
         self.server_manager = GeoWebViewServerManager(
             self.iface, 
@@ -334,10 +334,6 @@ class GeoWebView:
                     self.panel.pushButton_google_maps.clicked.connect(self.on_google_maps_clicked_panel)
                 if hasattr(self.panel, 'pushButton_google_earth'):
                     self.panel.pushButton_google_earth.clicked.connect(self.on_google_earth_clicked_panel)
-                
-                # MapLibreボタンのイベントを接続
-                if hasattr(self.panel, 'pushButton_maplibre'):
-                    self.panel.pushButton_maplibre.clicked.connect(self.on_maplibre_clicked_panel)
                 
                 # Check Access ボタンのイベントを接続
                 if hasattr(self.panel, 'pushButton_check_access'):
@@ -2159,32 +2155,6 @@ class GeoWebView:
         except Exception as e:
             self.iface.messageBar().pushMessage(
                 "QMap Permalink", f"Google Earth起動エラー: {str(e)}", duration=5
-            )
-    
-    def on_maplibre_clicked_panel(self):
-        """パネル版：MapLibreボタンがクリックされた時の処理"""
-        try:
-            # HTTPサーバーが起動しているか確認
-            if not self.server_manager.is_server_running():
-                self.iface.messageBar().pushMessage(
-                    "geo_webview", "HTTPサーバーが起動していません。サーバーを起動してください。", duration=5
-                )
-                return
-            
-            # 現在のサーバーポートを取得
-            server_port = self.server_manager.get_server_port() or 8089
-            
-            # MapLibre URLを生成
-            maplibre_url = f"http://localhost:{server_port}/maplibre"
-            
-            # ブラウザで開く
-            QDesktopServices.openUrl(QUrl(maplibre_url))
-            self.iface.messageBar().pushMessage(
-                "geo_webview", "MapLibreで開きました。", duration=3
-            )
-        except Exception as e:
-            self.iface.messageBar().pushMessage(
-                "geo_webview", f"MapLibre起動エラー: {str(e)}", duration=5
             )
     
     def on_check_access_clicked(self):
