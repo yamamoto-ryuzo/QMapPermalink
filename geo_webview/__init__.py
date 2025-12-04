@@ -78,5 +78,5 @@ def classFactory(iface):  # pylint: disable=invalid-name
         # Don't let secondary errors prevent plugin loading
         pass
 
-    from .qmap_permalink import GeoWebView
+    from .plugin import GeoWebView
     return GeoWebView(iface)

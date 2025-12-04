@@ -56,7 +56,7 @@ import traceback
 # Optional components: if UI/webmap modules are not present, provide safe defaults
 # Try to import optional UI and webmap generator modules; fall back safely when absent.
 try:
-    from .qmap_permalink_panel import GeoWebViewPanel  # type: ignore
+    from .panel import GeoWebViewPanel  # type: ignore
     PANEL_AVAILABLE = True
     PANEL_IMPORT_ERROR = None
 except Exception:
@@ -70,7 +70,7 @@ except Exception:
         PANEL_IMPORT_ERROR = 'Failed to capture panel import error.'
 
 try:
-    from .qmap_webmap_generator import QMapWebMapGenerator  # type: ignore
+    from .webmap_generator import QMapWebMapGenerator  # type: ignore
     WEBMAP_AVAILABLE = True
 except Exception:
     QMapWebMapGenerator = None
@@ -154,7 +154,7 @@ class GeoWebView:
             self.webmap_generator = None
 
         # HTTPサーバーマネージャー
-        from .qmap_permalink_server_manager import GeoWebViewServerManager
+        from .server_manager import GeoWebViewServerManager
 
         self.server_manager = GeoWebViewServerManager(
             self.iface, 

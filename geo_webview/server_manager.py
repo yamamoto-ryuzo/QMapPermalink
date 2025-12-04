@@ -75,11 +75,11 @@ class GeoWebViewServerManager:
         self.webmap_generator = webmap_generator
         
         # WMSサービスを初期化
-        from .qmap_wms_service import GeoWebViewWMSService
+        from .wms_service import GeoWebViewWMSService
         self.wms_service = GeoWebViewWMSService(iface, webmap_generator, 8089, False)
         # WMTSサービスを初期化（サーバマネージャ自身を渡すことで依存を小さくする）
         try:
-            from .qmap_wmts_service import GeoWebViewWMTSService
+            from .wmts_service import GeoWebViewWMTSService
             self.wmts_service = GeoWebViewWMTSService(self)
         except Exception:
             # 初期化が失敗してもサーバは動作を続けられるように None を許容
@@ -116,7 +116,7 @@ class GeoWebViewServerManager:
         
         # WFSサービスを初期化
         try:
-            from .qmap_wfs_service import GeoWebViewWFSService
+            from .wfs_service import GeoWebViewWFSService
             self.wfs_service = GeoWebViewWFSService(iface, 8089)
         except Exception:
             # 初期化が失敗してもサーバは動作を続けられるように None を許容

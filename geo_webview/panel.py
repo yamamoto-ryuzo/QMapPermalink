@@ -69,7 +69,7 @@ from qgis.PyQt.QtGui import QGuiApplication
 FORM_CLASS = None
 try:
     FORM_CLASS, _ = uic.loadUiType(os.path.join(
-        os.path.dirname(__file__), 'qmap_permalink_panel_base.ui'))
+        os.path.dirname(__file__), 'panel_base.ui'))
 except Exception:
     # Defer UI loading errors to runtime. Keep FORM_CLASS as None so the
     # module can be imported in environments where Qt/PyQt or uic is not

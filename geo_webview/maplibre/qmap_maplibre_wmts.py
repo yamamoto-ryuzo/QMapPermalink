@@ -33,7 +33,7 @@ def choose_tile_template() -> str:
         # MapLibre requires complete URLs for tile sources
         # Try to get the actual server port from the plugin
         try:
-            from ..qmap_permalink_server_manager import GeoWebViewServerManager
+            from ..server_manager import GeoWebViewServerManager
             # Attempt to find a running server instance
             port = 8089  # default fallback
             # In practice, the server manager is instantiated with the plugin
