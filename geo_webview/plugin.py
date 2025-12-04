@@ -272,13 +272,13 @@ class GeoWebView:
         if PANEL_AVAILABLE:
             self.add_action(
                 icon_path,
-                text=self.tr(u'QMap Permalink'),
+                text=self.tr(u'geo_webview'),
                 callback=self.toggle_panel,
                 parent=self.iface.mainWindow())
         else:
             # パネルが利用できない場合は警告メッセージ
             self.iface.messageBar().pushMessage(
-                self.tr("QMap Permalink"),
+                self.tr("geo_webview"),
                 self.tr("Panel functionality is not available. Please try reinstalling the plugin."),
                 level=2,  # WARNING
                 duration=10
@@ -302,7 +302,7 @@ class GeoWebView:
         if not PANEL_AVAILABLE:
             QMessageBox.warning(
                 self.iface.mainWindow(),
-                self.tr("QMap Permalink"),
+                self.tr("geo_webview"),
                 self.tr("Panel functionality is not available.")
             )
             return
@@ -417,7 +417,7 @@ class GeoWebView:
                                 from qgis.PyQt.QtWidgets import QMessageBox
                                 reply = QMessageBox.question(
                                     self.iface.mainWindow(),
-                                    self.tr("QMap Permalink"),
+                                    self.tr("geo_webview"),
                                     self.tr(f"サーバーを停止してポート {new_port} で再起動しますか？"),
                                     QMessageBox.Yes | QMessageBox.No,
                                     QMessageBox.No
@@ -462,7 +462,7 @@ class GeoWebView:
                 
                 # デバッグメッセージ
                 self.iface.messageBar().pushMessage(
-                    self.tr("QMap Permalink"), 
+                    self.tr("geo_webview"), 
                     self.tr("Panel created successfully."), 
                     duration=3
                 )
@@ -479,7 +479,7 @@ class GeoWebView:
             print(f"パネル作成エラーの詳細:\n{error_details}")
             QMessageBox.critical(
                 self.iface.mainWindow(),
-                self.tr("QMap Permalink"),
+                self.tr("geo_webview"),
                 self.tr("Failed to create panel: {error}").format(error=str(e))
             )
 
@@ -489,9 +489,9 @@ class GeoWebView:
             port = self.server_manager.get_server_port() or 8089
             url = QUrl(f'http://localhost:{port}/web-ui/')
             if not QDesktopServices.openUrl(url):
-                QMessageBox.warning(self.iface.mainWindow(), self.tr('QMap Permalink'), self.tr('Failed to open web UI in browser.'))
+                QMessageBox.warning(self.iface.mainWindow(), self.tr('geo_webview'), self.tr('Failed to open web UI in browser.'))
         except Exception as e:
-            QMessageBox.warning(self.iface.mainWindow(), self.tr('QMap Permalink'), self.tr(f'Error opening web UI: {e}'))
+            QMessageBox.warning(self.iface.mainWindow(), self.tr('geo_webview'), self.tr(f'Error opening web UI: {e}'))
 
     def _try_tabify_with_existing_panels(self):
         """既存の左側パネルがあればタブ化を試行"""
@@ -541,13 +541,13 @@ class GeoWebView:
                 self.panel.raise_()
                 
                 self.iface.messageBar().pushMessage(
-                    self.tr("QMap Permalink"), 
+                    self.tr("geo_webview"), 
                     self.tr("Tabified with '{panel_name}' panel.").format(panel_name=target_panel.windowTitle()), 
                     duration=3
                 )
             else:
                 self.iface.messageBar().pushMessage(
-                    self.tr("QMap Permalink"), 
+                    self.tr("geo_webview"), 
                     self.tr("Displayed as an independent panel on the left side."), 
                     duration=3
                 )
@@ -556,7 +556,7 @@ class GeoWebView:
             # タブ化に失敗しても継続
             print(f"パネルのタブ化でエラー: {e}")
             self.iface.messageBar().pushMessage(
-                self.tr("QMap Permalink"), 
+                self.tr("geo_webview"), 
                 self.tr("Panel displayed on the left side."), 
                 duration=3
             )
@@ -577,7 +577,7 @@ class GeoWebView:
         
         for action in self.actions:
             self.iface.removePluginMenu(
-                self.tr(u'&QMap Permalink'),
+                self.tr(u'&geo_webview'),
                 action)
             self.iface.removeToolBarIcon(action)
 
@@ -1916,14 +1916,14 @@ class GeoWebView:
                 message = self.tr("Permalink (position only) generated successfully.")
             
             self.iface.messageBar().pushMessage(
-                self.tr("QMap Permalink"), 
+                self.tr("geo_webview"), 
                 message, 
                 duration=3
             )
         except Exception as e:
             QMessageBox.critical(
                 self.iface.mainWindow(),
-                self.tr("QMap Permalink"),
+                self.tr("geo_webview"),
                 self.tr("Failed to generate permalink: {error}").format(error=str(e))
             )
 
@@ -1933,7 +1933,7 @@ class GeoWebView:
         if not permalink_url:
             QMessageBox.warning(
                 self.iface.mainWindow(),
-                self.tr("QMap Permalink"),
+                self.tr("geo_webview"),
                 self.tr("Please enter a permalink URL.")
             )
             return

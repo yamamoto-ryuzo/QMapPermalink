@@ -292,7 +292,7 @@ class GeoWebViewPanel(QDockWidget):
         from qgis.PyQt.QtCore import QCoreApplication
         
         def tr(text):
-            return QCoreApplication.translate('QMapPermalink', text)
+            return QCoreApplication.translate('geo_webview', text)
         # グループボックスのタイトル
         if hasattr(self.ui, 'groupBox_server'):
             self.ui.groupBox_server.setTitle(tr("HTTP Server Status"))
