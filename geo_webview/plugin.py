@@ -2182,8 +2182,38 @@ class GeoWebView:
             # 現在のサーバーポートを取得
             server_port = self.server_manager.get_server_port() or 8089
             
-            # MapLibre URLを生成
+            # パーマリンクテキストを取得
+            permalink_text = ''
+            if hasattr(self.panel, 'lineEdit_permalink') and self.panel.lineEdit_permalink is not None:
+                permalink_text = self.panel.lineEdit_permalink.text() or ''
+            
+            # パーマリンクがない場合はナビゲートフィールドから取得
+            if not permalink_text and hasattr(self.panel, 'lineEdit_navigate') and self.panel.lineEdit_navigate is not None:
+                permalink_text = self.panel.lineEdit_navigate.text() or ''
+            
+            # パーマリンクのパラメータを解析
+            from urllib.parse import parse_qs, urlparse
+            params = {}
+            if permalink_text:
+                try:
+                    parsed = urlparse(permalink_text)
+                    query_params = parse_qs(parsed.query)
+                    # x, y, scale, crs, rotation パラメータを抽出
+                    for key in ['x', 'y', 'scale', 'crs', 'rotation']:
+                        if key in query_params and query_params[key]:
+                            params[key] = query_params[key][0]
+                except Exception:
+                    pass
+            
+            # MapLibre URLを生成（パラメータ付き）
             maplibre_url = f"http://localhost:{server_port}/maplibre"
+            if params:
+                param_parts = []
+                for key in ['x', 'y', 'scale', 'crs', 'rotation']:
+                    if key in params:
+                        param_parts.append(f'{key}={params[key]}')
+                if param_parts:
+                    maplibre_url = maplibre_url + '?' + '&'.join(param_parts)
             
             # ブラウザで開く
             QDesktopServices.openUrl(QUrl(maplibre_url))
