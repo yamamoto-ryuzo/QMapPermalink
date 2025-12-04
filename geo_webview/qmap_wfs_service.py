@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""QMapPermalink WFS Service
+"""geo_webview WFS Service
 
 WFS (Web Feature Service) 機能を提供する専用クラス。
 QGISベクターレイヤーから地物をGeoJSON/GML形式で提供。
@@ -19,8 +19,8 @@ from qgis.PyQt.QtCore import QUrl
 from qgis.PyQt.QtGui import QColor
 
 
-class QMapPermalinkWFSService:
-    """QMapPermalink用WFSサービスクラス
+class GeoWebViewWFSService:
+    """geo_webview用WFSサービスクラス
 
     WFS GetCapabilitiesおよびGetFeatureリクエストを処理し、
     QGISベクターレイヤーから地物をGeoJSON/GML形式で提供します。
@@ -97,7 +97,7 @@ class QMapPermalinkWFSService:
                     from qgis.core import QgsMessageLog, Qgis
                     QgsMessageLog.logMessage(
                         f"🧹 WFS Cache: {len(expired_keys)}個の期限切れエントリを削除",
-                        "QMapPermalink", Qgis.Info
+                        "geo_webview", Qgis.Info
                     )
         except Exception:
             pass
@@ -297,7 +297,7 @@ class QMapPermalinkWFSService:
                         # キャッシュヒット!
                         QgsMessageLog.logMessage(
                             f"⚡ WFS Cache HIT: {type_name} (saved ~{int((time.time()-timestamp)*1000)}ms)",
-                            "QMapPermalink", Qgis.Info
+                            "geo_webview", Qgis.Info
                         )
                         from . import http_server
                         http_server.send_http_response(
@@ -328,7 +328,7 @@ class QMapPermalinkWFSService:
                 self._response_cache[cache_key] = (time.time(), response_content, content_type)
                 QgsMessageLog.logMessage(
                     f"💾 WFS Cache MISS: {type_name} ({len(features)}地物, {elapsed_time}ms) - キャッシュに保存",
-                    "QMapPermalink", Qgis.Info
+                    "geo_webview", Qgis.Info
                 )
             
             # 期限切れキャッシュのクリーンアップ(10%の確率で実行)
@@ -342,8 +342,8 @@ class QMapPermalinkWFSService:
         except Exception as e:
             from qgis.core import QgsMessageLog, Qgis
             import traceback
-            QgsMessageLog.logMessage(f"❌ WFS GetFeature error: {e}", "QMapPermalink", Qgis.Critical)
-            QgsMessageLog.logMessage(f"❌ Error traceback: {traceback.format_exc()}", "QMapPermalink", Qgis.Critical)
+            QgsMessageLog.logMessage(f"❌ WFS GetFeature error: {e}", "geo_webview", Qgis.Critical)
+            QgsMessageLog.logMessage(f"❌ Error traceback: {traceback.format_exc()}", "geo_webview", Qgis.Critical)
             from . import http_server
             # Return an OWS-style ExceptionReport for better WFS compatibility
             try:
@@ -378,7 +378,7 @@ class QMapPermalinkWFSService:
         except Exception as e:
             from qgis.core import QgsMessageLog, Qgis
             import traceback
-            QgsMessageLog.logMessage(f"❌ WFS DescribeFeatureType error: {e}", "QMapPermalink", Qgis.Critical)
+            QgsMessageLog.logMessage(f"❌ WFS DescribeFeatureType error: {e}", "geo_webview", Qgis.Critical)
             from . import http_server
             http_server.send_http_response(conn, 500, "Internal Server Error", f"WFS DescribeFeatureType failed: {str(e)}")
 
@@ -411,7 +411,7 @@ class QMapPermalinkWFSService:
         except Exception as e:
             from qgis.core import QgsMessageLog, Qgis
             import traceback
-            QgsMessageLog.logMessage(f"❌ WFS GetStyles error: {e}", "QMapPermalink", Qgis.Critical)
+            QgsMessageLog.logMessage(f"❌ WFS GetStyles error: {e}", "geo_webview", Qgis.Critical)
             from . import http_server
             http_server.send_http_response(conn, 500, "Internal Server Error", f"WFS GetStyles failed: {str(e)}")
 
@@ -619,14 +619,14 @@ class QMapPermalinkWFSService:
                 if not geom or 'coordinates' not in geom or not _coords_valid(geom.get('coordinates')):
                     # skip features without valid geometry
                     try:
-                        QgsMessageLog.logMessage(f"⚠️ Skipping feature {feature.id()} due to invalid geometry", "QMapPermalink", Qgis.Warning)
+                        QgsMessageLog.logMessage(f"⚠️ Skipping feature {feature.id()} due to invalid geometry", "geo_webview", Qgis.Warning)
                     except Exception:
                         pass
                     continue
             except Exception:
                 # non-fatal: if any unexpected error in geometry handling, skip this feature
                 try:
-                    QgsMessageLog.logMessage(f"⚠️ Skipping feature {feature.id()} due to geometry normalization error", "QMapPermalink", Qgis.Warning)
+                    QgsMessageLog.logMessage(f"⚠️ Skipping feature {feature.id()} due to geometry normalization error", "geo_webview", Qgis.Warning)
                 except Exception:
                     pass
                 continue
@@ -1142,7 +1142,7 @@ class QMapPermalinkWFSService:
         except Exception as e:
             # symbolForFeatureが失敗したら、デフォルトを使用
             from qgis.core import QgsMessageLog, Qgis
-            QgsMessageLog.logMessage(f"⚠️ symbolForFeature failed for layer {layer_name}: {e}, using default SLD", "QMapPermalink", Qgis.Warning)
+            QgsMessageLog.logMessage(f"⚠️ symbolForFeature failed for layer {layer_name}: {e}, using default SLD", "geo_webview", Qgis.Warning)
             return self._generate_default_sld(layer_name)
 
         if symbol is None:
@@ -1289,7 +1289,7 @@ class QMapPermalinkWFSService:
                             from qgis.core import QgsMessageLog, Qgis
             except Exception as e:
                 from qgis.core import QgsMessageLog, Qgis
-                QgsMessageLog.logMessage(f"⚠️ Failed to check brush style: {e}", "QMapPermalink", Qgis.Warning)
+                QgsMessageLog.logMessage(f"⚠️ Failed to check brush style: {e}", "geo_webview", Qgis.Warning)
             
             # アルファ値（透明度）もチェック
             if has_brush and fill_color_obj is not None:
@@ -1357,5 +1357,5 @@ class QMapPermalinkWFSService:
             return sld
         except Exception as e:
             from qgis.core import QgsMessageLog, Qgis
-            QgsMessageLog.logMessage(f"❌ Failed to generate polygon SLD: {e}", "QMapPermalink", Qgis.Critical)
+            QgsMessageLog.logMessage(f"❌ Failed to generate polygon SLD: {e}", "geo_webview", Qgis.Critical)
             return self._generate_default_sld(layer_name)

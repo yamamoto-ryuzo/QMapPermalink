@@ -1,10 +1,10 @@
-# QMapPermalink — 仕様書
+# geo_webview — 仕様書
 
 この仕様書は `README.md` と `CHANGELOG.md` の内容に基づき、機能別に整理した正式な仕様を提供します。
-対象リポジトリ: `QMapPermalink`（ルートに配置）。
+対象リポジトリ: `geo_webview`（ルートに配置）。
 
 ## 目的と範囲
-- 目的: QMapPermalink プラグインの機能を明確に仕様化し、実装・運用・テストの基準を定める。
+- 目的: geo_webview プラグインの機能を明確に仕様化し、実装・運用・テストの基準を定める。
 - 範囲: パーマリンク生成、組み込みHTTPサーバー（WMS/OpenLayers/MapLibre/WMTS）、外部連携（Google Maps/Earth）、テーマ適用、回転（ANGLE）処理、External Control の挙動、投影（CRS）ポリシー、セキュリティ/運用上の注意。
 
 ---
@@ -165,7 +165,7 @@ WMTS GetCapabilities と TileMatrix
   python -c "import xmlschema; xmlschema.XMLSchema('http://schemas.opengis.net/wmts/1.0/wmtsGetCapabilities_response.xsd').validate(r'C:\\Users\\<you>\\AppData\\Local\\Temp\\wmts_cap_<id>.xml'); print('validation OK')"
   ```
 
-  - 検証中に HTTP 500 や Import/Indentation のトレースバックが出る場合は、QGIS の Message Log を確認してください（カテゴリ: `QMapPermalink`）。プラグインの初期化時にモジュールの文法エラーや例外が発生すると WMTS サービスが None となり HTTP 501 を返すため、トレースバックの共有が迅速な修正に役立ちます。
+  - 検証中に HTTP 500 や Import/Indentation のトレースバックが出る場合は、QGIS の Message Log を確認してください（カテゴリ: `geo_webview`）。プラグインの初期化時にモジュールの文法エラーや例外が発生すると WMTS サービスが None となり HTTP 501 を返すため、トレースバックの共有が迅速な修正に役立ちます。
 
 ---
 
@@ -251,7 +251,7 @@ WMTS キャッシュと identity（V3.1.0）
 - **メトリクス**: レスポンスタイム、レンダ時間、キュー長、キャッシュヒット率、メモリ使用量、ワーカー数などを収集する（Prometheus 等を推奨）。
 - **ログ**: 長時間処理リクエストや失敗を重要ログとして出力し、アラートを設定する。
 
-実装例（QMapPermalink 向け推奨）
+実装例（geo_webview 向け推奨）
 - プラグイン起動時に `N` 個のレンダーワーカー（プロセス）を生成。各ワーカーは QgsApplication とプロジェクトをロードして待機する。
 - HTTP 層は軽量非同期サーバで受け、レンダ要求はキューに入れてワーカーへ委譲。ワーカーは結果をキャッシュへ保存し、呼び出し元へパススルーする。
 - `qmap_wmts_service.py` / `qmap_wms_service.py` に設定可能なパラメータを追加:
@@ -293,7 +293,7 @@ WMTS キャッシュと identity（V3.1.0）
 
 ### 日本語・多言語対応について
 
-- QMapPermalink の WFS 機能および MapLibre クライアントは、日本語を含む多言語のレイヤ名・属性名・UI表示に完全対応しています。
+- geo_webview の WFS 機能および MapLibre クライアントは、日本語を含む多言語のレイヤ名・属性名・UI表示に完全対応しています。
 - `/wfs-layers` エンドポイントの `title` フィールドや、`TYPENAME` には日本語（全角文字・記号含む）を利用可能です。
 - クライアント側（MapLibre等）でIDやHTML要素属性として利用する場合は、`encodeURIComponent` などで一意かつ安全なIDに変換してください。
 - JSON/HTML出力時はUTF-8エンコーディングを強制し、`ensure_ascii=False` で日本語がそのまま出力されます。
@@ -301,7 +301,7 @@ WMTS キャッシュと identity（V3.1.0）
 
 
 ### 概要
-- QMapPermalink の WFS は QGIS プロジェクトのベクターレイヤーを外部アプリケーションに提供します。
+- geo_webview の WFS は QGIS プロジェクトのベクターレイヤーを外部アプリケーションに提供します。
 - `/wfs-layers` エンドポイントはプロジェクトの `WFSLayers` エントリを読み、公開対象レイヤの JSON リストを返します。
 - `GetCapabilities` は `/wfs-layers` と同じロジックを参照して FeatureTypeList を生成します（すなわち、プロジェクトの `WFSLayers` に登録されたレイヤのみが公開されます）。
 

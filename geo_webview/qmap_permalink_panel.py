@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 /***************************************************************************
- QMapPermalinkPanel
+ GeoWebViewPanel
                                  A QGIS plugin
  Navigate QGIS map views through external permalink system - Panel Version
                              -------------------
@@ -77,8 +77,8 @@ except Exception:
     FORM_CLASS = None
 
 
-class QMapPermalinkPanel(QDockWidget):
-    """QMapPermalinkのパネルクラス
+class GeoWebViewPanel(QDockWidget):
+    """geo_webviewのパネルクラス
     
     Qt Designerで作成されたUIファイルを読み込んでドッキング可能なパネルとして表示
     """
@@ -89,10 +89,10 @@ class QMapPermalinkPanel(QDockWidget):
         Args:
             parent: 親ウィジェット
         """
-        super(QMapPermalinkPanel, self).__init__(parent)
+        super(GeoWebViewPanel, self).__init__(parent)
         
         # パネルのタイトルを設定
-        self.setWindowTitle("QMap Permalink")
+        self.setWindowTitle("GeoWebView")
         
         # ドッキングエリアを設定（左側を優先、右側も可能）
         self.setAllowedAreas(Qt.LeftDockWidgetArea | Qt.RightDockWidgetArea)

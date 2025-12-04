@@ -11,8 +11,8 @@ import concurrent.futures
 from qgis.core import QgsProject, QgsCoordinateReferenceSystem, QgsCoordinateTransform, QgsPointXY, QgsMessageLog, Qgis
 # lazy import http_server inside methods to avoid circular import during QGIS plugin init
 
-class QMapPermalinkServerManager:
-    """QMapPermalink用HTTPサーバー管理クラス - WMS専用シンプル版
+class GeoWebViewServerManager:
+    """geo_webview用HTTPサーバー管理クラス - WMS専用シンプル版
     
     WMSサーバーの起動・停止・リクエスト処理を担当します。
     不要なエンドポイント（画像、マップ、タイル）は全て削除されています。
@@ -48,7 +48,7 @@ class QMapPermalinkServerManager:
             from qgis.core import QgsMessageLog, Qgis
             QgsMessageLog.logMessage(
                 f"💻 検出: CPUコア数={cpu_count}, HTTP並列ワーカー数={workers}",
-                "QMapPermalink", Qgis.Info
+                "geo_webview", Qgis.Info
             )
             
             return workers
@@ -56,7 +56,7 @@ class QMapPermalinkServerManager:
             from qgis.core import QgsMessageLog, Qgis
             QgsMessageLog.logMessage(
                 f"⚠️ ワーカー数自動計算失敗、デフォルト6を使用: {e}",
-                "QMapPermalink", Qgis.Warning
+                "geo_webview", Qgis.Warning
             )
             return 6
     
@@ -75,12 +75,12 @@ class QMapPermalinkServerManager:
         self.webmap_generator = webmap_generator
         
         # WMSサービスを初期化
-        from .qmap_wms_service import QMapPermalinkWMSService
-        self.wms_service = QMapPermalinkWMSService(iface, webmap_generator, 8089, False)
+        from .qmap_wms_service import GeoWebViewWMSService
+        self.wms_service = GeoWebViewWMSService(iface, webmap_generator, 8089, False)
         # WMTSサービスを初期化（サーバマネージャ自身を渡すことで依存を小さくする）
         try:
-            from .qmap_wmts_service import QMapPermalinkWMTSService
-            self.wmts_service = QMapPermalinkWMTSService(self)
+            from .qmap_wmts_service import GeoWebViewWMTSService
+            self.wmts_service = GeoWebViewWMTSService(self)
         except Exception:
             # 初期化が失敗してもサーバは動作を続けられるように None を許容
             # ただし失敗理由はログに出しておく (QGIS のメッセージログが使える場合)
@@ -89,7 +89,7 @@ class QMapPermalinkServerManager:
                 from qgis.core import QgsMessageLog, Qgis
                 QgsMessageLog.logMessage(
                     f"WMTS service initialization failed: {traceback.format_exc()}",
-                    "QMapPermalink",
+                    "geo_webview",
                     Qgis.Warning
                 )
             except Exception:
@@ -116,8 +116,8 @@ class QMapPermalinkServerManager:
         
         # WFSサービスを初期化
         try:
-            from .qmap_wfs_service import QMapPermalinkWFSService
-            self.wfs_service = QMapPermalinkWFSService(iface, 8089)
+            from .qmap_wfs_service import GeoWebViewWFSService
+            self.wfs_service = GeoWebViewWFSService(iface, 8089)
         except Exception:
             # 初期化が失敗してもサーバは動作を続けられるように None を許容
             self.wfs_service = None
@@ -175,7 +175,7 @@ class QMapPermalinkServerManager:
                     
         except Exception as e:
             from qgis.core import QgsMessageLog, Qgis
-            QgsMessageLog.logMessage(f"❌ バージョン取得エラー: {e}", "QMapPermalink", Qgis.Warning)
+            QgsMessageLog.logMessage(f"❌ バージョン取得エラー: {e}", "geo_webview", Qgis.Warning)
         
         # デフォルトバージョン（metadata.txtから読み取れない場合）
         return "UNKNOWN"
@@ -225,7 +225,7 @@ class QMapPermalinkServerManager:
             self.server_thread.start()
 
             from qgis.core import QgsMessageLog, Qgis
-            QgsMessageLog.logMessage(f"🚀 QMap Permalink v{self.plugin_version} WMS HTTPサーバーが起動しました: http://localhost:{self.server_port}/wms", "QMapPermalink", Qgis.Info)
+            QgsMessageLog.logMessage(f"🚀 QMap Permalink v{self.plugin_version} WMS HTTPサーバーが起動しました: http://localhost:{self.server_port}/wms", "geo_webview", Qgis.Info)
             self.iface.messageBar().pushMessage(
                 "QMap Permalink",
                 f"WMS HTTPサーバーが起動しました (ポート: {self.server_port})",
@@ -234,7 +234,7 @@ class QMapPermalinkServerManager:
 
         except Exception as e:
             from qgis.core import QgsMessageLog, Qgis
-            QgsMessageLog.logMessage(f"HTTPサーバーの起動に失敗しました: {e}", "QMapPermalink", Qgis.Critical)
+            QgsMessageLog.logMessage(f"HTTPサーバーの起動に失敗しました: {e}", "geo_webview", Qgis.Critical)
             self.iface.messageBar().pushMessage(
                 "QMap Permalink エラー",
                 f"HTTPサーバーの起動に失敗しました: {str(e)}",
@@ -272,7 +272,7 @@ class QMapPermalinkServerManager:
                             pass
                 except Exception as e:
                     from qgis.core import QgsMessageLog, Qgis
-                    QgsMessageLog.logMessage(f"HTTPリクエストのスレッド投入に失敗: {e}", "QMapPermalink", Qgis.Critical)
+                    QgsMessageLog.logMessage(f"HTTPリクエストのスレッド投入に失敗: {e}", "geo_webview", Qgis.Critical)
                     try:
                         conn.close()
                     except Exception:
@@ -287,7 +287,7 @@ class QMapPermalinkServerManager:
                     pass
                 self.http_server = None
             from qgis.core import QgsMessageLog, Qgis
-            QgsMessageLog.logMessage("HTTPサーバーが停止しました", "QMapPermalink", Qgis.Info)
+            QgsMessageLog.logMessage("HTTPサーバーが停止しました", "geo_webview", Qgis.Info)
     
     def stop_http_server(self):
         """HTTPサーバーを停止"""
@@ -327,11 +327,11 @@ class QMapPermalinkServerManager:
                 )
 
             from qgis.core import QgsMessageLog, Qgis
-            QgsMessageLog.logMessage("QMap Permalink HTTPサーバーが停止しました", "QMapPermalink", Qgis.Info)
+            QgsMessageLog.logMessage("QMap Permalink HTTPサーバーが停止しました", "geo_webview", Qgis.Info)
             
         except Exception as e:
             from qgis.core import QgsMessageLog, Qgis
-            QgsMessageLog.logMessage(f"HTTPサーバーの停止中にエラーが発生しました: {e}", "QMapPermalink", Qgis.Critical)
+            QgsMessageLog.logMessage(f"HTTPサーバーの停止中にエラーが発生しました: {e}", "geo_webview", Qgis.Critical)
 
     def _handle_client_connection_safe(self, conn, addr):
         """HTTPリクエストを安全に処理（エラーハンドリング付き）"""
@@ -339,7 +339,7 @@ class QMapPermalinkServerManager:
             self._handle_client_connection(conn, addr)
         except Exception as e:
             from qgis.core import QgsMessageLog, Qgis
-            QgsMessageLog.logMessage(f"HTTPリクエスト処理中にエラー: {e}", "QMapPermalink", Qgis.Warning)
+            QgsMessageLog.logMessage(f"HTTPリクエスト処理中にエラー: {e}", "geo_webview", Qgis.Warning)
         finally:
             try:
                 conn.close()
@@ -434,9 +434,9 @@ class QMapPermalinkServerManager:
                 try:
                     self.wms_service.handle_wms_request(conn, params, host)
                 except Exception as e:
-                    QgsMessageLog.logMessage(f"❌ WMS handler error: {e}", "QMapPermalink", Qgis.Critical)
+                    QgsMessageLog.logMessage(f"❌ WMS handler error: {e}", "geo_webview", Qgis.Critical)
                     import traceback
-                    QgsMessageLog.logMessage(f"❌ Error traceback: {traceback.format_exc()}", "QMapPermalink", Qgis.Critical)
+                    QgsMessageLog.logMessage(f"❌ Error traceback: {traceback.format_exc()}", "geo_webview", Qgis.Critical)
                     from . import http_server
                     http_server.send_http_response(conn, 500, "Internal Server Error", f"WMS processing failed: {str(e)}")
                 return
@@ -446,9 +446,9 @@ class QMapPermalinkServerManager:
                 try:
                     self._handle_permalink_html_page(conn, params)
                 except Exception as e:
-                    QgsMessageLog.logMessage(f"❌ OpenLayers HTML page error: {e}", "QMapPermalink", Qgis.Critical)
+                    QgsMessageLog.logMessage(f"❌ OpenLayers HTML page error: {e}", "geo_webview", Qgis.Critical)
                     import traceback
-                    QgsMessageLog.logMessage(f"❌ Error traceback: {traceback.format_exc()}", "QMapPermalink", Qgis.Critical)
+                    QgsMessageLog.logMessage(f"❌ Error traceback: {traceback.format_exc()}", "geo_webview", Qgis.Critical)
                     from . import http_server
                     http_server.send_http_response(conn, 500, "Internal Server Error", f"OpenLayers HTML page generation failed: {str(e)}")
                 return
@@ -710,7 +710,7 @@ class QMapPermalinkServerManager:
                             except Exception as e:
                                 # If generator failed (e.g. couldn't parse permalink), attempt a safe fallback
                                 try:
-                                    QgsMessageLog.logMessage(f"⚠️ MapLibre generator failed: {e} - retrying with empty permalink", "QMapPermalink", Qgis.Warning)
+                                    QgsMessageLog.logMessage(f"⚠️ MapLibre generator failed: {e} - retrying with empty permalink", "geo_webview", Qgis.Warning)
                                 except Exception:
                                     pass
                                 try:
@@ -749,9 +749,9 @@ class QMapPermalinkServerManager:
                     from . import http_server
                     http_server.send_http_response(conn, 200, "OK", html_content, "text/html; charset=utf-8")
                 except Exception as e:
-                    QgsMessageLog.logMessage(f"❌ MapLibre HTML page error: {e}", "QMapPermalink", Qgis.Critical)
+                    QgsMessageLog.logMessage(f"❌ MapLibre HTML page error: {e}", "geo_webview", Qgis.Critical)
                     import traceback
-                    QgsMessageLog.logMessage(f"❌ Error traceback: {traceback.format_exc()}", "QMapPermalink", Qgis.Critical)
+                    QgsMessageLog.logMessage(f"❌ Error traceback: {traceback.format_exc()}", "geo_webview", Qgis.Critical)
                     from . import http_server
                     http_server.send_http_response(conn, 500, "Internal Server Error", f"MapLibre HTML page generation failed: {str(e)}")
                 return
@@ -762,8 +762,8 @@ class QMapPermalinkServerManager:
                     # lazily create service if missing
                     if not hasattr(self, 'wmts_service') or self.wmts_service is None:
                         try:
-                            from .qmap_wmts_service import QMapPermalinkWMTSService
-                            self.wmts_service = QMapPermalinkWMTSService(self)
+                            from .qmap_wmts_service import GeoWebViewWMTSService
+                            self.wmts_service = GeoWebViewWMTSService(self)
                         except Exception:
                             # Log import/instantiation failure so operator can diagnose
                             try:
@@ -771,7 +771,7 @@ class QMapPermalinkServerManager:
                                 from qgis.core import QgsMessageLog, Qgis
                                 QgsMessageLog.logMessage(
                                     f"Lazy WMTS service creation failed: {traceback.format_exc()}",
-                                    "QMapPermalink",
+                                    "geo_webview",
                                     Qgis.Warning
                                 )
                             except Exception:
@@ -789,9 +789,9 @@ class QMapPermalinkServerManager:
                         from . import http_server
                         http_server.send_http_response(conn, 501, 'Not Implemented', 'WMTS service not available')
                 except Exception as e:
-                    QgsMessageLog.logMessage(f"❌ WMTS delegation error: {e}", "QMapPermalink", Qgis.Critical)
+                    QgsMessageLog.logMessage(f"❌ WMTS delegation error: {e}", "geo_webview", Qgis.Critical)
                     import traceback
-                    QgsMessageLog.logMessage(f"❌ Error traceback: {traceback.format_exc()}", "QMapPermalink", Qgis.Critical)
+                    QgsMessageLog.logMessage(f"❌ Error traceback: {traceback.format_exc()}", "geo_webview", Qgis.Critical)
                     from . import http_server
                     http_server.send_http_response(conn, 500, "Internal Server Error", f"WMTS processing failed: {str(e)}")
                 return
@@ -801,9 +801,9 @@ class QMapPermalinkServerManager:
                 try:
                     self._handle_wfs_layers(conn, params)
                 except Exception as e:
-                    QgsMessageLog.logMessage(f"❌ wfs-layers handler error: {e}", "QMapPermalink", Qgis.Critical)
+                    QgsMessageLog.logMessage(f"❌ wfs-layers handler error: {e}", "geo_webview", Qgis.Critical)
                     import traceback
-                    QgsMessageLog.logMessage(f"❌ Error traceback: {traceback.format_exc()}", "QMapPermalink", Qgis.Critical)
+                    QgsMessageLog.logMessage(f"❌ Error traceback: {traceback.format_exc()}", "geo_webview", Qgis.Critical)
                     from . import http_server
                     http_server.send_http_response(conn, 500, "Internal Server Error", f"wfs-layers failed: {str(e)}")
                 return
@@ -814,8 +814,8 @@ class QMapPermalinkServerManager:
                     # lazily create service if missing
                     if not hasattr(self, 'wfs_service') or self.wfs_service is None:
                         try:
-                            from .qmap_wfs_service import QMapPermalinkWFSService
-                            self.wfs_service = QMapPermalinkWFSService(self.iface, self.server_port)
+                            from .qmap_wfs_service import GeoWebViewWFSService
+                            self.wfs_service = GeoWebViewWFSService(self.iface, self.server_port)
                         except Exception:
                             self.wfs_service = None
 
@@ -834,9 +834,9 @@ class QMapPermalinkServerManager:
                         from . import http_server
                         http_server.send_http_response(conn, 501, 'Not Implemented', 'WFS service not available')
                 except Exception as e:
-                    QgsMessageLog.logMessage(f"❌ WFS delegation error: {e}", "QMapPermalink", Qgis.Critical)
+                    QgsMessageLog.logMessage(f"❌ WFS delegation error: {e}", "geo_webview", Qgis.Critical)
                     import traceback
-                    QgsMessageLog.logMessage(f"❌ Error traceback: {traceback.format_exc()}", "QMapPermalink", Qgis.Critical)
+                    QgsMessageLog.logMessage(f"❌ Error traceback: {traceback.format_exc()}", "geo_webview", Qgis.Critical)
                     from . import http_server
                     http_server.send_http_response(conn, 500, "Internal Server Error", f"WFS processing failed: {str(e)}")
                 return
@@ -849,9 +849,9 @@ class QMapPermalinkServerManager:
                         from . import http_server
                         http_server.send_http_response(conn, 501, 'Not Implemented', 'debug-bookmarks handler not available')
                 except Exception as e:
-                    QgsMessageLog.logMessage(f"❌ debug-bookmarks handler error: {e}", "QMapPermalink", Qgis.Critical)
+                    QgsMessageLog.logMessage(f"❌ debug-bookmarks handler error: {e}", "geo_webview", Qgis.Critical)
                     import traceback
-                    QgsMessageLog.logMessage(f"❌ Error traceback: {traceback.format_exc()}", "QMapPermalink", Qgis.Critical)
+                    QgsMessageLog.logMessage(f"❌ Error traceback: {traceback.format_exc()}", "geo_webview", Qgis.Critical)
                     from . import http_server
                     http_server.send_http_response(conn, 500, "Internal Server Error", f"debug-bookmarks failed: {str(e)}")
                 return
@@ -899,7 +899,7 @@ class QMapPermalinkServerManager:
                     return
 
             # 未対応のエンドポイントは404エラー
-            QgsMessageLog.logMessage(f"❌ Unknown endpoint: {parsed_url.path}", "QMapPermalink", Qgis.Warning)
+            QgsMessageLog.logMessage(f"❌ Unknown endpoint: {parsed_url.path}", "geo_webview", Qgis.Warning)
             from . import http_server
             # 明示的に利用可能なエンドポイント一覧に /wmts と /wfs を含める
             http_server.send_http_response(
@@ -1010,7 +1010,7 @@ class QMapPermalinkServerManager:
             
         except Exception as e:
             from qgis.core import QgsMessageLog, Qgis
-            QgsMessageLog.logMessage(f"⚠️ Error getting canvas extent info: {e}", "QMapPermalink", Qgis.Warning)
+            QgsMessageLog.logMessage(f"⚠️ Error getting canvas extent info: {e}", "geo_webview", Qgis.Warning)
             return "<EX_GeographicBoundingBox><westBoundLongitude>-180</westBoundLongitude><eastBoundLongitude>180</eastBoundLongitude><southBoundLatitude>-90</southBoundLatitude><northBoundLatitude>90</northBoundLatitude></EX_GeographicBoundingBox>"
 
 
@@ -1068,9 +1068,9 @@ class QMapPermalinkServerManager:
                                             # Ensure the CRS variable matches the transformed BBOX coordinates
                                             crs = 'EPSG:3857'
                             except Exception as e:
-                                QgsMessageLog.logMessage(f"⚠️ Failed to transform BBOX to EPSG:3857: {e}", "QMapPermalink", Qgis.Warning)
+                                QgsMessageLog.logMessage(f"⚠️ Failed to transform BBOX to EPSG:3857: {e}", "geo_webview", Qgis.Warning)
                         else:
-                            QgsMessageLog.logMessage(f"⚠️ Invalid source CRS '{original_crs}' - forcing to EPSG:3857", "QMapPermalink", Qgis.Warning)
+                            QgsMessageLog.logMessage(f"⚠️ Invalid source CRS '{original_crs}' - forcing to EPSG:3857", "geo_webview", Qgis.Warning)
                 except Exception:
                     # non-fatal: continue with original crs/bbox
                     pass
@@ -1084,16 +1084,16 @@ class QMapPermalinkServerManager:
                 http_server.send_binary_response(conn, 200, "OK", png_data, "image/png")
                 return
             else:
-                QgsMessageLog.logMessage("❌ Canvas rendering failed", "QMapPermalink", Qgis.Warning)
+                QgsMessageLog.logMessage("❌ Canvas rendering failed", "geo_webview", Qgis.Warning)
                 # フォールバック: エラー画像を生成
                 error_image = self._generate_error_image(width, height, "QGIS Map Generation Failed")
                 from . import http_server
                 http_server.send_binary_response(conn, 200, "OK", error_image, "image/png")
             
         except Exception as e:
-            QgsMessageLog.logMessage(f"❌ WMS GetMap error: {e}", "QMapPermalink", Qgis.Critical)
+            QgsMessageLog.logMessage(f"❌ WMS GetMap error: {e}", "geo_webview", Qgis.Critical)
             import traceback
-            QgsMessageLog.logMessage(f"❌ Error traceback: {traceback.format_exc()}", "QMapPermalink", Qgis.Critical)
+            QgsMessageLog.logMessage(f"❌ Error traceback: {traceback.format_exc()}", "geo_webview", Qgis.Critical)
             
             # エラー時は最小限のテスト画像を返す
             test_image = b'\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x01\x00\x00\x00\x01\x00\x08\x02\x00\x00\x00\x90wS\xde\x00\x00\x00\tpHYs\x00\x00\x0b\x13\x00\x00\x0b\x13\x01\x00\x9a\x9c\x18\x00\x00\x00\x16tEXtSoftware\x00www.inkscape.org\x9b\xee<\x1a\x00\x00\x00\x1ftEXtTitle\x00Test Image\x87\x96\xf0\x8e\x00\x00\x00\x12IDATx\x9cc\xf8\x0f\x00\x00\x01\x00\x01\x00\x18\xdd\x8d\xb4\x00\x00\x00\x00IEND\xaeB`\x82'
@@ -1139,10 +1139,10 @@ class QMapPermalinkServerManager:
                             rect = transform.transformBoundingBox(rect)
                             bbox = f"{rect.xMinimum()},{rect.yMinimum()},{rect.xMaximum()},{rect.yMaximum()}"
                     else:
-                        QgsMessageLog.logMessage(f"⚠️ Invalid permalink CRS '{original_permalink_crs}' - forcing to EPSG:3857", "QMapPermalink", Qgis.Warning)
+                        QgsMessageLog.logMessage(f"⚠️ Invalid permalink CRS '{original_permalink_crs}' - forcing to EPSG:3857", "geo_webview", Qgis.Warning)
                         # leave bbox as-is; downstream code will force EPSG:3857 as needed
                 except Exception as ex:
-                    QgsMessageLog.logMessage(f"⚠️ Error transforming permalink BBOX: {ex}", "QMapPermalink", Qgis.Warning)
+                    QgsMessageLog.logMessage(f"⚠️ Error transforming permalink BBOX: {ex}", "geo_webview", Qgis.Warning)
 
                 # Use canvas-based rendering for permalink requests. Rotation, if
                 # needed, should be handled by the canvas adjustment routines.
@@ -1152,21 +1152,21 @@ class QMapPermalinkServerManager:
                     http_server.send_binary_response(conn, 200, "OK", png_data, "image/png")
                     return
                 else:
-                    QgsMessageLog.logMessage("❌ Permalink canvas rendering failed", "QMapPermalink", Qgis.Warning)
+                    QgsMessageLog.logMessage("❌ Permalink canvas rendering failed", "geo_webview", Qgis.Warning)
                     error_image = self._generate_error_image(width, height, "Permalink Rendering Failed")
                     from . import http_server
                     http_server.send_binary_response(conn, 200, "OK", error_image, "image/png")
                     return
             else:
-                QgsMessageLog.logMessage("❌ Failed to calculate BBOX from permalink parameters", "QMapPermalink", Qgis.Warning)
+                QgsMessageLog.logMessage("❌ Failed to calculate BBOX from permalink parameters", "geo_webview", Qgis.Warning)
                 error_image = self._generate_error_image(width, height, "Invalid Permalink Parameters")
                 from . import http_server
                 http_server.send_binary_response(conn, 200, "OK", error_image, "image/png")
                 
         except Exception as e:
-            QgsMessageLog.logMessage(f"❌ Permalink processing error: {e}", "QMapPermalink", Qgis.Critical)
+            QgsMessageLog.logMessage(f"❌ Permalink processing error: {e}", "geo_webview", Qgis.Critical)
             import traceback
-            QgsMessageLog.logMessage(f"❌ Error traceback: {traceback.format_exc()}", "QMapPermalink", Qgis.Critical)
+            QgsMessageLog.logMessage(f"❌ Error traceback: {traceback.format_exc()}", "geo_webview", Qgis.Critical)
             
             # エラー時はエラー画像を返す
             error_image = self._generate_error_image(512, 512, f"Permalink Error: {str(e)}")
@@ -1214,9 +1214,9 @@ class QMapPermalinkServerManager:
             http_server.send_http_response(conn, 200, "OK", html_content, "text/html; charset=utf-8")
             
         except Exception as e:
-            QgsMessageLog.logMessage(f"❌ Permalink HTML page generation error: {e}", "QMapPermalink", Qgis.Critical)
+            QgsMessageLog.logMessage(f"❌ Permalink HTML page generation error: {e}", "geo_webview", Qgis.Critical)
             import traceback
-            QgsMessageLog.logMessage(f"❌ Error traceback: {traceback.format_exc()}", "QMapPermalink", Qgis.Critical)
+            QgsMessageLog.logMessage(f"❌ Error traceback: {traceback.format_exc()}", "geo_webview", Qgis.Critical)
             
             # エラー時はエラーページを返す
             error_html = self._generate_error_html_page(f"Error generating permalink page: {str(e)}")
@@ -2237,7 +2237,7 @@ class QMapPermalinkServerManager:
             raise ValueError('No navigation parameters found')
 
         except Exception as e:
-            QgsMessageLog.logMessage(f"Error building navigation_data from params: {e}", "QMapPermalink", Qgis.Warning)
+            QgsMessageLog.logMessage(f"Error building navigation_data from params: {e}", "geo_webview", Qgis.Warning)
             raise
 
     def _generate_error_html_page(self, error_message):
@@ -2336,7 +2336,7 @@ class QMapPermalinkServerManager:
             return bbox
             
         except Exception as e:
-            QgsMessageLog.logMessage(f"❌ BBOX calculation error: {e}", "QMapPermalink", Qgis.Warning)
+            QgsMessageLog.logMessage(f"❌ BBOX calculation error: {e}", "geo_webview", Qgis.Warning)
             return None
 
     def _handle_wms_get_map_with_bbox(self, conn, bbox, crs, width, height, rotation=0.0):
@@ -2359,7 +2359,7 @@ class QMapPermalinkServerManager:
                             bbox = f"{rect.xMinimum()},{rect.yMinimum()},{rect.xMaximum()},{rect.yMaximum()}"
                             crs = 'EPSG:3857'
                     else:
-                        QgsMessageLog.logMessage(f"⚠️ Invalid CRS '{crs}' - forcing to EPSG:3857", "QMapPermalink", Qgis.Warning)
+                        QgsMessageLog.logMessage(f"⚠️ Invalid CRS '{crs}' - forcing to EPSG:3857", "geo_webview", Qgis.Warning)
                         crs = 'EPSG:3857'
             except Exception:
                 pass
@@ -2379,7 +2379,7 @@ class QMapPermalinkServerManager:
             http_server.send_binary_response(conn, 200, "OK", error_image, "image/png")
             
         except Exception as e:
-            QgsMessageLog.logMessage(f"❌ WMS GetMap with BBOX error: {e}", "QMapPermalink", Qgis.Critical)
+            QgsMessageLog.logMessage(f"❌ WMS GetMap with BBOX error: {e}", "geo_webview", Qgis.Critical)
             error_image = self._generate_error_image(width, height, f"Error: {str(e)}")
             from . import http_server
             http_server.send_binary_response(conn, 200, "OK", error_image, "image/png")
@@ -2390,7 +2390,7 @@ class QMapPermalinkServerManager:
             from qgis.core import QgsMessageLog, Qgis
             
             if not self.webmap_generator:
-                QgsMessageLog.logMessage("❌ WebMapGenerator not available", "QMapPermalink", Qgis.Warning)
+                QgsMessageLog.logMessage("❌ WebMapGenerator not available", "geo_webview", Qgis.Warning)
                 return None
             
             # WebMapGeneratorにダミーのナビゲーションデータを渡す
@@ -2417,7 +2417,7 @@ class QMapPermalinkServerManager:
                             'crs': crs
                         })
                 except Exception as e:
-                    QgsMessageLog.logMessage(f"⚠️ Failed to parse BBOX: {e}", "QMapPermalink", Qgis.Warning)
+                    QgsMessageLog.logMessage(f"⚠️ Failed to parse BBOX: {e}", "geo_webview", Qgis.Warning)
             
             # WebMapGeneratorを使って画像を生成
             try:
@@ -2432,16 +2432,16 @@ class QMapPermalinkServerManager:
                     png_data = base64.b64decode(base64_match.group(1))
                     return png_data
                 else:
-                    QgsMessageLog.logMessage("❌ No base64 image found in WebMapGenerator output", "QMapPermalink", Qgis.Warning)
+                    QgsMessageLog.logMessage("❌ No base64 image found in WebMapGenerator output", "geo_webview", Qgis.Warning)
                     return None
                     
             except Exception as e:
-                QgsMessageLog.logMessage(f"❌ WebMapGenerator generation failed: {e}", "QMapPermalink", Qgis.Warning)
+                QgsMessageLog.logMessage(f"❌ WebMapGenerator generation failed: {e}", "geo_webview", Qgis.Warning)
                 return None
                 
         except Exception as e:
             from qgis.core import QgsMessageLog, Qgis
-            QgsMessageLog.logMessage(f"❌ Error in _generate_webmap_png: {e}", "QMapPermalink", Qgis.Critical)
+            QgsMessageLog.logMessage(f"❌ Error in _generate_webmap_png: {e}", "geo_webview", Qgis.Critical)
             return None
 
     def _generate_qgis_map_png(self, width, height, bbox, crs, rotation=0.0):
@@ -2455,7 +2455,7 @@ class QMapPermalinkServerManager:
         try:
             return self._render_map_image(width, height, bbox, crs, rotation)
         except Exception as e:
-            QgsMessageLog.logMessage(f"❌ Error in _generate_qgis_map_png (delegated): {e}", "QMapPermalink", Qgis.Critical)
+            QgsMessageLog.logMessage(f"❌ Error in _generate_qgis_map_png (delegated): {e}", "geo_webview", Qgis.Critical)
             return None
 
     def _set_canvas_extent_from_bbox(self, bbox, crs):
@@ -2466,7 +2466,7 @@ class QMapPermalinkServerManager:
             # BBOXの解析 (minx,miny,maxx,maxy)
             coords = [float(x) for x in bbox.split(',')]
             if len(coords) != 4:
-                QgsMessageLog.logMessage(f"❌ Invalid BBOX format: {bbox}", "QMapPermalink", Qgis.Warning)
+                QgsMessageLog.logMessage(f"❌ Invalid BBOX format: {bbox}", "geo_webview", Qgis.Warning)
                 return False
             
             minx, miny, maxx, maxy = coords
@@ -2477,13 +2477,13 @@ class QMapPermalinkServerManager:
             # 入力CRS
             source_crs = QgsCoordinateReferenceSystem(crs)
             if not source_crs.isValid():
-                QgsMessageLog.logMessage(f"❌ Invalid CRS: {crs}", "QMapPermalink", Qgis.Warning)
+                QgsMessageLog.logMessage(f"❌ Invalid CRS: {crs}", "geo_webview", Qgis.Warning)
                 return False
             
             # キャンバスのCRS取得
             canvas = self.iface.mapCanvas()
             if not canvas:
-                QgsMessageLog.logMessage("❌ No map canvas available", "QMapPermalink", Qgis.Warning)
+                QgsMessageLog.logMessage("❌ No map canvas available", "geo_webview", Qgis.Warning)
                 return False
             
             dest_crs = canvas.mapSettings().destinationCrs()
@@ -2497,7 +2497,7 @@ class QMapPermalinkServerManager:
                 try:
                     extent = transform.transformBoundingBox(extent)
                 except Exception as e:
-                    QgsMessageLog.logMessage(f"❌ Coordinate transformation failed: {e}", "QMapPermalink", Qgis.Warning)
+                    QgsMessageLog.logMessage(f"❌ Coordinate transformation failed: {e}", "geo_webview", Qgis.Warning)
                     return False
             
             # キャンバスの表示範囲を設定
@@ -2507,9 +2507,9 @@ class QMapPermalinkServerManager:
             return True
             
         except Exception as e:
-            QgsMessageLog.logMessage(f"❌ Error setting canvas extent: {e}", "QMapPermalink", Qgis.Critical)
+            QgsMessageLog.logMessage(f"❌ Error setting canvas extent: {e}", "geo_webview", Qgis.Critical)
             import traceback
-            QgsMessageLog.logMessage(f"❌ Traceback: {traceback.format_exc()}", "QMapPermalink", Qgis.Critical)
+            QgsMessageLog.logMessage(f"❌ Traceback: {traceback.format_exc()}", "geo_webview", Qgis.Critical)
             return False
 
     def _capture_canvas_image(self, width, height):
@@ -2540,7 +2540,7 @@ class QMapPermalinkServerManager:
                         try:
                             canvas = self.iface.mapCanvas()
                             if not canvas:
-                                QgsMessageLog.logMessage("❌ No map canvas available (helper)", "QMapPermalink", Qgis.Warning)
+                                QgsMessageLog.logMessage("❌ No map canvas available (helper)", "geo_webview", Qgis.Warning)
                                 self.finished.emit(b'')
                                 return
 
@@ -2554,7 +2554,7 @@ class QMapPermalinkServerManager:
 
                             pixmap = canvas.grab()
                             if pixmap.isNull():
-                                QgsMessageLog.logMessage("❌ Failed to grab canvas pixmap (helper)", "QMapPermalink", Qgis.Warning)
+                                QgsMessageLog.logMessage("❌ Failed to grab canvas pixmap (helper)", "geo_webview", Qgis.Warning)
                                 self.finished.emit(b'')
                                 return
 
@@ -2569,7 +2569,7 @@ class QMapPermalinkServerManager:
 
                             image = pixmap.toImage()
                             if image.isNull():
-                                QgsMessageLog.logMessage("❌ Failed to convert pixmap to image (helper)", "QMapPermalink", Qgis.Warning)
+                                QgsMessageLog.logMessage("❌ Failed to convert pixmap to image (helper)", "geo_webview", Qgis.Warning)
                                 self.finished.emit(b'')
                                 return
 
@@ -2590,7 +2590,7 @@ class QMapPermalinkServerManager:
                             buffer.open(write_mode)
                             success = image.save(buffer, "PNG")
                             if not success:
-                                QgsMessageLog.logMessage("❌ Failed to save image as PNG (helper)", "QMapPermalink", Qgis.Warning)
+                                QgsMessageLog.logMessage("❌ Failed to save image as PNG (helper)", "geo_webview", Qgis.Warning)
                                 self.finished.emit(b'')
                                 return
 
@@ -2598,7 +2598,7 @@ class QMapPermalinkServerManager:
                             self.finished.emit(png_data)
 
                         except Exception as e:
-                            QgsMessageLog.logMessage(f"❌ Exception in helper capture: {e}", "QMapPermalink", Qgis.Warning)
+                            QgsMessageLog.logMessage(f"❌ Exception in helper capture: {e}", "geo_webview", Qgis.Warning)
                             try:
                                 self.finished.emit(b'')
                             except Exception:
@@ -2652,12 +2652,12 @@ class QMapPermalinkServerManager:
 
             # If capture failed or timed out, fallback to None so caller can try
             # other rendering approaches.
-            QgsMessageLog.logMessage("⚠️ Canvas capture timed out or failed", "QMapPermalink", Qgis.Warning)
+            QgsMessageLog.logMessage("⚠️ Canvas capture timed out or failed", "geo_webview", Qgis.Warning)
             return None
 
         except Exception as e:
             from qgis.core import QgsMessageLog, Qgis
-            QgsMessageLog.logMessage(f"❌ Error in _capture_canvas_image: {e}", "QMapPermalink", Qgis.Critical)
+            QgsMessageLog.logMessage(f"❌ Error in _capture_canvas_image: {e}", "geo_webview", Qgis.Critical)
             return None
 
     def _render_map_image(self, width, height, bbox, crs, rotation=0.0):
@@ -2675,7 +2675,7 @@ class QMapPermalinkServerManager:
             # WMS独立レンダリング設定を作成
             map_settings = self._create_wms_map_settings(width, height, bbox, crs, rotation=rotation)
             if not map_settings:
-                QgsMessageLog.logMessage("❌ Failed to create WMS map settings", "QMapPermalink", Qgis.Warning)
+                QgsMessageLog.logMessage("❌ Failed to create WMS map settings", "geo_webview", Qgis.Warning)
                 return None
 
             # 独立したマップレンダラーでPNG画像を生成
@@ -2683,13 +2683,13 @@ class QMapPermalinkServerManager:
             if png_data:
                 return png_data
             else:
-                QgsMessageLog.logMessage("❌ Professional WMS rendering failed", "QMapPermalink", Qgis.Warning)
+                QgsMessageLog.logMessage("❌ Professional WMS rendering failed", "geo_webview", Qgis.Warning)
                 return None
 
         except Exception as e:
-            QgsMessageLog.logMessage(f"❌ Error in professional WMS rendering: {e}", "QMapPermalink", Qgis.Critical)
+            QgsMessageLog.logMessage(f"❌ Error in professional WMS rendering: {e}", "geo_webview", Qgis.Critical)
             import traceback
-            QgsMessageLog.logMessage(f"❌ Traceback: {traceback.format_exc()}", "QMapPermalink", Qgis.Critical)
+            QgsMessageLog.logMessage(f"❌ Traceback: {traceback.format_exc()}", "geo_webview", Qgis.Critical)
             return None
 
     def _create_wms_map_settings(self, width, height, bbox, crs, rotation=0.0):
@@ -2722,7 +2722,7 @@ class QMapPermalinkServerManager:
                 from qgis.core import QgsProject
                 project = QgsProject.instance()
                 map_settings.setLayers(project.mapLayers().values())
-                QgsMessageLog.logMessage("⚠️ No canvas, using all project layers", "QMapPermalink", Qgis.Warning)
+                QgsMessageLog.logMessage("⚠️ No canvas, using all project layers", "geo_webview", Qgis.Warning)
             
             # 2. 出力サイズ設定
             from qgis.PyQt.QtCore import QSize
@@ -2732,7 +2732,7 @@ class QMapPermalinkServerManager:
             if bbox and crs:
                 success = self._configure_wms_extent_and_crs(map_settings, bbox, crs)
                 if not success:
-                    QgsMessageLog.logMessage("❌ Failed to configure WMS extent/CRS", "QMapPermalink", Qgis.Warning)
+                    QgsMessageLog.logMessage("❌ Failed to configure WMS extent/CRS", "geo_webview", Qgis.Warning)
                     return None
             else:
                 # デフォルト範囲設定
@@ -2767,7 +2767,7 @@ class QMapPermalinkServerManager:
             return map_settings
             
         except Exception as e:
-            QgsMessageLog.logMessage(f"❌ Error creating WMS map settings: {e}", "QMapPermalink", Qgis.Critical)
+            QgsMessageLog.logMessage(f"❌ Error creating WMS map settings: {e}", "geo_webview", Qgis.Critical)
             return None
 
     def _configure_wms_extent_and_crs(self, map_settings, bbox, crs):
@@ -2778,7 +2778,7 @@ class QMapPermalinkServerManager:
             # BBOXの解析 (minx,miny,maxx,maxy)
             coords = [float(x) for x in bbox.split(',')]
             if len(coords) != 4:
-                QgsMessageLog.logMessage(f"❌ Invalid BBOX format: {bbox}", "QMapPermalink", Qgis.Warning)  
+                QgsMessageLog.logMessage(f"❌ Invalid BBOX format: {bbox}", "geo_webview", Qgis.Warning)  
                 return False
             
             minx, miny, maxx, maxy = coords
@@ -2787,7 +2787,7 @@ class QMapPermalinkServerManager:
             # CRS設定
             target_crs = QgsCoordinateReferenceSystem(crs)
             if not target_crs.isValid():
-                QgsMessageLog.logMessage(f"❌ Invalid CRS: {crs}", "QMapPermalink", Qgis.Warning)
+                QgsMessageLog.logMessage(f"❌ Invalid CRS: {crs}", "geo_webview", Qgis.Warning)
                 return False
             
             map_settings.setDestinationCrs(target_crs)
@@ -2796,10 +2796,10 @@ class QMapPermalinkServerManager:
             return True
             
         except ValueError as e:
-            QgsMessageLog.logMessage(f"❌ Error parsing BBOX coordinates: {e}", "QMapPermalink", Qgis.Warning)
+            QgsMessageLog.logMessage(f"❌ Error parsing BBOX coordinates: {e}", "geo_webview", Qgis.Warning)
             return False
         except Exception as e:
-            QgsMessageLog.logMessage(f"❌ Error configuring WMS extent/CRS: {e}", "QMapPermalink", Qgis.Critical)
+            QgsMessageLog.logMessage(f"❌ Error configuring WMS extent/CRS: {e}", "geo_webview", Qgis.Critical)
             return False
 
     def _execute_map_rendering(self, map_settings):
@@ -2850,7 +2850,7 @@ class QMapPermalinkServerManager:
             # レンダリング結果を取得
             image = job.renderedImage()
             if image.isNull():
-                QgsMessageLog.logMessage("❌ Rendered image is null", "QMapPermalink", Qgis.Warning)
+                QgsMessageLog.logMessage("❌ Rendered image is null", "geo_webview", Qgis.Warning)
                 return None
             
             # PNG形式でバイト配列に変換
@@ -2872,16 +2872,16 @@ class QMapPermalinkServerManager:
             
             success = image.save(buffer, "PNG")
             if not success:
-                QgsMessageLog.logMessage("❌ Failed to save rendered image as PNG", "QMapPermalink", Qgis.Warning)
+                QgsMessageLog.logMessage("❌ Failed to save rendered image as PNG", "geo_webview", Qgis.Warning)
                 return None
             
             png_data = byte_array.data()
             return png_data
             
         except Exception as e:
-            QgsMessageLog.logMessage(f"❌ Error executing map rendering: {e}", "QMapPermalink", Qgis.Critical)
+            QgsMessageLog.logMessage(f"❌ Error executing map rendering: {e}", "geo_webview", Qgis.Critical)
             import traceback
-            QgsMessageLog.logMessage(f"❌ Traceback: {traceback.format_exc()}", "QMapPermalink", Qgis.Critical)
+            QgsMessageLog.logMessage(f"❌ Traceback: {traceback.format_exc()}", "geo_webview", Qgis.Critical)
             return None
             
             # マップレンダリング実行
@@ -2894,7 +2894,7 @@ class QMapPermalinkServerManager:
             
             image = job.renderedImage()
             if image.isNull():
-                QgsMessageLog.logMessage("❌ Rendered image is null", "QMapPermalink", Qgis.Warning)
+                QgsMessageLog.logMessage("❌ Rendered image is null", "geo_webview", Qgis.Warning)
                 return None
             
             # PNG形式でバイト配列に変換
@@ -2905,16 +2905,16 @@ class QMapPermalinkServerManager:
             
             success = image.save(buffer, "PNG")
             if not success:
-                QgsMessageLog.logMessage("❌ Failed to save image as PNG", "QMapPermalink", Qgis.Warning)
+                QgsMessageLog.logMessage("❌ Failed to save image as PNG", "geo_webview", Qgis.Warning)
                 return None
             
             png_data = byte_array.data()
             return png_data
             
         except Exception as e:
-            QgsMessageLog.logMessage(f"❌ Error generating QGIS map PNG: {e}", "QMapPermalink", Qgis.Critical)
+            QgsMessageLog.logMessage(f"❌ Error generating QGIS map PNG: {e}", "geo_webview", Qgis.Critical)
             import traceback
-            QgsMessageLog.logMessage(f"❌ Traceback: {traceback.format_exc()}", "QMapPermalink", Qgis.Critical)
+            QgsMessageLog.logMessage(f"❌ Traceback: {traceback.format_exc()}", "geo_webview", Qgis.Critical)
             return None
 
     def _generate_error_image(self, width, height, error_message):
@@ -3008,7 +3008,7 @@ class QMapPermalinkServerManager:
                     from qgis.core import QgsMessageLog, Qgis
                     QgsMessageLog.logMessage(
                         f"ポート {port} のバインドに失敗しました（管理者権限が必要な可能性があります）: {e}",
-                        "QMapPermalink", Qgis.Warning
+                        "geo_webview", Qgis.Warning
                     )
                 continue
         raise RuntimeError(f"ポート範囲 {start_port}-{end_port} で使用可能なポートが見つかりません")
@@ -3235,7 +3235,7 @@ class QMapPermalinkServerManager:
             
         except Exception as e:
             from qgis.core import QgsMessageLog, Qgis
-            QgsMessageLog.logMessage(f"ファイアウォールポートスキャンエラー: {e}", "QMapPermalink", Qgis.Warning)
+            QgsMessageLog.logMessage(f"ファイアウォールポートスキャンエラー: {e}", "geo_webview", Qgis.Warning)
             return []
     
     def add_firewall_rule(self, port, rule_name=None, request_elevation=True):
@@ -3299,7 +3299,7 @@ class QMapPermalinkServerManager:
                     result['success'] = True
                     result['message'] = f'ファイアウォールルール "{rule_name}" を追加しました'
                     from qgis.core import QgsMessageLog, Qgis
-                    QgsMessageLog.logMessage(result['message'], "QMapPermalink", Qgis.Info)
+                    QgsMessageLog.logMessage(result['message'], "geo_webview", Qgis.Info)
                 else:
                     # 通常権限で失敗した場合、管理者権限で再試行
                     if request_elevation:
@@ -3366,7 +3366,7 @@ class QMapPermalinkServerManager:
                                 result['success'] = True
                                 result['message'] = f'ファイアウォールルール "{rule_name}" を管理者権限で追加しました'
                                 from qgis.core import QgsMessageLog, Qgis
-                                QgsMessageLog.logMessage(result['message'], "QMapPermalink", Qgis.Info)
+                                QgsMessageLog.logMessage(result['message'], "geo_webview", Qgis.Info)
                             else:
                                 # ユーザーがUACをキャンセルした可能性
                                 result['admin_required'] = True
@@ -3384,7 +3384,7 @@ class QMapPermalinkServerManager:
                         result['message'] = f'管理者権限が必要です。\n\n次のコマンドを管理者権限のコマンドプロンプトで実行してください:\n\n{cmd}'
                         result['command'] = cmd
                         from qgis.core import QgsMessageLog, Qgis
-                        QgsMessageLog.logMessage(f"ファイアウォールルール追加に管理者権限が必要: {output.stderr}", "QMapPermalink", Qgis.Warning)
+                        QgsMessageLog.logMessage(f"ファイアウォールルール追加に管理者権限が必要: {output.stderr}", "geo_webview", Qgis.Warning)
                     
             except subprocess.TimeoutExpired:
                 result['message'] = 'ファイアウォールルールの追加がタイムアウトしました'
@@ -3400,7 +3400,7 @@ class QMapPermalinkServerManager:
         except Exception as e:
             result['message'] = f'ファイアウォールルールの追加に失敗しました: {str(e)}'
             from qgis.core import QgsMessageLog, Qgis
-            QgsMessageLog.logMessage(result['message'], "QMapPermalink", Qgis.Critical)
+            QgsMessageLog.logMessage(result['message'], "geo_webview", Qgis.Critical)
         
         return result
 

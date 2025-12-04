@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Lightweight WMTS-like service for QMapPermalink.
+Lightweight WMTS-like service for geo_webview.
 
 This module provides a small class that handles /wmts requests and
 delegates actual rendering to the server manager's existing WMS
@@ -17,7 +17,7 @@ import concurrent.futures
 import threading
 
 
-class QMapPermalinkWMTSService:
+class GeoWebViewWMTSService:
     """Simple WMTS-like handler that maps XYZ tiles to a WMS GetMap BBOX.
 
     The service does not implement a full WMTS server — just a minimal
@@ -1140,7 +1140,7 @@ class QMapPermalinkWMTSService:
                 from qgis.core import QgsMessageLog, Qgis
                 QgsMessageLog.logMessage(
                     f"🚀 WMTS Prewarm: {len(tasks)}タイルを並列生成開始",
-                    "QMapPermalink", Qgis.Info
+                    "geo_webview", Qgis.Info
                 )
                 
                 for task in tasks:
@@ -1151,7 +1151,7 @@ class QMapPermalinkWMTSService:
                 from qgis.core import QgsMessageLog, Qgis
                 QgsMessageLog.logMessage(
                     f"⚠️ WMTS Prewarm setup failed: {e}",
-                    "QMapPermalink", Qgis.Warning
+                    "geo_webview", Qgis.Warning
                 )
         finally:
             # Reset flag after a delay
@@ -1225,7 +1225,7 @@ class QMapPermalinkWMTSService:
                 from qgis.core import QgsMessageLog, Qgis
                 QgsMessageLog.logMessage(
                     f"Prewarm tile {z}/{x}/{y} failed: {e}",
-                    "QMapPermalink", Qgis.Warning
+                    "geo_webview", Qgis.Warning
                 )
             except Exception:
                 pass

@@ -1,4 +1,4 @@
-"""Simple WMS smoke test helper for QMapPermalink
+"""Simple WMS smoke test helper for geo_webview
 
 Usage examples:
   python tools/wms_smoke_test.py --host localhost --port 8089 --outdir .\tmp
@@ -42,7 +42,7 @@ def fetch_get_map(base_url: str, out_path: str, params: dict) -> int:
 
 
 def main():
-    p = argparse.ArgumentParser(description="WMS smoke test for QMapPermalink")
+    p = argparse.ArgumentParser(description="WMS smoke test for geo_webview")
     p.add_argument("--host", default="localhost", help="server host")
     p.add_argument("--port", default=8089, type=int, help="server port")
     p.add_argument("--outdir", default=".", help="output directory for test image")

@@ -1,4 +1,4 @@
-"""Basic WFS checks for QMapPermalink
+"""Basic WFS checks for geo_webview
 
 - Fetch GetCapabilities
 - Parse FeatureTypeList and print count/names

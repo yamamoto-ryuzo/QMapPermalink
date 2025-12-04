@@ -1,11 +1,11 @@
-# QMapPermalink — 社内（LAN）で安全に使える、かんたん地図共有ツール
+# geo_webview — 社内（LAN）で安全に使える、かんたん地図共有ツール
 
 > あなたが『今見ている地図』を、そのまま社内資料（Excel / PowerPoint / PDF）の共有リンクに変えるためのツール。  
 > OpenLayers / MapLibre / Google Maps / Google Earth　との連携も簡単に行えます。  
 
 ## ざっくり説明（ワンセンテンス）
 
-QMapPermalink は QGIS の表示状態（中心位置・ズーム・レイヤ設定など）を“パーマリンク”として固定し、社内 LAN 上で安全に共有したり、Excel / PowerPoint / PDF / OpenLayers / MapLibre / Google Maps / Google Earth と簡単に連携できるツールです。  
+geo_webview は QGIS の表示状態（中心位置・ズーム・レイヤ設定など）を“パーマリンク”として固定し、社内 LAN 上で安全に共有したり、Excel / PowerPoint / PDF / OpenLayers / MapLibre / Google Maps / Google Earth と簡単に連携できるツールです。  
 
    ![alt text](images/image01.png)
 
@@ -18,13 +18,13 @@ QMapPermalink は QGIS の表示状態（中心位置・ズーム・レイヤ設
 
 （注：これらが整っていないと、生成されるパーマリンクやエクスポート結果が期待どおりに復元できません。）
 
-## なぜ QMapPermalink を社内で使うのか（QGIS と違う点）
+## なぜ geo_webview を社内で使うのか（QGIS と違う点）
 
 - QGIS は編集・解析・スタイリングが得意な“作業ツール”。そのままファイルを渡すと相手で環境を揃える必要があることも。
-- QMapPermalink は“共有”に特化。今見えている地図を軽量な形（URL / HTML パッケージ / 画像）で切り出し、受け手が簡単に開ける形式にします。
+- geo_webview は“共有”に特化。今見えている地図を軽量な形（URL / HTML パッケージ / 画像）で切り出し、受け手が簡単に開ける形式にします。
 - 社内（LAN）での運用を前提にしているため、外部公開せずに機密データを扱いやすい設計ができます。
 
-例えるなら：QGIS が厨房での調理、QMapPermalink は店内配膳・テイクアウトの包装・ラベル付けを担当するサービスです。
+例えるなら：QGIS が厨房での調理、geo_webview は店内配膳・テイクアウトの包装・ラベル付けを担当するサービスです。
 
 ## 主な機能（社内利用にフォーカスしたハイライト）
 
@@ -60,7 +60,7 @@ QMapPermalink は QGIS の表示状態（中心位置・ズーム・レイヤ設
 
 ## WFS (Web Feature Service) 機能
 
-QMapPermalink は QGIS のベクターレイヤーを OGC WFS 2.0 準拠のサービスとして提供します。これにより、外部の GIS アプリケーションやウェブアプリケーションから QGIS の地物を GeoJSON または GML 形式で取得することができます。
+geo_webview は QGIS のベクターレイヤーを OGC WFS 2.0 準拠のサービスとして提供します。これにより、外部の GIS アプリケーションやウェブアプリケーションから QGIS の地物を GeoJSON または GML 形式で取得することができます。
 
 ### 🚀 Phase 1 高速化 (v3.4.0)
 
@@ -131,14 +131,14 @@ curl "http://localhost:8089/wfs?SERVICE=WFS&REQUEST=GetStyles&TYPENAME=my_layer"
 - 空間フィルタ（BBOX）はレイヤーの座標系で指定してください
 - GetStyles は QGIS のレンダラ設定に基づいて SLD (Styled Layer Descriptor) を生成します
 - **キャッシュ**: 同じリクエストは5分間キャッシュされます。データ更新時は5分経過後に自動反映されます
-- **パフォーマンスログ**: QGISログパネル(QMapPermalink)でキャッシュヒット/ミスを確認できます
+- **パフォーマンスログ**: QGISログパネル(geo_webview)でキャッシュヒット/ミスを確認できます
 - 社内 LAN での利用を前提としており、外部公開には適していません
   
 ## 使用例
 
 1. 資料作成時
    - QGIS で地図の特定箇所を表示し、表示状態を整える
-   - QMapPermalink でパーマリンクを生成する
+   - geo_webview でパーマリンクを生成する
    - Excel や PowerPoint、PDF の説明資料にそのリンクや PNG を埋め込む
 
 2. 資料閲覧時
@@ -146,7 +146,7 @@ curl "http://localhost:8089/wfs?SERVICE=WFS&REQUEST=GetStyles&TYPENAME=my_layer"
    - 説明スライドと地図画面が瞬時に連携し、発表やレビューがスムーズに進む
 
 3. パネル形式での効率的なワークフロー
-   - QMapPermalink のパネルを常時表示しておくことで、複数のパーマリンクを素早く生成・管理可能
+   - geo_webview のパネルを常時表示しておくことで、複数のパーマリンクを素早く生成・管理可能
    - 必要に応じて Google Maps / Google Earth と連携してブラウザでの確認をワンクリックで実施
 
 ## Office（Excel / PowerPoint）・PDF 連携ガイド

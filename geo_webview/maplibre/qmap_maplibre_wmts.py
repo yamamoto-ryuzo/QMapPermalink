@@ -1,4 +1,4 @@
-"""WMTS helper utilities for QMapPermalink MapLibre HTML generation.
+"""WMTS helper utilities for geo_webview MapLibre HTML generation.
 
 This module contains a small, dependency-light helper to select the appropriate
 WMTS tile template and to provide the default WMTS layers JavaScript snippet
@@ -33,7 +33,7 @@ def choose_tile_template() -> str:
         # MapLibre requires complete URLs for tile sources
         # Try to get the actual server port from the plugin
         try:
-            from ..qmap_permalink_server_manager import QMapPermalinkServerManager
+            from ..qmap_permalink_server_manager import GeoWebViewServerManager
             # Attempt to find a running server instance
             port = 8089  # default fallback
             # In practice, the server manager is instantiated with the plugin

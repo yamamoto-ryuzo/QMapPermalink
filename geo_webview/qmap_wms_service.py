@@ -19,7 +19,7 @@ from qgis.PyQt.QtCore import QSize, QEventLoop, QTimer
 from qgis.PyQt.QtGui import QColor
 
 
-class QMapPermalinkWMSService:
+class GeoWebViewWMSService:
     """geo_webview用WMSサービスクラス
 
     WMS GetCapabilitiesおよびGetMapリクエストを処理し、
@@ -570,7 +570,7 @@ class QMapPermalinkWMSService:
                         return None
                     except Exception as e:
                         from qgis.core import QgsMessageLog, Qgis
-                        QgsMessageLog.logMessage(f"❌ Fast-path rendering error: {e}", "QMapPermalink", Qgis.Critical)
+                        QgsMessageLog.logMessage(f"❌ Fast-path rendering error: {e}", "geo_webview", Qgis.Critical)
                         return None
 
                 def _rot(px, py, cx, cy, a):
@@ -601,7 +601,7 @@ class QMapPermalinkWMSService:
                 bw = bmaxx - bminx
                 bh = bmaxy - bminy
                 if aw <= 0 or ah <= 0 or bw <= 0 or bh <= 0:
-                    QgsMessageLog.logMessage("❌ Invalid geometry when computing expanded extent for rotation", "QMapPermalink", Qgis.Warning)
+                    QgsMessageLog.logMessage("❌ Invalid geometry when computing expanded extent for rotation", "geo_webview", Qgis.Warning)
                     return None
 
                 # compute render size so that pixel-per-map-unit matches original requested mapping
@@ -638,7 +638,7 @@ class QMapPermalinkWMSService:
                 # perform rendering
                 big_image = self._execute_parallel_rendering(map_settings)
                 if not big_image or big_image.isNull():
-                    QgsMessageLog.logMessage("❌ Rotated rendering produced no image", "QMapPermalink", Qgis.Warning)
+                    QgsMessageLog.logMessage("❌ Rotated rendering produced no image", "geo_webview", Qgis.Warning)
                     return None
 
                 # Instead of attempting to map rotated coords to pixels (which is fragile
@@ -742,25 +742,25 @@ class QMapPermalinkWMSService:
                         # サイズが一致する場合はそのまま使用（画質劣化なし）
                         png_data = self._save_image_as_png(cropped)
                 except Exception as e:
-                    QgsMessageLog.logMessage(f"❌ Rotated image post-processing failed: {e}", "QMapPermalink", Qgis.Warning)
+                    QgsMessageLog.logMessage(f"❌ Rotated image post-processing failed: {e}", "geo_webview", Qgis.Warning)
                     return None
                 if png_data:
                     return png_data
-                QgsMessageLog.logMessage("❌ Rotated WMS rendering failed (png conversion)", "QMapPermalink", Qgis.Warning)
+                QgsMessageLog.logMessage("❌ Rotated WMS rendering failed (png conversion)", "geo_webview", Qgis.Warning)
                 return None
 
             except Exception as e:
                 from qgis.core import QgsMessageLog, Qgis
                 import traceback
-                QgsMessageLog.logMessage(f"❌ Rotated rendering error: {e}", "QMapPermalink", Qgis.Critical)
-                QgsMessageLog.logMessage(f"❌ Traceback: {traceback.format_exc()}", "QMapPermalink", Qgis.Critical)
+                QgsMessageLog.logMessage(f"❌ Rotated rendering error: {e}", "geo_webview", Qgis.Critical)
+                QgsMessageLog.logMessage(f"❌ Traceback: {traceback.format_exc()}", "geo_webview", Qgis.Critical)
                 return None
 
         except Exception as e:
             from qgis.core import QgsMessageLog, Qgis
             import traceback
-            QgsMessageLog.logMessage(f"❌ WMS rendering error: {e}", "QMapPermalink", Qgis.Critical)
-            QgsMessageLog.logMessage(f"❌ Error traceback: {traceback.format_exc()}", "QMapPermalink", Qgis.Critical)
+            QgsMessageLog.logMessage(f"❌ WMS rendering error: {e}", "geo_webview", Qgis.Critical)
+            QgsMessageLog.logMessage(f"❌ Error traceback: {traceback.format_exc()}", "geo_webview", Qgis.Critical)
             return None
         finally:
             # restore any temporary labeling we applied
@@ -820,11 +820,11 @@ class QMapPermalinkWMSService:
                                     from qgis.core import QgsMessageLog, Qgis
                                     QgsMessageLog.logMessage(
                                         f"🔤 ✅ Applied label rotation correction: {label_rotation}° for layer '{layer.name()}' (QgsVectorLayerSimpleLabeling)", 
-                                        "QMapPermalink", Qgis.Info
+                                        "geo_webview", Qgis.Info
                                     )
                                 else:
                                     from qgis.core import QgsMessageLog, Qgis
-                                    QgsMessageLog.logMessage(f"⚠️ No PAL settings found in QgsVectorLayerSimpleLabeling for layer '{layer.name()}'", "QMapPermalink", Qgis.Warning)
+                                    QgsMessageLog.logMessage(f"⚠️ No PAL settings found in QgsVectorLayerSimpleLabeling for layer '{layer.name()}'", "geo_webview", Qgis.Warning)
                             
                             elif isinstance(label_settings, QgsPalLayerSettings):
                                 # 直接QgsPalLayerSettingsの場合（古い形式）
@@ -840,32 +840,32 @@ class QMapPermalinkWMSService:
                                 from qgis.core import QgsMessageLog, Qgis
                                 QgsMessageLog.logMessage(
                                     f"🔤 ✅ Applied label rotation correction: {label_rotation}° for layer '{layer.name()}' (QgsPalLayerSettings)", 
-                                    "QMapPermalink", Qgis.Info
+                                    "geo_webview", Qgis.Info
                                 )
                             else:
                                 from qgis.core import QgsMessageLog, Qgis
-                                QgsMessageLog.logMessage(f"⚠️ Label settings type not supported for layer '{layer.name()}': {type(label_settings)}", "QMapPermalink", Qgis.Warning)
+                                QgsMessageLog.logMessage(f"⚠️ Label settings type not supported for layer '{layer.name()}': {type(label_settings)}", "geo_webview", Qgis.Warning)
                         
                         except Exception as e:
                             from qgis.core import QgsMessageLog, Qgis
                             import traceback
-                            QgsMessageLog.logMessage(f"⚠️ Failed to apply rotation to layer '{layer.name()}': {e}", "QMapPermalink", Qgis.Warning)
-                            QgsMessageLog.logMessage(f"⚠️ Traceback: {traceback.format_exc()}", "QMapPermalink", Qgis.Warning)
+                            QgsMessageLog.logMessage(f"⚠️ Failed to apply rotation to layer '{layer.name()}': {e}", "geo_webview", Qgis.Warning)
+                            QgsMessageLog.logMessage(f"⚠️ Traceback: {traceback.format_exc()}", "geo_webview", Qgis.Warning)
                     else:
                         from qgis.core import QgsMessageLog, Qgis
-                        QgsMessageLog.logMessage(f"⚠️ No label settings found for layer '{layer.name()}'", "QMapPermalink", Qgis.Warning)
+                        QgsMessageLog.logMessage(f"⚠️ No label settings found for layer '{layer.name()}'", "geo_webview", Qgis.Warning)
             
             from qgis.core import QgsMessageLog, Qgis
             QgsMessageLog.logMessage(
                 f"🔤 Label rotation correction completed: {labeled_layer_count} labeled layers processed", 
-                "QMapPermalink", Qgis.Info
+                "geo_webview", Qgis.Info
             )
             
         except Exception as e:
             from qgis.core import QgsMessageLog, Qgis
             import traceback
-            QgsMessageLog.logMessage(f"❌ Label rotation correction error: {e}", "QMapPermalink", Qgis.Critical)
-            QgsMessageLog.logMessage(f"❌ Traceback: {traceback.format_exc()}", "QMapPermalink", Qgis.Critical)
+            QgsMessageLog.logMessage(f"❌ Label rotation correction error: {e}", "geo_webview", Qgis.Critical)
+            QgsMessageLog.logMessage(f"❌ Traceback: {traceback.format_exc()}", "geo_webview", Qgis.Critical)
 
     def _apply_label_rotation_only(self, map_settings, rotation):
         """ラベルのみを指定角度で回転させる（画像は回転させない）。
@@ -894,7 +894,7 @@ class QMapPermalinkWMSService:
                                 new_labeling = QgsVectorLayerSimpleLabeling(pal_copy)
                                 layer.setLabeling(new_labeling)
                             else:
-                                QgsMessageLog.logMessage(f"⚠️ No PAL settings in labeling for layer '{layer.name()}'", "QMapPermalink", Qgis.Warning)
+                                QgsMessageLog.logMessage(f"⚠️ No PAL settings in labeling for layer '{layer.name()}'", "geo_webview", Qgis.Warning)
                         else:
                             # 試しに QgsPalLayerSettings でラップして適用
                             try:
@@ -903,16 +903,16 @@ class QMapPermalinkWMSService:
                                 new_labeling = QgsVectorLayerSimpleLabeling(pal_try)
                                 layer.setLabeling(new_labeling)
                             except Exception:
-                                QgsMessageLog.logMessage(f"⚠️ Unsupported labeling type for layer '{layer.name()}': {type(orig_labeling)}", "QMapPermalink", Qgis.Warning)
+                                QgsMessageLog.logMessage(f"⚠️ Unsupported labeling type for layer '{layer.name()}': {type(orig_labeling)}", "geo_webview", Qgis.Warning)
                 except Exception as e:
                     from qgis.core import QgsMessageLog, Qgis
-                    QgsMessageLog.logMessage(f"⚠️ Failed processing layer for label-only rotation: {e}", "QMapPermalink", Qgis.Warning)
+                    QgsMessageLog.logMessage(f"⚠️ Failed processing layer for label-only rotation: {e}", "geo_webview", Qgis.Warning)
 
         except Exception as e:
             from qgis.core import QgsMessageLog, Qgis
             import traceback
-            QgsMessageLog.logMessage(f"❌ _apply_label_rotation_only error: {e}", "QMapPermalink", Qgis.Critical)
-            QgsMessageLog.logMessage(f"❌ Traceback: {traceback.format_exc()}", "QMapPermalink", Qgis.Critical)
+            QgsMessageLog.logMessage(f"❌ _apply_label_rotation_only error: {e}", "geo_webview", Qgis.Critical)
+            QgsMessageLog.logMessage(f"❌ Traceback: {traceback.format_exc()}", "geo_webview", Qgis.Critical)
 
         return original_labelings
 
@@ -961,14 +961,14 @@ class QMapPermalinkWMSService:
                     layer.setLabeling(labeling)
                     layer.setLabelsEnabled(True)
 
-                    QgsMessageLog.logMessage(f"🔤 Temporarily enabled labels for '{layer.name()}' using field '{field}'", "QMapPermalink", Qgis.Info)
+                    QgsMessageLog.logMessage(f"🔤 Temporarily enabled labels for '{layer.name()}' using field '{field}'", "geo_webview", Qgis.Info)
                 except Exception as e:
-                    QgsMessageLog.logMessage(f"⚠️ Failed to apply temporary labeling for layer '{getattr(layer, 'name', lambda: '<unknown>')()}': {e}", "QMapPermalink", Qgis.Warning)
+                    QgsMessageLog.logMessage(f"⚠️ Failed to apply temporary labeling for layer '{getattr(layer, 'name', lambda: '<unknown>')()}': {e}", "geo_webview", Qgis.Warning)
 
         except Exception as e:
             try:
                 from qgis.core import QgsMessageLog, Qgis
-                QgsMessageLog.logMessage(f"❌ _apply_temporary_labeling error: {e}", "QMapPermalink", Qgis.Critical)
+                QgsMessageLog.logMessage(f"❌ _apply_temporary_labeling error: {e}", "geo_webview", Qgis.Critical)
             except Exception:
                 pass
 
@@ -990,7 +990,7 @@ class QMapPermalinkWMSService:
                     except Exception:
                         pass
                 except Exception as e:
-                    QgsMessageLog.logMessage(f"⚠️ Failed to restore labeling for layer '{getattr(layer, 'name', lambda: '<unknown>')()}': {e}", "QMapPermalink", Qgis.Warning)
+                    QgsMessageLog.logMessage(f"⚠️ Failed to restore labeling for layer '{getattr(layer, 'name', lambda: '<unknown>')()}': {e}", "geo_webview", Qgis.Warning)
         except Exception:
             pass
 
@@ -1085,7 +1085,7 @@ class QMapPermalinkWMSService:
                 pass
                 
         except Exception as e:
-            QgsMessageLog.logMessage(f"⚠️ Rendering optimization setup failed: {e}", "QMapPermalink", Qgis.Warning)
+            QgsMessageLog.logMessage(f"⚠️ Rendering optimization setup failed: {e}", "geo_webview", Qgis.Warning)
 
         # 座標系の設定
         if crs:
@@ -1157,12 +1157,12 @@ class QMapPermalinkWMSService:
                                             cache_for_layer[style_name] = qml_string
                                             QgsMessageLog.logMessage(
                                                 f"✅ Applied style '{style_name}' to '{lyr.name()}'",
-                                                "QMapPermalink", Qgis.Info
+                                                "geo_webview", Qgis.Info
                                             )
                                         else:
                                             QgsMessageLog.logMessage(
                                                 f"⚠️ Style export failed for '{lyr.name()}': {error_msg}",
-                                                "QMapPermalink", Qgis.Warning
+                                                "geo_webview", Qgis.Warning
                                             )
                                     finally:
                                         if original_style is not None:
@@ -1173,12 +1173,12 @@ class QMapPermalinkWMSService:
                                 else:
                                     QgsMessageLog.logMessage(
                                         f"⚠️ Style '{style_name}' not found for '{lyr.name()}'",
-                                        "QMapPermalink", Qgis.Warning
+                                        "geo_webview", Qgis.Warning
                                     )
                             except Exception as e:
                                 QgsMessageLog.logMessage(
                                     f"⚠️ Applying style '{style_name}' to '{lyr.name()}' failed: {e}",
-                                    "QMapPermalink", Qgis.Warning
+                                    "geo_webview", Qgis.Warning
                                 )
 
                     if layer_style_overrides:
@@ -1209,12 +1209,12 @@ class QMapPermalinkWMSService:
                                         layer_style_overrides[lid] = new_qml
                                         QgsMessageLog.logMessage(
                                             f"🔧 Rewrote is_layer_visible() in style for layer {lid}",
-                                            "QMapPermalink", Qgis.Info
+                                            "geo_webview", Qgis.Info
                                         )
                                 except Exception as e:
                                     QgsMessageLog.logMessage(
                                         f"⚠️ Failed preprocessing QML for layer {lid}: {e}",
-                                        "QMapPermalink", Qgis.Warning
+                                        "geo_webview", Qgis.Warning
                                     )
                         except Exception:
                             pass
@@ -1229,7 +1229,7 @@ class QMapPermalinkWMSService:
                                 summary = str(type(layer_style_overrides))
                             QgsMessageLog.logMessage(
                                 f"🔍 Applying layerStyleOverrides: keys={summary}, count={len(layer_style_overrides)}",
-                                "QMapPermalink", Qgis.Info
+                                "geo_webview", Qgis.Info
                             )
                             map_settings.setLayerStyleOverrides(layer_style_overrides)
                             # attempt to read back what map_settings holds (if supported)
@@ -1242,22 +1242,22 @@ class QMapPermalinkWMSService:
                                     cur_summary = str(type(current))
                                 QgsMessageLog.logMessage(
                                     f"🔍 map_settings.layerStyleOverrides() keys={cur_summary}, count={len(current)}",
-                                    "QMapPermalink", Qgis.Info
+                                    "geo_webview", Qgis.Info
                                 )
                             except Exception:
                                 QgsMessageLog.logMessage(
                                     "🔍 map_settings.layerStyleOverrides() not readable or unsupported in this QGIS version",
-                                    "QMapPermalink", Qgis.Warning
+                                    "geo_webview", Qgis.Warning
                                 )
                         except Exception as e:
                             QgsMessageLog.logMessage(
                                 f"⚠️ Failed to set layerStyleOverrides: {e}",
-                                "QMapPermalink", Qgis.Warning
+                                "geo_webview", Qgis.Warning
                             )
 
                     QgsMessageLog.logMessage(
                         f"🎯 Using explicit LAYERS param: {len(resolved_layers)} layers",
-                        "QMapPermalink", Qgis.Info
+                        "geo_webview", Qgis.Info
                     )
                     return map_settings
             except Exception:
@@ -1273,7 +1273,7 @@ class QMapPermalinkWMSService:
                     map_settings.setLayerStyleOverrides(layer_style_overrides)
                 QgsMessageLog.logMessage(
                     f"💾 Cache hit for theme '{themes}': {len(virtual_layers)} layers",
-                    "QMapPermalink", Qgis.Info
+                    "geo_webview", Qgis.Info
                 )
                 return map_settings
             
@@ -1282,7 +1282,7 @@ class QMapPermalinkWMSService:
             if themes in map_theme_collection.mapThemes():
                 QgsMessageLog.logMessage(
                     f"🎨 Creating virtual map view for theme: {themes}",
-                    "QMapPermalink", Qgis.Info
+                    "geo_webview", Qgis.Info
                 )
                 
                 # テーマの状態を取得
@@ -1303,7 +1303,7 @@ class QMapPermalinkWMSService:
                     if not layer_record.isVisible:
                         QgsMessageLog.logMessage(
                             f"🚫 Skip hidden: '{layer.name()}'",
-                            "QMapPermalink", Qgis.Info
+                            "geo_webview", Qgis.Info
                         )
                         continue
                     
@@ -1333,12 +1333,12 @@ class QMapPermalinkWMSService:
                                     layer_style_overrides[layer.id()] = qml_string
                                     QgsMessageLog.logMessage(
                                         f"✅ '{layer.name()}' -> style '{style_name}'",
-                                        "QMapPermalink", Qgis.Info
+                                        "geo_webview", Qgis.Info
                                     )
                                 else:
                                     QgsMessageLog.logMessage(
                                         f"⚠️ Style export failed for '{layer.name()}': {error_msg}",
-                                        "QMapPermalink", Qgis.Warning
+                                        "geo_webview", Qgis.Warning
                                     )
                             finally:
                                 # 元のスタイルに戻す（プロジェクトに影響を与えない）
@@ -1346,7 +1346,7 @@ class QMapPermalinkWMSService:
                         else:
                             QgsMessageLog.logMessage(
                                 f"⚠️ Style '{style_name}' not found for '{layer.name()}'",
-                                "QMapPermalink", Qgis.Warning
+                                "geo_webview", Qgis.Warning
                             )
                     else:
                         # 現在のスタイルをそのまま使用
@@ -1358,7 +1358,7 @@ class QMapPermalinkWMSService:
                             layer_style_overrides[layer.id()] = qml_string
                             QgsMessageLog.logMessage(
                                 f"✅ '{layer.name()}' -> current style",
-                                "QMapPermalink", Qgis.Info
+                                "geo_webview", Qgis.Info
                             )
                 
                 # 仮想マップビューに設定を適用
@@ -1368,12 +1368,12 @@ class QMapPermalinkWMSService:
                     map_settings.setLayerStyleOverrides(layer_style_overrides)
                     QgsMessageLog.logMessage(
                         f"🎨 Virtual view: {len(virtual_layers)} layers, {len(layer_style_overrides)} styles applied",
-                        "QMapPermalink", Qgis.Info
+                        "geo_webview", Qgis.Info
                     )
                 else:
                     QgsMessageLog.logMessage(
                         f"🎨 Virtual view: {len(virtual_layers)} layers (no style overrides)",
-                        "QMapPermalink", Qgis.Info
+                        "geo_webview", Qgis.Info
                     )
                 
                 # キャッシュに保存
@@ -1383,7 +1383,7 @@ class QMapPermalinkWMSService:
                 canvas_layers = canvas.mapSettings().layers()
                 QgsMessageLog.logMessage(
                     f"⚠️ Theme '{themes}' not found, using canvas layers: {len(canvas_layers)} layers",
-                    "QMapPermalink", Qgis.Warning
+                    "geo_webview", Qgis.Warning
                 )
                 if canvas_layers:
                     map_settings.setLayers(canvas_layers)
@@ -1399,14 +1399,14 @@ class QMapPermalinkWMSService:
                     map_settings.setLayers(project_layers)
                     QgsMessageLog.logMessage(
                         f"📋 Fallback to {len(project_layers)} visible project layers",
-                        "QMapPermalink", Qgis.Info
+                        "geo_webview", Qgis.Info
                     )
         else:
             # テーマ指定なし：現在のキャンバスレイヤーを使用
             canvas_layers = canvas.mapSettings().layers()
             QgsMessageLog.logMessage(
                 f"🎨 No theme specified, using canvas layers: {len(canvas_layers)} layers found",
-                "QMapPermalink", Qgis.Info
+                "geo_webview", Qgis.Info
             )
             if canvas_layers:
                 map_settings.setLayers(canvas_layers)
@@ -1414,7 +1414,7 @@ class QMapPermalinkWMSService:
                 layer_names = [layer.name() for layer in canvas_layers if layer]
                 QgsMessageLog.logMessage(
                     f"📋 Canvas layers: {', '.join(layer_names)}",
-                    "QMapPermalink", Qgis.Info
+                    "geo_webview", Qgis.Info
                 )
                 # 追加診断: 各レイヤーのラベリング状態と QML に <labeling> が含まれるかをチェック
                 try:
@@ -1470,7 +1470,7 @@ class QMapPermalinkWMSService:
                                                     layer_style_overrides[layer.id()] = new_qml
                                                     QgsMessageLog.logMessage(
                                                         f"🔧 Rewrote is_layer_visible() in canvas style for layer {layer.id()}",
-                                                        "QMapPermalink", Qgis.Info
+                                                        "geo_webview", Qgis.Info
                                                     )
                                                 else:
                                                     layer_style_overrides[layer.id()] = qml
@@ -1483,10 +1483,10 @@ class QMapPermalinkWMSService:
 
                             QgsMessageLog.logMessage(
                                 f"🔎 Layer '{lname}' (id={lid}) labelsEnabled={labels_on} labeling_type={labeling_type} qml_has_labeling={qml_has_labeling}",
-                                "QMapPermalink", Qgis.Info
+                                "geo_webview", Qgis.Info
                             )
                         except Exception as e:
-                            QgsMessageLog.logMessage(f"⚠️ Failed diagnosing layer labeling: {e}", "QMapPermalink", Qgis.Warning)
+                            QgsMessageLog.logMessage(f"⚠️ Failed diagnosing layer labeling: {e}", "geo_webview", Qgis.Warning)
                     # If we collected style overrides for canvas layers, apply them to map_settings
                     if layer_style_overrides:
                         try:
@@ -1497,7 +1497,7 @@ class QMapPermalinkWMSService:
                                 summary = str(type(layer_style_overrides))
                             QgsMessageLog.logMessage(
                                 f"🔍 Applying canvas layerStyleOverrides: keys={summary}, count={len(layer_style_overrides)}",
-                                "QMapPermalink", Qgis.Info
+                                "geo_webview", Qgis.Info
                             )
                             map_settings.setLayerStyleOverrides(layer_style_overrides)
                             try:
@@ -1509,21 +1509,21 @@ class QMapPermalinkWMSService:
                                     cur_summary = str(type(current))
                                 QgsMessageLog.logMessage(
                                     f"🔍 map_settings.layerStyleOverrides() keys={cur_summary}, count={len(current)}",
-                                    "QMapPermalink", Qgis.Info
+                                    "geo_webview", Qgis.Info
                                 )
                             except Exception:
                                 QgsMessageLog.logMessage(
                                     "🔍 map_settings.layerStyleOverrides() not readable or unsupported in this QGIS version",
-                                    "QMapPermalink", Qgis.Warning
+                                    "geo_webview", Qgis.Warning
                                 )
                         except Exception as e:
-                            QgsMessageLog.logMessage(f"⚠️ Failed to set canvas layerStyleOverrides: {e}", "QMapPermalink", Qgis.Warning)
+                            QgsMessageLog.logMessage(f"⚠️ Failed to set canvas layerStyleOverrides: {e}", "geo_webview", Qgis.Warning)
                 except Exception:
                     pass
             else:
                 QgsMessageLog.logMessage(
                     "⚠️ No layers found in canvas, using project layers",
-                    "QMapPermalink", Qgis.Warning
+                    "geo_webview", Qgis.Warning
                 )
                 # フォールバック: プロジェクトの可視レイヤーを使用
                 project_layers = []
@@ -1536,7 +1536,7 @@ class QMapPermalinkWMSService:
                 map_settings.setLayers(project_layers)
                 QgsMessageLog.logMessage(
                     f"📋 Using {len(project_layers)} visible project layers",
-                    "QMapPermalink", Qgis.Info
+                    "geo_webview", Qgis.Info
                 )
 
         return map_settings
@@ -1562,7 +1562,7 @@ class QMapPermalinkWMSService:
             # テーマが指定されていない場合は現在のQGIS表示状態を使用
             from qgis.core import QgsMessageLog, Qgis
             if themes:
-                QgsMessageLog.logMessage(f"⚠️ Theme '{themes}' not found, using current QGIS display settings", "QMapPermalink", Qgis.Warning)
+                QgsMessageLog.logMessage(f"⚠️ Theme '{themes}' not found, using current QGIS display settings", "geo_webview", Qgis.Warning)
 
             # プロジェクトのレイヤツリーを走査して可視レイヤを取得
             layer_tree_root = project.layerTreeRoot()
@@ -1584,7 +1584,7 @@ class QMapPermalinkWMSService:
                 return QgsRectangle(minx, miny, maxx, maxy)
         except Exception as e:
             from qgis.core import QgsMessageLog, Qgis
-            QgsMessageLog.logMessage(f"⚠️ Failed to parse BBOX '{bbox}': {e}", "QMapPermalink", Qgis.Warning)
+            QgsMessageLog.logMessage(f"⚠️ Failed to parse BBOX '{bbox}': {e}", "geo_webview", Qgis.Warning)
         return None
 
     def _execute_parallel_rendering(self, map_settings):
@@ -1599,7 +1599,7 @@ class QMapPermalinkWMSService:
             layers = map_settings.layers()
             QgsMessageLog.logMessage(
                 f"🎬 Starting render: {len(layers)} layers, size: {map_settings.outputSize().width()}x{map_settings.outputSize().height()}",
-                "QMapPermalink", Qgis.Info
+                "geo_webview", Qgis.Info
             )
             
             # 並列レンダリングジョブを作成
@@ -1633,7 +1633,7 @@ class QMapPermalinkWMSService:
             if render_job.isActive():
                 # タイムアウトした場合
                 render_job.cancel()
-                QgsMessageLog.logMessage(f"⚠️ Rendering timeout (30s)", "QMapPermalink", Qgis.Warning)
+                QgsMessageLog.logMessage(f"⚠️ Rendering timeout (30s)", "geo_webview", Qgis.Warning)
                 return None
 
             # レンダリング結果を取得
@@ -1644,20 +1644,20 @@ class QMapPermalinkWMSService:
             if image and not image.isNull():
                 QgsMessageLog.logMessage(
                     f"✅ Render completed: {render_elapsed:.2f}s (total: {total_elapsed:.2f}s)",
-                    "QMapPermalink", Qgis.Info
+                    "geo_webview", Qgis.Info
                 )
                 return image
             else:
-                QgsMessageLog.logMessage("⚠️ Rendered image is null", "QMapPermalink", Qgis.Warning)
+                QgsMessageLog.logMessage("⚠️ Rendered image is null", "geo_webview", Qgis.Warning)
                 return None
 
         except Exception as e:
             import traceback
-            QgsMessageLog.logMessage(f"❌ Parallel rendering error: {e}", "QMapPermalink", Qgis.Critical)
-            QgsMessageLog.logMessage(f"❌ Traceback: {traceback.format_exc()}", "QMapPermalink", Qgis.Critical)
+            QgsMessageLog.logMessage(f"❌ Parallel rendering error: {e}", "geo_webview", Qgis.Critical)
+            QgsMessageLog.logMessage(f"❌ Traceback: {traceback.format_exc()}", "geo_webview", Qgis.Critical)
             return None
-            QgsMessageLog.logMessage(f"❌ Parallel rendering error: {e}", "QMapPermalink", Qgis.Critical)
-            QgsMessageLog.logMessage(f"❌ Traceback: {traceback.format_exc()}", "QMapPermalink", Qgis.Critical)
+            QgsMessageLog.logMessage(f"❌ Parallel rendering error: {e}", "geo_webview", Qgis.Critical)
+            QgsMessageLog.logMessage(f"❌ Traceback: {traceback.format_exc()}", "geo_webview", Qgis.Critical)
             return None
 
 
@@ -1692,5 +1692,5 @@ class QMapPermalinkWMSService:
             return png_bytes
         except Exception as e:
             from qgis.core import QgsMessageLog, Qgis
-            QgsMessageLog.logMessage(f"⚠️ Failed to save image as PNG: {e}", "QMapPermalink", Qgis.Warning)
+            QgsMessageLog.logMessage(f"⚠️ Failed to save image as PNG: {e}", "geo_webview", Qgis.Warning)
             return None

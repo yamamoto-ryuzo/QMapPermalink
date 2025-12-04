@@ -243,7 +243,7 @@ def _extract_symbol_properties(symbol, geom_type: str):
     except Exception as e:
         try:
             from qgis.core import QgsMessageLog, Qgis
-            QgsMessageLog.logMessage(f"⚠️ sld_renderer: symbolLayer extraction failed: {e}", "QMapPermalink", Qgis.Warning)
+            QgsMessageLog.logMessage(f"⚠️ sld_renderer: symbolLayer extraction failed: {e}", "geo_webview", Qgis.Warning)
         except Exception:
             pass
 
@@ -459,7 +459,7 @@ def _symbol_to_symbolizer(symbol, geom_type: str) -> str:
             from qgis.core import QgsMessageLog, Qgis
             QgsMessageLog.logMessage(
                 f"🧪 Polygon fill decision: fill_color={fill_color}, opacity={opacity}, has_brush={has_brush}, has_fill={has_fill}",
-                "QMapPermalink", Qgis.Info
+                "geo_webview", Qgis.Info
             )
         except Exception:
             pass
@@ -565,7 +565,7 @@ def renderer_to_sld(layer, layer_name: Optional[str] = None) -> str:
     if renderer is None:
         # trivial default
         from qgis.core import QgsMessageLog, Qgis
-        QgsMessageLog.logMessage(f"No renderer for layer {ln}, returning default SLD", "QMapPermalink", Qgis.Warning)
+        QgsMessageLog.logMessage(f"No renderer for layer {ln}, returning default SLD", "geo_webview", Qgis.Warning)
         return _sld_header(ln) + _rule_xml('default', None, _symbol_to_symbolizer(None, 'Polygon')) + _sld_footer()
 
     rules = []

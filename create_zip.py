@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-QMap Permalink Plugin ZIP Distribution Creator
+geo_webview Plugin ZIP Distribution Creator
 
-このスクリプトは、QMapPermalinkプラグインの配布用ZIPファイルを作成します。
+このスクリプトは、geo_webviewプラグインの配布用ZIPファイルを作成します。
 - metadata.txtからバージョン情報を読み取り
 - バージョンを+0.0.1して更新
 - 必要最小限のファイルのみをZIPに含める
@@ -20,8 +20,8 @@ from pathlib import Path
 from datetime import datetime
 
 
-class QMapPermalinkZipCreator:
-    """QMapPermalinkプラグインのZIP配布ファイル作成クラス"""
+class GeoWebViewZipCreator:
+    """geo_webviewプラグインのZIP配布ファイル作成クラス"""
     
     def __init__(self):
         """初期化処理"""
@@ -351,12 +351,12 @@ def main():
     """メイン実行関数"""
     import argparse
 
-    parser = argparse.ArgumentParser(description='Create distribution ZIP for QMapPermalink')
+    parser = argparse.ArgumentParser(description='Create distribution ZIP for geo_webview')
     parser.add_argument('--set-version', help='Set the version explicitly (do not increment)')
     parser.add_argument('--no-increment', action='store_true', help='Do not auto-increment the version')
     args = parser.parse_args()
 
-    creator = QMapPermalinkZipCreator()
+    creator = GeoWebViewZipCreator()
 
     # Read current metadata
     current_version, config = creator.read_metadata()
