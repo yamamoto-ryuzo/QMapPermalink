@@ -1,4 +1,4 @@
-"""Public exports for qmap_permalink.maplibre package.
+"""Public exports for geo_webview.maplibre package.
 
 This module re-exports helper functions for MapLibre GL JS integration.
 """

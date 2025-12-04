@@ -108,7 +108,7 @@ class QMapWebMapGenerator:
                     if qt_core is not None and hasattr(qt_core, 'QCoreApplication'):
                         QCoreApplication = getattr(qt_core, 'QCoreApplication')
                         try:
-                            prompt_text = QCoreApplication.translate('QMapPermalink', prompt_text)
+                            prompt_text = QCoreApplication.translate('geo_webview', prompt_text)
                         except Exception:
                             pass
                 except Exception:

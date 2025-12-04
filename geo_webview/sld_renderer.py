@@ -123,7 +123,7 @@ def _extract_symbol_properties(symbol, geom_type: str):
                         pen_join_style = sl.penJoinStyle()
                         try:
                             from qgis.core import QgsMessageLog, Qgis
-                            QgsMessageLog.logMessage(f'🔧 Extracted penJoinStyle: {pen_join_style} (type: {type(pen_join_style).__name__})', 'QMapPermalink', Qgis.Info)
+                            QgsMessageLog.logMessage(f'🔧 Extracted penJoinStyle: {pen_join_style} (type: {type(pen_join_style).__name__})', 'geo_webview', Qgis.Info)
                         except Exception:
                             pass
                     except Exception:
@@ -135,7 +135,7 @@ def _extract_symbol_properties(symbol, geom_type: str):
                         pen_cap_style = sl.penCapStyle()
                         try:
                             from qgis.core import QgsMessageLog, Qgis
-                            QgsMessageLog.logMessage(f'🔧 Extracted penCapStyle: {pen_cap_style}', 'QMapPermalink', Qgis.Info)
+                            QgsMessageLog.logMessage(f'🔧 Extracted penCapStyle: {pen_cap_style}', 'geo_webview', Qgis.Info)
                         except Exception:
                             pass
                     except Exception:
@@ -147,7 +147,7 @@ def _extract_symbol_properties(symbol, geom_type: str):
                         pen_style = sl.penStyle()
                         try:
                             from qgis.core import QgsMessageLog, Qgis
-                            QgsMessageLog.logMessage(f'🔧 Extracted penStyle: {pen_style}', 'QMapPermalink', Qgis.Info)
+                            QgsMessageLog.logMessage(f'🔧 Extracted penStyle: {pen_style}', 'geo_webview', Qgis.Info)
                         except Exception:
                             pass
                     except Exception:
@@ -373,7 +373,7 @@ def _symbol_to_symbolizer(symbol, geom_type: str) -> str:
                 f'📋 Symbol properties for {geom_type}: '
                 f'stroke_color={stroke_color}, stroke_width={stroke_width}, '
                 f'pen_join_style={pen_join_style}, pen_cap_style={pen_cap_style}, pen_style={pen_style}',
-                'QMapPermalink', Qgis.Info
+                'geo_webview', Qgis.Info
             )
         except Exception:
             pass

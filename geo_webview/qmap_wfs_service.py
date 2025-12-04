@@ -227,7 +227,7 @@ class GeoWebViewWFSService:
             f"    <AccessConstraints>NONE</AccessConstraints>\n"
             f"  </ServiceIdentification>\n"
             f"  <ServiceProvider>\n"
-            f"    <ProviderName>QMapPermalink</ProviderName>\n"
+            f"    <ProviderName>geo_webview</ProviderName>\n"
             f"  </ServiceProvider>\n"
             f"  <OperationsMetadata>\n"
             f"    <Operation name=\"GetCapabilities\">\n"

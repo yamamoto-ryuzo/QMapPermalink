@@ -96,7 +96,7 @@ class GeoWebViewWMTSService:
             cpu_val = str(cpu_count) if cpu_count is not None else 'unknown'
             QgsMessageLog.logMessage(
                 f"WMTS Prewarm workers: {prewarm_workers} (computed: cpu_count()-1, enforced min=6; max_render_workers={max_rw}, cpu_count={cpu_val})",
-                'QMapPermalink', Qgis.Info
+                'geo_webview', Qgis.Info
             )
         except Exception:
             # best-effort logging; ignore if QGIS logging not available
@@ -669,8 +669,8 @@ class GeoWebViewWMTSService:
         <ows:ServiceTypeVersion>1.0.0</ows:ServiceTypeVersion>
     </ows:ServiceIdentification>
     <ows:ServiceProvider>
-        <ows:ProviderName>QMapPermalink</ows:ProviderName>
-        <ows:ProviderSite xlink:href="https://github.com/yamamoto-ryuzo/QMapPermalink"/>
+        <ows:ProviderName>geo_webview</ows:ProviderName>
+        <ows:ProviderSite xlink:href="https://github.com/yamamoto-ryuzo/geo_webview"/>
     </ows:ServiceProvider>
     <ows:OperationsMetadata>
         <ows:Operation name="GetCapabilities">
