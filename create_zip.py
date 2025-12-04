@@ -375,6 +375,7 @@ def main():
     try:
         print(f"Using version: {target_version}")
 
+
         # cleanup old zip files from previous runs (restore old behavior)
         try:
             creator.cleanup_old_zips(current_version)
