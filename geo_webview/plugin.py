@@ -332,12 +332,20 @@ class GeoWebView:
                 # Google Maps/Earthボタンのイベントを接続
                 if hasattr(self.panel, 'pushButton_google_maps'):
                     self.panel.pushButton_google_maps.clicked.connect(self.on_google_maps_clicked_panel)
+                    print("Google Mapsボタン接続成功")
                 if hasattr(self.panel, 'pushButton_google_earth'):
                     self.panel.pushButton_google_earth.clicked.connect(self.on_google_earth_clicked_panel)
+                    print("Google Earthボタン接続成功")
                 
                 # MapLibreボタンのイベントを接続
                 if hasattr(self.panel, 'pushButton_maplibre'):
+                    print(f"MapLibreボタン発見: {self.panel.pushButton_maplibre}")
                     self.panel.pushButton_maplibre.clicked.connect(self.on_maplibre_clicked_panel)
+                    # ボタンを有効化
+                    self.panel.pushButton_maplibre.setEnabled(True)
+                    print("MapLibreボタン接続成功")
+                else:
+                    print("警告: pushButton_maplibre が見つかりません")
                 
                 # Check Access ボタンのイベントを接続
                 if hasattr(self.panel, 'pushButton_check_access'):
