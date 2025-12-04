@@ -1,7 +1,7 @@
-# QMapPermalink maplibre helpers
+# geo_webview maplibre helpers
 
 このディレクトリには MapLibre 用の軽量ヘルパーモジュールを置いてあります。
-目的は `qmap_maplibre.py` 内の WMTS/WFS/SLD 関連のロジックを分離して再利用性を高めることです。
+目的は `maplibre_generator.py` 内の WMTS/WFS/SLD 関連のロジックを分離して再利用性を高めることです。
 
 エクスポートされる API
 
@@ -31,7 +31,7 @@
 使用例（短いスニペット）
 
 ```py
-from qmap_permalink.maplibre import (
+from geo_webview.maplibre import (
     choose_tile_template,
     default_wmts_layers_js,
     prepare_wfs_for_maplibre,

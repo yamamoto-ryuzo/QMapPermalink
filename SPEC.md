@@ -107,13 +107,13 @@ ANGLE パイプライン（詳細は 回転（ANGLE）パイプライン節 を�
 ### ラベリングと QML 式のサーバ側評価（`is_layer_visible()` サポート）
 
 - 概要: サーバ側レンダリングでは QGIS GUI 上の表現（QML 内の条件式）とサーバ実行時の評価コンテキストが異なるため、クライアント要求に合わせて `is_layer_visible('レイヤ名')` のような式をサーバ側で評価できる仕組みを実装しています。これは GetMap リクエストの `LAYERS` 指定やキャンバスの表示状態に基づき、式内の `is_layer_visible('...')` をリテラル `1`/`0` に書き換えて評価させることで、QGIS 側でのラベル付与/非表示ロジックを WMS 出力に反映します。
-- 実装: 現状は正規表現ベースの前処理パスで QML 内の `is_layer_visible\('...')` パターンを検出し、要求された `LAYERS` やキャンバスのレイヤ表示状態に応じて `1`（true）/`0`（false）に書き換えます。書換処理は `qmap_permalink/qmap_wms_service.py` に実装済みです。
+- 実装: 現状は正規表現ベースの前処理パスで QML 内の `is_layer_visible\('...'\)` パターンを検出し、要求された `LAYERS` やキャンバスのレイヤ表示状態に応じて `1`（true）/`0`（false）に書き換えます。書換処理は `geo_webview/wms_service.py` に実装済みです。
 - 追加のエンドポイントオプション: `LABELS` パラメータを用意し、クライアントが強制的に特定フィールドで一時的にラベルを有効化してレンダリングできるようにしています（レンダリング後は元の状態へ復元します）。これにより、プロジェクトにラベルが永続的に保存されていないケースでも WMS 出力にラベルを反映できます。
 - 制約と注意点:
   - 現時点の書換は文字列マッチング（正規表現）に依存するため、複雑な式構造やQMLの微妙な記法差によってはカバーできないケースがあります。
   - 書換のマッチは主に表示名（label/display name）に基づいています。将来的にはレイヤ ID での解決や QML パーサを用いた堅牢化を推奨します。
   - 長期的な安定解としては、ラベル本文をサーバ側で評価可能な属性に永続化するか、クライアント側から `LABEL_EXPR` のような明示的なラベル式を渡す API 拡張を検討してください。
-  - 実装済みのファイル: `qmap_permalink/qmap_wms_service.py`（QML 書換・style override・`LABELS` パラメータ処理）
+  - 実装済みのファイル: `geo_webview/wms_service.py`（QML 書換・style override・`LABELS` パラメータ処理）
 
 ## 6. WMTS (タイルプロキシ) の挙動
 WMTS-like タイル (`/wmts/{z}/{x}/{y}.png`):
@@ -144,7 +144,7 @@ WMTS GetCapabilities と TileMatrix
 
 - 実装上の注意点と最近の修正:
   - GetCapabilities を生成する際に大きなインライン文字列を扱うため、編集でインデントや波括弧の扱いに注意が必要です（実際に編集時にインデント不整合が発生したため修正パッチを適用済み）。
-  - `qmap_permalink/qmap_wmts_service.py` 側で次の補強を行いました: `_validate_tile_coords` ヘルパの追加、GetCapabilities 分岐からの不適切なコード断片削除、`z/x/y` のローカル変数初期化、コメント内の波括弧エスケープ等。
+  - `geo_webview/wmts_service.py` 側で次の補強を行いました: `_validate_tile_coords` ヘルパの追加、GetCapabilities 分岐からの不適切なコード断片削除、`z/x/y` のローカル変数初期化、コメント内の波括弧エスケープ等。
   - これらの変更を反映するには、プラグインの HTTP サーバー（または QGIS）を再起動する必要があります。稼働中の Python プロセスはディスク上のモジュールを自動で再読み込みしないためです。
 
 ### GetCapabilities の検証
@@ -459,7 +459,7 @@ WMTS キャッシュと identity（V3.1.0）
 ---
 ## 16. テスト・QA 手順
 自動テスト候補:
-- `qmap_permalink_server_manager.py` のユニットテスト: ポート選定・バインド挙動のモックテスト。
+- `server_manager.py` のユニットテスト: ポート選定・バインド挙動のモックテスト。
 - URL パーサ（Google Maps/Earth/内部形式）の単体テスト（複数フォーマットのケース）。
 - `wmts` タイル座標→BBOX 変換のユニットテスト。
 
@@ -475,13 +475,13 @@ WMTS キャッシュと identity（V3.1.0）
 
 ---
 ## 17. 実装ファイルと責務マッピング
-- `qmap_permalink.py` — メインプラグインロジック、ユーティリティ関数。
-- `qmap_permalink_panel.py` — パネル UI 実装（ナビゲート、生成、外部制御トグル等）。
-- `qmap_permalink_panel_base.ui` — Qt Designer の UI 定義。
-- `qmap_permalink_server_manager.py` — 組み込み HTTP サーバーの起動/停止・ルーティング（WMS/Map endpoints）。
+- `plugin.py` — メインプラグインロジック、ユーティリティ関数。
+- `panel.py` — パネル UI 実装（ナビゲート、生成、外部制御トグル等）。
+- `panel_base.ui` — Qt Designer の UI 定義。
+- `server_manager.py` — 組み込み HTTP サーバーの起動/停止・ルーティング（WMS/Map endpoints）。
 - `qmap_webmap_generator.py` — OpenLayers / MapLibre HTML テンプレートの生成ロジック。
 - `qmap_wmts_service.py` / `qmap_wms_service.py` — WMS/WMTS 関連のヘルパー（タイル変換、BBOX 計算など）。
-- `qmap_permalink_panel.py` から `navigate_from_http` / `navigate_to_coordinates` を呼び出す流れ。
+- `panel.py` から `navigate_from_http` / `navigate_to_coordinates` を呼び出す流れ。
 
 ---
 ## 18. 変更履歴の要約（V2/V3 ハイライト）

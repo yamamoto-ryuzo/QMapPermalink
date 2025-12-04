@@ -194,7 +194,7 @@ curl "http://localhost:8089/wfs?SERVICE=WFS&REQUEST=GetStyles&TYPENAME=my_layer"
 このプロジェクトの設計仕様、API 仕様、期待される動作やファイルフォーマットの詳細は [`SPEC.md`](./SPEC.md) にまとまっています。開発やカスタマイズを始めるときは、以下の順で作業することをおすすめします：
 
 1. [`SPEC.md`](./SPEC.md) を確認して、目的と期待動作を把握する。
-2. 主要ファイルを把握する：`qmap_permalink.py`, `qmap_permalink_panel.py`, `qmap_webmap_generator.py`, `http_server.py`, `qmap_maplibre.py`。
+2. 主要ファイルを把握する：`plugin.py`, `panel.py`, `webmap_generator.py`, `http_server.py`, `maplibre_generator.py`。
 3. QGIS でプラグインを読み込み、開発中の変更を手元の QGIS で動作確認する（前提として所定の `.qgs/.qgz` を開いてください）。
 4. 変更点を小さく作り、動作確認 → コミットのサイクルを回す。
 

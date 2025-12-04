@@ -1,6 +1,6 @@
 # 変更履歴(Changelog)
 
-このファイルでは QMapPermalink プラグインの主な変更点を記録します。
+このファイルでは geo_webview プラグインの主な変更点を記録します。
 
 記法は [Keep a Changelog](https://keepachangelog.com/ja/1.0.0/) に基づき、
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html) に準拠します。
@@ -16,17 +16,17 @@
 ## [3.8.0] - 2025-11-19 ✅ is_layer_visible() 対応リリース
 
 ### Added (追加)
-- **サーバ側での `is_layer_visible()` 書換評価のサポート**: QML 内の `is_layer_visible('レイヤ名')` などの式を、GetMap の `LAYERS` 指定やキャンバス表示状態に基づきサーバ側で `1`/`0` に書き換えて評価できる前処理を実装しました（`qmap_permalink/qmap_wms_service.py` 内に実装）。
+- **サーバ側での `is_layer_visible()` 書換評価のサポート**: QML 内の `is_layer_visible('レイヤ名')` などの式を、GetMap の `LAYERS` 指定やキャンバス表示状態に基づきサーバ側で `1`/`0` に書き換えて評価できる前処理を実装しました（`geo_webview/wms_service.py` 内に実装）。
 - **`LABELS` リクエスト拡張**: クライアントが一時的に特定フィールドでラベルを有効化してレンダリングできる `LABELS` パラメータを追加。レンダリング後は元のレイヤ状態へ復元します。
 - **STYLES パラメータ強化**: GetMap の `STYLES` を適切に受け取り、レイヤ単位でのスタイル適用（QML のエクスポート/override）を安定化しました。スタイルキャッシュと診断ログも追加。
 
 ### Changed (変更)
 - ドキュメント: `SPEC.md` に `is_layer_visible()` のサーバ側評価・`LABELS` の挙動および制約を追記しました。
-- サーバ実装: `qmap_permalink/qmap_wms_service.py` に QML 前処理（正規表現ベース）および一時ラベリングロジックを追加し、キャンバスと WMS 出力のラベル表示差分を縮小しました。
+- サーバ実装: `geo_webview/wms_service.py` に QML 前処理（正規表現ベース）および一時ラベリングロジックを追加し、キャンバスと WMS 出力のラベル表示差分を縮小しました。
 
 ### Notes (注意事項)
 - 実装は現時点で正規表現ベースの前処理に依存するため、複雑な QML 式や特殊な記法ではカバーできないケースがあります。より堅牢な対応（QMLパーサ導入、レイヤIDベースの解決、`LABEL_EXPR` API 拡張など）を将来的に検討してください。
-- 実装済みのファイル: `qmap_permalink/qmap_wms_service.py`（QML 書換・style override・`LABELS` パラメータ処理）。
+- 実装済みのファイル: `geo_webview/wms_service.py`（QML 書換・style override・`LABELS` パラメータ処理）。
 
 ### Added (追加)
 - **XYZ タイルの正式サポート**: `/xyz/{z}/{x}/{y}.png` を公式エンドポイントとしてドキュメント化・実装
@@ -313,7 +313,7 @@
 
 ### ハイライト
 - OpenLayers を利用したブラウザ表示（インタラクティブな Web マップ表示）を実装し、QGIS の表示をブラウザ上で再現可能にしました。
-- HTTP サーバー機能を専用モジュール `qmap_permalink_server_manager.py` に分離し、起動/停止やリクエスト処理をモジュール化しました。
+- HTTP サーバー機能を専用モジュール `server_manager.py` に分離し、起動/停止やリクエスト処理をモジュール化しました。
 - Web マップ生成ロジックを `qmap_webmap_generator.py` に分離し、HTML/OpenLayers テンプレート生成を専用化しました。
 - Google Maps / Google Earth へのワンクリック連携を追加し、外部地図サービスへ即時に表示を切り替えられる機能を提供しました。
 - パーマリンクにテーマ情報（レイヤー状態）を含めるオプションを導入し、地図表示の完全な状態を共有・復元できるようにしました。
