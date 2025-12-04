@@ -545,11 +545,40 @@ WMTS キャッシュと identity（V3.1.0）
 
 ---
 ## 付録: 代表的なサンプル URL
-- OpenLayers（位置）:
-  `http://localhost:8089/qgis-map?x=139.7594&y=35.6837&scale=1000.0`
-- WMS GetMap（ANGLE=0）:
-  `http://127.0.0.1:8089/wms?SERVICE=WMS&REQUEST=GetMap&VERSION=1.3.0&CRS=EPSG:3857&BBOX=<minx,miny,maxx,maxy>&WIDTH=800&HEIGHT=600&FORMAT=image/png&ANGLE=0`
-- WMTS タイル:
-  `http://localhost:8089/wmts/15/17500/10600.png`
-- Google Earth 例:
-  `https://earth.google.com/web/@35.683709,139.759407,32.0367a,160699.3553d,1y,0h,0t,0r`
+# geo_webview — 仕様書 (日本語)
+
+このファイルは `geo_webview` の日本語仕様書です。
+
+[English version → SPEC.md](./SPEC.md)
+
+## 目次
+
+- [機能概要](#機能概要)
+- [API / エンドポイント](#api--エンドポイント)
+- [パーマリンク形式とパラメータ](#パーマリンク形式とパラメータ)
+- [地図表示生成（OpenLayers / MapLibre）](#地図表示生成openlayers--maplibre)
+- [WMS の挙動](#wms-の挙動)
+- [WMTS / XYZ タイル](#wmts--xyz-タイル)
+- [WFS の挙動](#wfs-の挙動)
+- [並列処理とパフォーマンス](#並列処理とパフォーマンス)
+- [Google Maps / Google Earth 連携](#google-maps--google-earth-連携)
+- [External Control](#external-control)
+- [テーマサポート](#テーマサポート)
+- [回転（ANGLE）パイプライン](#回転angleパイプライン)
+- [投影（CRS）ポリシー](#投影crsポリシー)
+- [セキュリティ・運用上の注意](#セキュリティ運用上の注意)
+- [テスト・QA](#テストqa)
+- [実装ファイル](#実装ファイル)
+- [変更履歴（ハイライト）](#変更履歴ハイライト)
+
+---
+
+## 機能概要
+
+- パーマリンク生成（座標・scale・rotation・theme 等）
+- 組み込み HTTP サーバーによる `/qgis-map`, `/wms`, `/wmts`, `/xyz`, `/maplibre`, `/wfs` の提供
+- Google Maps / Google Earth の生成・パース
+- テーマ適用（仮想ビュー）
+- External Control による外部 URL 受信と QGIS ナビゲーション
+
+（以下、英語版 `SPEC.md` の内容に対応する詳細な日本語説明を続けます。）
