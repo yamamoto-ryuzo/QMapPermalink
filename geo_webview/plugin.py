@@ -2017,12 +2017,26 @@ class GeoWebView:
 
     def on_copy_clicked_panel(self):
         """パネル版：コピーボタンがクリックされた時の処理"""
+        print("コピーボタンがクリックされました")
+        
+        # パーマリンクテキストを取得
+        if not hasattr(self.panel, 'lineEdit_permalink') or self.panel.lineEdit_permalink is None:
+            print("エラー: lineEdit_permalink が見つかりません")
+            QMessageBox.warning(
+                self.iface.mainWindow(),
+                "geo_webview",
+                "パーマリンク入力フィールドが見つかりません。"
+            )
+            return
+            
         permalink_url = self.panel.lineEdit_permalink.text().strip()
+        print(f"パーマリンクURL: {permalink_url}")
+        
         if not permalink_url:
             QMessageBox.warning(
                 self.iface.mainWindow(),
-                self.tr("QMap Permalink"),
-                self.tr("No permalink available to copy.")
+                "geo_webview",
+                "コピーできるパーマリンクがありません。"
             )
             return
             
@@ -2040,16 +2054,18 @@ class GeoWebView:
             QThread.msleep(50)
 
         if success:
+            print("クリップボードへのコピー成功")
             self.iface.messageBar().pushMessage(
-                self.tr("QMap Permalink"),
-                self.tr("Permalink copied to clipboard."),
+                "geo_webview",
+                "パーマリンクをクリップボードにコピーしました。",
                 duration=3
             )
         else:
+            print("クリップボードへのコピー失敗")
             QMessageBox.warning(
                 self.iface.mainWindow(),
-                self.tr("QMap Permalink"),
-                self.tr("Failed to copy to clipboard. Please try again or copy manually.")
+                "geo_webview",
+                "クリップボードへのコピーに失敗しました。手動でコピーしてください。"
             )
 
     def on_open_clicked_panel(self):
