@@ -1,85 +1,62 @@
-# geo_webview — 社内（LAN）で安全に使える、かんたん地図共有ツール
+# geo_webview — QGIS を即座に OGC サーバー化するプラグイン
 
-> あなたが『今見ている地図』を、そのまま社内資料（Excel / PowerPoint / PDF）の共有リンクに変えるためのツール。  
-> OpenLayers / MapLibre / Google Maps / Google Earth　との連携も簡単に行えます。  
+> **[geo_suite](https://github.com/yamamoto-ryuzo/geo_suite)** の一部として開発  
+> QGIS プロジェクトを WMS/WMTS/WFS の OGC 準拠サーバーに変換し、クライアントアプリと一緒に配布できる軽量プラグイン
 
-## ざっくり説明（ワンセンテンス）
+## 概要
 
-geo_webview は QGIS の表示状態（中心位置・ズーム・レイヤ設定など）を“パーマリンク”として固定し、社内 LAN 上で安全に共有したり、Excel / PowerPoint / PDF / OpenLayers / MapLibre / Google Maps / Google Earth と簡単に連携できるツールです。  
+geo_webview は QGIS を **OGC 標準準拠の地図配信サーバー**に即座に変換します。複雑なサーバー構築不要で、QGIS を起動するだけで WMS、WMTS、WFS サービスが利用可能になります。
 
-   ![alt text](images/image01.png)
+**主な用途:**
+- 社内 LAN での地図データ共有
+- フィールド調査用モバイルアプリへのデータ配信
+- 緊急時の臨時地図サーバー構築
+- QGIS プロジェクトをそのまま配布可能な地図サービス化
 
-## 前提条件（必須）
+![パネル画面](images/image01.png)
 
-- QGIS が起動しており、共有したい「所定のプロジェクトファイル（.qgs/.qgz）」が開かれていること。
-- 共有対象のレイヤが QGIS 上で読み込まれ、表示・スタイルが望ましい状態に整えられていること。
+## geo_suite との連携
 
-- 対応環境: QGIS 3.x（Qt5 / Qt6 両対応）。Qt6 対応は v3.2.0 で正式に導入されました。QGIS を再起動してプラグインを更新してください。
+本プラグインは [geo_suite](https://github.com/yamamoto-ryuzo/geo_suite) プロジェクトの一部として開発されています。
 
-（注：これらが整っていないと、生成されるパーマリンクやエクスポート結果が期待どおりに復元できません。）
+**geo_suite との組み合わせ:**
+- **geo_webview**: QGIS を OGC サーバーとして起動（本プラグイン）
+- **geo_suite**: クライアントアプリケーション（地図表示・編集）
+- **シナリオ**: QGIS + geo_webview でデータ配信、geo_suite でモバイル/デスクトップから利用
 
-## なぜ geo_webview を社内で使うのか（QGIS と違う点）
+両方を組み合わせることで、QGIS プロジェクトをそのままエンドユーザーに配布できるシステムを構築できます。
 
-- QGIS は編集・解析・スタイリングが得意な“作業ツール”。そのままファイルを渡すと相手で環境を揃える必要があることも。
-- geo_webview は“共有”に特化。今見えている地図を軽量な形（URL / HTML パッケージ / 画像）で切り出し、受け手が簡単に開ける形式にします。
-- 社内（LAN）での運用を前提にしているため、外部公開せずに機密データを扱いやすい設計ができます。
+## 動作環境
 
-例えるなら：QGIS が厨房での調理、geo_webview は店内配膳・テイクアウトの包装・ラベル付けを担当するサービスです。
+- QGIS 3.x（Qt5 / Qt6 両対応）
+- Windows / macOS / Linux
+- ネットワーク環境: LAN またはローカルホスト
+- Python 3.7 以上
 
-## 主な機能（社内利用にフォーカスしたハイライト）
+## 主要機能
 
-- パーマリンク生成：現在の地図ビュー（座標・ズーム・レイヤ状態）を固定化して短い URL や内部用リンクとして出力
-- ローカル（LAN）ホスティング：付属の軽量 HTTP サーバーで社内ネットワークだけに公開可能
-- 外部アクセス診断（v3.5.0）：ネットワーク接続性の診断、ファイアウォール状態の確認、自動ポート許可
-- 柔軟なポート設定（v3.5.0）：80-65535の全ポート範囲対応、標準ポート(80, 443)のクイック選択
-- Office 連携：地図の静止画像（高解像度 PNG）やリンクを Excel/PowerPoint に簡単に埋め込める形式で配布資料作成可能
-- PDF レポート化（手動ワークフロー）：地図スナップショット（PNG）とメタデータを出力し、PowerPoint 等から PDF に書き出すことで配布資料作成可能
-- WFS サービス：QGIS のベクターレイヤーを OGC WFS 2.0 準拠で提供し、GeoJSON または GML 形式で地物を外部アプリケーションから取得可能
+### 🌐 OGC 標準サービス
 
-## 外部マップライブラリ（OpenLayers / MapLibre / Google Maps / Google Earth）
+#### WMS (Web Map Service)
+- QGIS プロジェクトをそのまま WMS として配信
+- GetCapabilities / GetMap / GetFeatureInfo 対応
+- カスタムスタイル（SLD）サポート
+- 高解像度画像出力（最大 4096px）
 
-このプロジェクトは QGIS の表示状態を外部に渡すために、いくつかのウェブ地図ライブラリや外部サービスと連携する仕組みを持っています。社内運用を前提に、各技術の役割と使い分け、注意点をまとめます。
+#### WMTS (Web Map Tile Service)  
+- タイル形式での高速地図配信
+- XYZ タイル形式対応
+- キャッシュ機能（将来実装予定）
 
-- OpenLayers
-  - リポジトリの一部では OpenLayers ベースの HTML エンドポイント（例: `/qgis-map`）を提供しており、ブラウザで QGIS の状態を簡易的に表示できます。
-  - 特徴：柔軟でプラグインが豊富。WMS など既存の OGC サービスと自然に連携可能。
-  - 推奨場面：社内 LAN 上で既存の WMS/WMTS をそのままブラウザで表示したいとき。
-  ![alt text](images/openlayers.png)
+#### WFS (Web Feature Service) 2.0
+- ベクターデータを GeoJSON / GML で配信
+- GetCapabilities / GetFeature / DescribeFeatureType 対応
+- SLD スタイル情報の取得
+- **高速キャッシュ機構**: 2回目以降のリクエストが40倍高速化
 
-- MapLibre
-  - 軽量な Mapbox GL JS の互換実装で、ベクタータイル中心のモダンな地図表示に向いています。`maplibre_endpoint.py` が関係する設定や出力をサポートします。
-  - 特徴：高速でスタイルやベクター表現を柔軟に扱えるため、見た目重視のインタラクティブ表示に強い。
-  - **v3.6.0新機能**：OpenLayersと同様のテーマセレクトとブックマークセレクト機能を搭載
-    - QGISプロジェクトの地図テーマをドロップダウンメニューで切り替え可能
-    - 保存済みブックマークへワンクリックでナビゲーション
-    - 左上のコントロールパネルで直感的に操作
-  ![alt text](images/maplibre2.png)
-- Google Maps / Google Earth
-  - これらは外部の商用サービスです。資料作成時に "外部での確認"（例：Google Maps で位置を素早く確認したい、Google Earth で 3D 表示を確認したい）といった用途で便利です。
-   - 外部の人から受け取った Google Maps/Earth の共有リンク（住所やピン）や共有 URL から緯度・経度を取り出し、QGIS 上で同じ場所を素早く復元することができます。
+### 🚀 パフォーマンス最適化
 
-## WFS (Web Feature Service) 機能
-
-geo_webview は QGIS のベクターレイヤーを OGC WFS 2.0 準拠のサービスとして提供します。これにより、外部の GIS アプリケーションやウェブアプリケーションから QGIS の地物を GeoJSON または GML 形式で取得することができます。
-
-### 🚀 Phase 1 高速化 (v3.4.0)
-
-**レスポンスキャッシュ機構**により、2回目以降のリクエストが劇的に高速化されました:
-- **キャッシュヒット時**: < 5ms (通常の40倍高速)
-- **地物クエリ最適化**: インデックス活用により3倍高速化
-- **大量地物対応**: 10000地物でも5秒以内に応答
-- **自動キャッシュ管理**: 5分間のTTLと自動クリーンアップ
-
-### 🌐 ネットワーク機能強化 (v3.5.0)
-
-**外部アクセス完全対応**により、LANやインターネット経由での利用が容易になりました:
-- **外部アクセス診断**: ネットワーク接続性の包括的チェック、ファイアウォール状態検出
-- **Windowsファイアウォール統合**: UAC経由の自動ルール追加、ポート許可の自動検証
-- **柔軟なポート設定**: 80-65535の全ポート範囲対応、標準ポート(80, 443)クイック選択
-- **動的ホスト名解決**: 外部デバイスからのアクセス時に正しいURLを自動生成
-- **MapLibre拡張**: x/y/scale/crs/rotation形式のパラメータサポート
-
-パフォーマンス例:
+**WFS レスポンスキャッシュ (v3.4.0):**
 ```
 初回リクエスト: 200ms → 70ms (3倍高速)
 2回目以降:     200ms → <5ms (40倍高速!)
@@ -87,197 +64,287 @@ geo_webview は QGIS のベクターレイヤーを OGC WFS 2.0 準拠のサー�
 10000地物:    15秒 → 5秒
 ```
 
-### 利用可能な WFS オペレーション
+### 📡 ネットワーク機能 (v3.5.0)
 
-- **GetCapabilities**: 利用可能なレイヤー情報とサービスメタデータを XML 形式で返します
-- **GetFeature**: 指定したレイヤーから地物を GeoJSON または GML 形式で返します
-- **DescribeFeatureType**: 指定したレイヤーの属性スキーマを XML 形式で返します
-- **GetStyles**: 指定したレイヤーのスタイル情報を SLD (Styled Layer Descriptor) 形式で返します
+- **外部アクセス診断**: 接続性チェック、ファイアウォール検出
+- **自動ポート設定**: Windows ファイアウォールへの自動ルール追加
+- **柔軟なポート設定**: 80-65535 の全範囲対応
+- **動的ホスト名解決**: 外部デバイスからのアクセスに自動対応
+
+### 🗺️ クライアント連携
+
+#### OpenLayers 対応
+- `/qgis-map` エンドポイントで即座に Web 地図化
+- WMS/WMTS との自然な統合
+
+![OpenLayers表示](images/openlayers.png)
+
+#### MapLibre GL 対応
+- ベクトルタイル風のモダン表示
+- QGIS スタイルを MapLibre スタイルに自動変換
+- テーマ・ブックマーク機能 (v3.6.0)
+
+![MapLibre表示](images/maplibre2.png)
+
+#### Google Maps / Google Earth 連携
+- 座標の相互変換
+- 外部共有リンクから QGIS へのインポート
+
+### 🔄 パーマリンク機能
+
+- 現在の地図ビュー（座標・ズーム・レイヤ状態）を URL で共有
+- Office ドキュメント（Excel / PowerPoint）への埋め込み
+- 高解像度 PNG エクスポート
+
+## クイックスタート
+
+### 1. インストール
+
+```bash
+# QGIS プラグインディレクトリに配置
+# Windows: %APPDATA%\QGIS\QGIS3\profiles\default\python\plugins\geo_webview
+# macOS: ~/Library/Application Support/QGIS/QGIS3/profiles/default/python/plugins/geo_webview
+# Linux: ~/.local/share/QGIS/QGIS3/profiles/default/python/plugins/geo_webview
+```
+
+または QGIS プラグインマネージャーからインストール可能です。
+
+### 2. 基本的な使い方
+
+1. QGIS でプロジェクト（.qgs/.qgz）を開く
+2. メニューから「Web > geo_webview」を選択
+3. パネルが表示され、自動的に HTTP サーバーが起動
+4. 表示される URL（例: `http://localhost:8089`）でサービスにアクセス
+
+### 3. OGC サービスの利用
+
+**WMS サービス:**
+```bash
+# GetCapabilities
+http://localhost:8089/wms?SERVICE=WMS&REQUEST=GetCapabilities
+
+# GetMap
+http://localhost:8089/wms?SERVICE=WMS&REQUEST=GetMap&LAYERS=mylayer&WIDTH=800&HEIGHT=600&BBOX=...
+```
+
+**WMTS サービス:**
+```bash
+# XYZ タイル
+http://localhost:8089/wmts/{z}/{x}/{y}.png
+
+# GetCapabilities
+http://localhost:8089/wmts?SERVICE=WMTS&REQUEST=GetCapabilities
+```
+
+**WFS サービス:**
+```bash
+# GetCapabilities
+http://localhost:8089/wfs?SERVICE=WFS&REQUEST=GetCapabilities
+
+# GetFeature (GeoJSON)
+http://localhost:8089/wfs?SERVICE=WFS&REQUEST=GetFeature&TYPENAME=mylayer&OUTPUTFORMAT=application/json
+```
+
+## 主なユースケース
+
+### 1. フィールド調査支援
+
+QGIS で作成した地図データを、調査員のモバイル端末（geo_suite アプリ）にリアルタイム配信。
+
+```
+[本部 PC]
+ └─ QGIS + geo_webview (WMS/WFS 配信)
+      ↓
+[フィールド]
+ └─ モバイル端末 + geo_suite (データ受信・編集)
+```
+
+### 2. 社内地図ポータル
+
+部署内の地図データを QGIS から配信し、各メンバーがブラウザで閲覧。
+
+```bash
+# 部署内 LAN で配信
+http://192.168.1.100:8089/qgis-map
+```
+
+### 3. 緊急時の臨時地図サーバー
+
+災害対応時、既存の QGIS プロジェクトを即座にサーバー化して情報共有。
+
+### 4. プロジェクト配布パッケージ
+
+QGIS Portable + geo_webview + データを USB メモリで配布し、受け取った人が即座にサーバーとして起動。
+
+## WFS 詳細仕様
+
+### 対応オペレーション
+
+| オペレーション | 説明 | 出力形式 |
+|--------------|------|---------|
+| GetCapabilities | サービス情報・レイヤー一覧 | XML |
+| GetFeature | 地物データ取得 | GeoJSON / GML |
+| DescribeFeatureType | スキーマ情報 | XML |
+| GetStyles | スタイル情報（SLD） | XML |
+
+### パラメータ
+
+```bash
+# 基本パラメータ
+SERVICE=WFS          # 必須: "WFS"
+REQUEST=GetFeature   # 必須: オペレーション名
+VERSION=2.0.0        # オプション: デフォルト 2.0.0
+TYPENAME=layer_name  # 必須: レイヤー名
+OUTPUTFORMAT=application/json  # オプション: GeoJSON/GML
+
+# フィルタリング
+MAXFEATURES=100      # 最大地物数
+BBOX=minx,miny,maxx,maxy  # 空間フィルタ
+SRSNAME=EPSG:4326    # 座標系
+```
 
 ### 使用例
 
 ```bash
-# サービス情報を取得
-curl "http://localhost:8089/wfs?SERVICE=WFS&REQUEST=GetCapabilities&VERSION=2.0.0"
+# レイヤー一覧を取得
+curl "http://localhost:8089/wfs?SERVICE=WFS&REQUEST=GetCapabilities"
 
-# 特定のレイヤーから地物を GeoJSON で取得
-curl "http://localhost:8089/wfs?SERVICE=WFS&REQUEST=GetFeature&TYPENAME=my_layer&OUTPUTFORMAT=application/json"
+# GeoJSON で地物を取得
+curl "http://localhost:8089/wfs?SERVICE=WFS&REQUEST=GetFeature&TYPENAME=roads&OUTPUTFORMAT=application/json"
 
-# 特定のレイヤーから地物を GML で取得
-curl "http://localhost:8089/wfs?SERVICE=WFS&REQUEST=GetFeature&TYPENAME=my_layer&OUTPUTFORMAT=application/gml+xml"
+# 範囲指定で取得
+curl "http://localhost:8089/wfs?SERVICE=WFS&REQUEST=GetFeature&TYPENAME=buildings&BBOX=130,30,140,40"
 
-# レイヤーのスキーマ情報を取得
-curl "http://localhost:8089/wfs?SERVICE=WFS&REQUEST=DescribeFeatureType&TYPENAME=my_layer"
-
-# レイヤーのスタイル情報を取得
-curl "http://localhost:8089/wfs?SERVICE=WFS&REQUEST=GetStyles&TYPENAME=my_layer"
+# スタイル情報を取得
+curl "http://localhost:8089/wfs?SERVICE=WFS&REQUEST=GetStyles&TYPENAME=roads"
 ```
 
-### パラメータ
+## MapLibre 連携
 
-- **SERVICE**: "WFS" （必須）
-- **REQUEST**: "GetCapabilities", "GetFeature", "DescribeFeatureType", "GetStyles" のいずれか （必須）
-- **VERSION**: "2.0.0" （オプション、デフォルト: 2.0.0）
-- **TYPENAME/TYPENAMES**: レイヤー名 （GetFeature, DescribeFeatureType で必須）
-- **OUTPUTFORMAT**: "application/json" または "application/gml+xml" （GetFeature でオプション、デフォルト: application/json）
-- **MAXFEATURES**: 最大地物数 （オプション）
-- **BBOX**: 空間フィルタ（minx,miny,maxx,maxy） （オプション）
-- **SRSNAME**: 座標系 （オプション）
+### スタイル自動変換
 
-### 注意点
+QGIS のレンダラ設定を MapLibre スタイルに自動変換:
 
-- WFS サービスは QGIS プロジェクトで読み込まれているベクターレイヤーのみを公開します
-- レイヤー名にスペースが含まれる場合は、アンダースコア（_）に置き換えて指定してください
-- 空間フィルタ（BBOX）はレイヤーの座標系で指定してください
-- GetStyles は QGIS のレンダラ設定に基づいて SLD (Styled Layer Descriptor) を生成します
-- **キャッシュ**: 同じリクエストは5分間キャッシュされます。データ更新時は5分経過後に自動反映されます
-- **パフォーマンスログ**: QGISログパネル(geo_webview)でキャッシュヒット/ミスを確認できます
-- 社内 LAN での利用を前提としており、外部公開には適していません
-  
-## 使用例
+- シンボルレンダラ → circle/line/fill レイヤ
+- カテゴリ値レンダラ → データ駆動スタイル
+- ルールベースレンダラ → フィルタ式変換
 
-1. 資料作成時
-   - QGIS で地図の特定箇所を表示し、表示状態を整える
-   - geo_webview でパーマリンクを生成する
-   - Excel や PowerPoint、PDF の説明資料にそのリンクや PNG を埋め込む
+### エンドポイント
 
-2. 資料閲覧時
-   - 資料内のリンクをクリックすると、QGIS 側が自動で該当箇所にジャンプ（設定済みの場合）
-   - 説明スライドと地図画面が瞬時に連携し、発表やレビューがスムーズに進む
+```bash
+# ベーススタイル（WMTS のみ）
+http://localhost:8089/maplibre-style
 
-3. パネル形式での効率的なワークフロー
-   - geo_webview のパネルを常時表示しておくことで、複数のパーマリンクを素早く生成・管理可能
-   - 必要に応じて Google Maps / Google Earth と連携してブラウザでの確認をワンクリックで実施
+# レイヤー別スタイル（WFS + スタイル）
+http://localhost:8089/maplibre-style?typename=layer_name
 
-## Office（Excel / PowerPoint）・PDF 連携ガイド
+# MapLibre ビューア
+http://localhost:8089/maplibre
+```
 
-以下は「パーマリンクを軸にした」簡単なワークフロー例です。
+### カスタマイズ
 
-1) QGIS で見せたい地図を表示して調整（中心・ズーム・表示レイヤ）
-2) プラグインで「パーマリンクを生成」
-   - 結果：短い内部 URL、HTML パッケージ、PNG（高解像度）などが作られます
-3) PowerPoint への組み込み（2 通り）
-   - 画像で貼る：生成した PNG をスライドに挿入し、画像にパーマリンクをハイパーリンクとして設定
-   - ハイブリッド：スライドに説明用画像＋URL を併記し、発表中にブラウザで詳細を表示
-4) Excel での活用
-   - セルにパーマリンク（ハイパーリンク）を入れておくと、担当者がクリックで同じビューを開けます
-   - サムネイル列を作り、PNG を貼ってクリックでリンク先へ飛べるようにすると分かりやすい
-5) PDF にまとめる
-   - PowerPoint を PDF に書き出すと、地図の画像と説明を含む配布資料が作れます
+```javascript
+// カスタム MapLibre スタイルの適用
+map.setStyle('http://localhost:8089/maplibre-style?typename=roads');
+```
 
-## 簡単なテンプレ — Excel/PowerPoint 用（ステップ）
+## Office 連携
 
-- 生成物フォルダ構成の例：
-  - /exports/2025-10-25/map_001.png
-  - /exports/2025-10-25/map_001_link.txt
+### Excel へのリンク埋め込み
 
-- PowerPoint の作成手順（短縮）
-  1. `map_001.png` をスライドに挿入
-  2. 画像に `map_001_link.txt` の URL をハイパーリンクとして設定
-  3. 発表スライドを PDF にエクスポートして配布（PDF にもリンクを残す）
+1. geo_webview でパーマリンク生成
+2. Excel セルにハイパーリンクとして設定
+3. クリックで QGIS が該当箇所にジャンプ
 
-- Excel の作成手順（短縮）
-  1. サムネイル列に `map_001.png` を挿入
-  2. 隣のセルにハイパーリンク（`map_001_link.txt`）を設定
+### PowerPoint での活用
 
-## クイックスタート（社内向け・実践）
+1. 高解像度 PNG をエクスポート
+2. スライドに画像を挿入
+3. 画像にパーマリンクを設定
+4. プレゼン中にクリックで詳細表示
 
-1. リポジトリを QGIS のプラグインフォルダにセットアップ
-2. QGIS で地図を作る → プラグインでパーマリンクと PNG / HTML を生成
-3. QGIS　+　プラグイン を社内で立ち上げ
-4. Excel/PowerPoint に画像とリンクを挿入 → 配布用 PDF を生成
+## 開発・カスタマイズ
 
-## 開発者向けメモ
+### アーキテクチャ
 
-まずは [`SPEC.md`](./SPEC.md) をお読みください。
+```
+geo_webview/
+├── plugin.py              # メインプラグイン
+├── panel.py               # UI パネル
+├── server_manager.py      # HTTP サーバー管理
+├── wms_service.py         # WMS 実装
+├── wmts_service.py        # WMTS 実装
+├── wfs_service.py         # WFS 実装
+├── maplibre_generator.py  # MapLibre 変換
+└── webmap_generator.py    # OpenLayers 生成
+```
 
-このプロジェクトの設計仕様、API 仕様、期待される動作やファイルフォーマットの詳細は [`SPEC.md`](./SPEC.md) にまとまっています。開発やカスタマイズを始めるときは、以下の順で作業することをおすすめします：
+### 詳細仕様
 
-1. [`SPEC.md`](./SPEC.md) を確認して、目的と期待動作を把握する。
-2. 主要ファイルを把握する：`plugin.py`, `panel.py`, `webmap_generator.py`, `http_server.py`, `maplibre_generator.py`。
-3. QGIS でプラグインを読み込み、開発中の変更を手元の QGIS で動作確認する（前提として所定の `.qgs/.qgz` を開いてください）。
-4. 変更点を小さく作り、動作確認 → コミットのサイクルを回す。
+技術仕様の詳細は [`SPEC.md`](./SPEC.md) を参照してください。
 
-## MapLibre スタイル注入とフォールバックの簡易サマリ
+### 開発手順
 
-MapLibre 関連の挙動は現在以下の設計方針です（詳細は `SPEC.md` を参照）。
+1. [`SPEC.md`](./SPEC.md) で仕様を確認
+2. 主要ファイルを把握
+3. QGIS で動作確認
+4. 変更 → テスト → コミットのサイクル
 
-### 基本構造
-- ベーススタイル: `/maplibre-style` (typename なし) は WMTS 由来のラスタソース/レイヤ (`qmap`) だけを返す軽量スタイル。
-- レイヤ別スタイル: `/maplibre-style?typename=<QGIS layer.id()>` を取得すると、WMTS に加えて対象ベクターレイヤの GeoJSON ソース + QGIS 変換済みの MapLibre レイヤ群を返す。
-- データとスタイルの分離: GeoJSON (WFS GetFeature) にはスタイル情報を一切持たせず、スタイルは注入（injection）された JSON が唯一の真実 (source of truth)。
+### 翻訳対応
 
-### 処理フロー（クライアント側 `qmap_postload.js`）
-1. 各 WFS レイヤについてまず `/maplibre-style?typename=...` を取得し、QGIS 変換スタイルを注入。
-2. 取得失敗・タイムアウト (5 秒) の場合のみ GeoJSON (WFS GetFeature) を直接取得し、極小・中立的なフォールバックスタイルを適用。
-3. ラベルレイヤは成功/失敗どちらでも必ず追加（属性 `label` を持つ要素に限定）。
-4. UI の表示/非表示切り替えは「同じ sourceId を参照するすべてのレイヤ」を一括制御。
+10言語対応（英語、フランス語、ドイツ語、スペイン語、イタリア語、ポルトガル語、日本語、中国語、ロシア語、ヒンディー語）
 
-### ブラシなし（ポリゴン）の扱い
-- QGIS 側で塗りが透過 (alpha=0) の場合、注入スタイルでは `fill` レイヤを生成せず境界線 (`line`) のみ。
-- フォールバックでもポリゴンは塗り無しの細線表示（視認性確保のみ）。
+```bash
+# 翻訳ファイル更新
+python update_translations.py
+```
 
-### フォールバック vs フォールダウン
-- フォールバック (fallback): 失敗時だけ暫定表示を行う目的。最小限の記号的スタイル（Point: 白円+灰アウトライン / Line: 細い灰線 / Polygon: 線のみ）。
-- フォールダウン (folddown): 意図した機能縮退を段階的に下位レベルへ落とす一般概念。本プロジェクトでは用語としては「フォールバック」のみを使用し、段階的縮退は行わない。
+## セキュリティ注意事項
 
-### 相対パス化
-- ベーススタイル URL を絶対 (`http://localhost:PORT/...`) から相対 (`/maplibre-style`) に変更し、ポート変更やホスト差し替えに自動追従。
+⚠️ **重要**: 本プラグインは社内 LAN での利用を前提としています。
 
-### レイヤ ID と制御
-- 変換済みスタイルは QGIS レイヤ ID を基に安定した sourceId / layerId を生成し、重複を回避。
-- UI 側は WMTS (`qmap`) を常にトグル可能とし、公開された WFS レイヤのみ自動登録。
+- 機密データを含む場合は外部公開を避けてください
+- 外部公開が必要な場合は認証・アクセス制御を実装してください
+- ファイアウォール設定を適切に行ってください
+- 最小限のデータのみを公開してください
 
-### 単位正規化
-- QGIS シンボルで mm / pt などが使われている場合、MapLibre では px に正規化し視覚的スケールの一貫性を確保。
+## 今後の開発方針
 
-### 目的
-- 「QGIS で定義したスタイルを可能な限り忠実に MapLibre に転写」する一方、失敗時は「データが存在することだけ分かる」控えめなビジュアルを提供し誤解（QGIS の意図した色や線幅ではない）を防ぐ。
+- ✅ WMS/WMTS/WFS の基本機能実装
+- ✅ キャッシュ機構による高速化
+- ✅ MapLibre スタイル自動変換
+- ⏳ タイルキャッシュ機能（検討中）
+- ❌ ベクトルタイルサーバー（他サービス利用を推奨）
 
-### よくある確認ポイント
-- 2 つ以上のレイヤを追加した際、両方 `/maplibre-style?typename=...` が呼ばれているか。
-- ブラシ無しポリゴンに fill が表示されていないか。
-- フォールバックが意図せず常用されていないか（頻発するならサーバログ / ネットワーク状態を確認）。
-- ラベルレイヤが重複追加されていないか。
+## バージョン履歴
 
-この概要は変更の多い MapLibre 部分の“現状スナップショット”です。深い仕様や将来拡張方針は `SPEC.md` を参照してください。
+- **v3.8.x**: プラグイン名変更、geo_suite 統合、翻訳システム実装
+- **v3.6.0**: MapLibre テーマ・ブックマーク機能
+- **v3.5.0**: 外部アクセス診断、柔軟なポート設定
+- **v3.4.0**: WFS キャッシュ機構、高速化
+- **v3.2.0**: Qt6 対応
+- **v3.0.0**: WFS 導入、MapLibre 正式対応
+- **v2.0.0**: WMTS/XYZ 導入
+- **v1.0.0**: OpenLayers/WMS 基本機能
 
-## バージョン概要 (メジャー節目の整理)
-
-本プロジェクトではメジャーバージョン (A) を以下の「表示技術 / 配信ブロックの導入」節目で整理します。
-
-- V1.0.0:【WMS導入】OpenLayers ベース表示（パーマリンク共有の基礎 / 社内ブラウザ再現）
-- V2.0.0:【WMTS+XYZ導入】MapLibre 対応（モダン高速表示への拡張）
-- V3.0.0:【WFS導入】 MapLibre + スタイル注入の安定化（QGIS ベクター + スタイル忠実転写を正式機能化）
-
-運用メモ:
-- 破壊的変更や表示パイプライン追加 → メジャー (A) をインクリメント
-- 互換を保った機能追加/改善 → B/C で進行
-- 詳細な日付・差分は `CHANGELOG.md` を参照
-
-V3 系では WFS/スタイル注入フローを「安定 API」としてドキュメント化し、移行ガイドを同梱しています。
-
-## セキュリティ注意（要必読）
-
-このツールは便利ですが、機密データを含む場合は外部公開を絶対に避けてください。外部公開が必要な場合は必ず組織の承認を得て、安全な公開手順（認証・アクセス制御・最小データ）を整備してください。
-
-## あきらめた開発
- VectorTileサーバーの導入は標準のPYだけでは困難と判断、当面は開発保留とし、再開する場合は、本格的なサーバー化と合わせて実施とするが、それらは他のサービスを利用がよいため基本しない方向。  
+詳細は [`CHANGELOG.md`](./CHANGELOG.md) を参照してください。
 
 ## ライセンス
 
-本プロジェクトは GNU General Public License version 3 (GPLv3) の下で配布されています。詳細はリポジトリルートの `LICENSE` ファイルを参照してください（https://www.gnu.org/licenses/gpl-3.0.html）　。
+GNU General Public License version 3 (GPLv3)  
+詳細: [LICENSE](./LICENSE)
 
 ## 免責事項
 
-本システムは個人のPCで作成・テストされたものです。  
-ご利用によるいかなる損害も責任を負いません。
+本システムは個人開発によるものです。  
+利用によるいかなる損害も責任を負いません。
 
-<p align="center">
-  <a href="https://giphy.com/explore/free-gif" target="_blank">
-    <img src="https://github.com/yamamoto-ryuzo/QGIS_portable_3x/raw/master/imgs/giphy.gif" width="500" title="avvio QGIS">
-  </a>
-</p>
+---
+
+**開発**: yamamoto-ryuzo  
+**プロジェクト**: [geo_suite](https://github.com/yamamoto-ryuzo/geo_suite)  
+**リポジトリ**: [geo_webview](https://github.com/yamamoto-ryuzo/geo_webview)
 
 
 
