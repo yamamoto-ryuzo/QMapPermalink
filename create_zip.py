@@ -45,28 +45,29 @@ class GeoWebViewZipCreator:
         # 配布に含めるファイル/ディレクトリのリスト
         self.include_files = [
             "__init__.py",
-            "qmap_permalink.py", 
-            "qmap_permalink_server_manager.py",  # 新しく分離したHTTPサーバーマネージャー
-            "qmap_wms_service.py",  # WMSサービスクラス（新規追加）
-            "professional_wms_server.py",  # 本格的WMSサーバー
-            "qmap_permalink_panel.py",
-            "qmap_permalink_panel_base.ui",
-            "qmap_maplibre_generator.py",
-            "qmap_permalink_panel_simple.py",
-            "qmap_permalink_dialog.py",  # ダイアログファイル
-            "qmap_permalink_dialog_base.ui",  # ダイアログUIファイル
-            "qmap_webmap_generator.py",  # WebMap生成器
-            "http_server.py",  # 共通HTTPユーティリティ（新規追加）
+            "plugin.py", 
+            "server_manager.py",  # HTTPサーバーマネージャー
+            "wms_service.py",  # WMSサービスクラス
+            "wfs_service.py",  # WFSサービスクラス
+            "wmts_service.py",  # WMTSサービスクラス
+            "panel.py",
+            "panel_base.ui",
+            "maplibre_generator.py",
+            "webmap_generator.py",  # WebMap生成器
+            "http_server.py",  # 共通HTTPユーティリティ
+            "scale_zoom.py",  # スケール/ズーム変換
+            "sld_renderer.py",  # SLDレンダラー
             "metadata.txt",
             "icon.png",
             "LICENSE",
-            "i18n/"  # ディレクトリ全体
+            "i18n/",  # ディレクトリ全体
+            "maplibre/"  # MapLibreヘルパー
         ]
 
         # 最低限必須とみなすファイル（存在しない場合は警告／失敗の対象）
         self.required_files = [
             "__init__.py",
-            "qmap_permalink.py",
+            "plugin.py",
             "metadata.txt",
         ]
         
@@ -159,7 +160,9 @@ class GeoWebViewZipCreator:
         if not self.dist_dir.exists():
             return
 
-        zip_pattern = "qmap_permalink_*.zip"
+        # プラグインフォルダ名に基づいてZIPパターンを決定
+        zip_base = self.plugin_dir.name if self.plugin_dir is not None else 'geo_webview'
+        zip_pattern = f"{zip_base}_*.zip"
         old_zips = list(self.dist_dir.glob(zip_pattern))
 
         if not old_zips:
@@ -312,7 +315,7 @@ class GeoWebViewZipCreator:
     def create_distribution(self):
         """配布パッケージ作成のメイン処理"""
         try:
-            print("=== QMap Permalink 配布用ZIP作成 ===")
+            print("=== geo_webview 配布用ZIP作成 ===")
             print(f"作業ディレクトリ: {self.script_dir}")
             print(f"プラグインディレクトリ: {self.plugin_dir}")
             
