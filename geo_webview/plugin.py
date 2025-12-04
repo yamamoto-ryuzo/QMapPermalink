@@ -2041,14 +2041,24 @@ class GeoWebView:
             return
             
         clipboard = QApplication.clipboard()
+        
+        # Qt5/Qt6互換性: QClipboard.Mode.Clipboard (Qt6) vs QClipboard.Clipboard (Qt5)
+        try:
+            # Qt6
+            clipboard_mode = QClipboard.Mode.Clipboard
+            selection_mode = QClipboard.Mode.Selection if clipboard.supportsSelection() else None
+        except AttributeError:
+            # Qt5
+            clipboard_mode = QClipboard.Clipboard
+            selection_mode = QClipboard.Selection if clipboard.supportsSelection() else None
+        
         success = False
-
         for _ in range(3):
-            clipboard.setText(permalink_url, mode=QClipboard.Clipboard)
+            clipboard.setText(permalink_url, mode=clipboard_mode)
             QApplication.processEvents()
-            if clipboard.text(mode=QClipboard.Clipboard) == permalink_url:
-                if clipboard.supportsSelection():
-                    clipboard.setText(permalink_url, mode=QClipboard.Selection)
+            if clipboard.text(mode=clipboard_mode) == permalink_url:
+                if selection_mode is not None:
+                    clipboard.setText(permalink_url, mode=selection_mode)
                 success = True
                 break
             QThread.msleep(50)
