@@ -1,0 +1,397 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>QMapPermalinkPanelBase</class>
+ <widget class="QWidget" name="QMapPermalinkPanelBase">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>300</width>
+    <height>400</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>QMap Permalink Panel</string>
+  </property>
+  <layout class="QVBoxLayout" name="verticalLayout">
+   <property name="margin">
+    <number>6</number>
+   </property>
+   <property name="spacing">
+    <number>6</number>
+   </property>
+   <item>
+    <widget class="QGroupBox" name="groupBox_server">
+     <property name="title">
+      <string>HTTP Server Status</string>
+     </property>
+     <layout class="QVBoxLayout" name="verticalLayout_server">
+      <item>
+       <widget class="QLabel" name="label_server_status">
+        <property name="text">
+         <string>HTTP Server: Running on http://localhost:8089</string>
+        </property>
+        <property name="styleSheet">
+         <string>color: green; font-weight: bold;</string>
+        </property>
+        <property name="wordWrap">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <layout class="QHBoxLayout" name="horizontalLayout_port">
+        <item>
+         <widget class="QLabel" name="label_port">
+          <property name="text">
+           <string>Port:</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QSpinBox" name="spinBox_port">
+          <property name="minimum">
+           <number>80</number>
+          </property>
+          <property name="maximum">
+           <number>65535</number>
+          </property>
+          <property name="value">
+           <number>8089</number>
+          </property>
+          <property name="toolTip">
+           <string>HTTP Server port number (requires server restart)</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="pushButton_port_80">
+          <property name="text">
+           <string>80</string>
+          </property>
+          <property name="toolTip">
+           <string>Set HTTP standard port (80)</string>
+          </property>
+          <property name="minimumSize">
+           <size>
+            <width>35</width>
+            <height>25</height>
+           </size>
+          </property>
+          <property name="maximumSize">
+           <size>
+            <width>35</width>
+            <height>25</height>
+           </size>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="pushButton_port_443">
+          <property name="text">
+           <string>443</string>
+          </property>
+          <property name="toolTip">
+           <string>Set HTTPS standard port (443)</string>
+          </property>
+          <property name="minimumSize">
+           <size>
+            <width>35</width>
+            <height>25</height>
+           </size>
+          </property>
+          <property name="maximumSize">
+           <size>
+            <width>35</width>
+            <height>25</height>
+           </size>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="pushButton_check_access">
+          <property name="text">
+           <string>Check</string>
+          </property>
+          <property name="toolTip">
+           <string>Check external access availability</string>
+          </property>
+          <property name="minimumSize">
+           <size>
+            <width>50</width>
+            <height>25</height>
+           </size>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="groupBox_generate">
+     <property name="title">
+      <string>Generate Permalink</string>
+     </property>
+     <layout class="QVBoxLayout" name="verticalLayout_generate">
+      <item>
+       <widget class="QLabel" name="label_generate_info">
+        <property name="text">
+         <string>Generate a permalink for the current map view</string>
+        </property>
+        <property name="wordWrap">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QLabel" name="label_theme_selection">
+        <property name="text">
+         <string>Theme/Layer State:</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QComboBox" name="comboBox_themes">
+        <property name="toolTip">
+         <string>Select theme option: no theme (position only) or specific theme</string>
+        </property>
+        <item>
+         <property name="text">
+          <string>-- No Theme (Position Only) --</string>
+         </property>
+        </item>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="pushButton_generate">
+        <property name="text">
+         <string>Generate Permalink</string>
+        </property>
+        <property name="minimumSize">
+         <size>
+          <width>0</width>
+          <height>30</height>
+         </size>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="groupBox_permalink">
+     <property name="title">
+      <string>Current Permalink</string>
+     </property>
+     <layout class="QVBoxLayout" name="verticalLayout_permalink">
+      <item>
+       <widget class="QLineEdit" name="lineEdit_permalink">
+        <property name="placeholderText">
+         <string>Generated permalink will appear here</string>
+        </property>
+        <property name="readOnly">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <layout class="QHBoxLayout" name="horizontalLayout_permalink">
+        <item>
+         <widget class="QPushButton" name="pushButton_copy">
+            <property name="text">
+               <string>URLCopy</string>
+            </property>
+          <property name="minimumSize">
+           <size>
+            <width>0</width>
+            <height>25</height>
+           </size>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="pushButton_open">
+            <property name="text">
+               <string>OpenLayers</string>
+            </property>
+          <property name="minimumSize">
+           <size>
+            <width>0</width>
+            <height>25</height>
+           </size>
+          </property>
+         </widget>
+        </item>
+   <item>
+    <widget class="QPushButton" name="pushButton_maplibre">
+     <property name="text">
+      <string>MapLibre</string>
+     </property>
+     <property name="minimumSize">
+      <size>
+       <width>0</width>
+       <height>25</height>
+      </size>
+     </property>
+    </widget>
+   </item>
+       </layout>
+      </item>
+      <item>
+       <layout class="QHBoxLayout" name="horizontalLayout_external_buttons">
+        <item>
+         <widget class="QPushButton" name="pushButton_google_maps">
+          <property name="text">
+           <string>🗺️ Google Maps</string>
+          </property>
+          <property name="enabled">
+           <bool>true</bool>
+          </property>
+          <property name="minimumSize">
+           <size>
+            <width>100</width>
+            <height>25</height>
+           </size>
+          </property>
+          <property name="maximumSize">
+           <size>
+            <width>120</width>
+            <height>25</height>
+           </size>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="pushButton_google_earth">
+          <property name="text">
+           <string>🌍 Google Earth</string>
+          </property>
+          <property name="enabled">
+           <bool>true</bool>
+          </property>
+          <property name="minimumSize">
+           <size>
+            <width>100</width>
+            <height>25</height>
+           </size>
+          </property>
+          <property name="maximumSize">
+           <size>
+            <width>120</width>
+            <height>25</height>
+           </size>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="groupBox_navigate">
+     <property name="title">
+      <string>Navigate to Location</string>
+     </property>
+     <layout class="QVBoxLayout" name="verticalLayout_navigate">
+      <item>
+       <widget class="QLabel" name="label_navigate_info">
+        <property name="text">
+         <string>Enter a permalink to navigate</string>
+        </property>
+        <property name="wordWrap">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+  <item>
+   <layout class="QHBoxLayout" name="horizontalLayout_navigate_input">
+    <item>
+     <widget class="QLineEdit" name="lineEdit_navigate">
+      <property name="placeholderText">
+       <string>Paste permalink here</string>
+      </property>
+     </widget>
+    </item>
+   </layout>
+  </item>
+  <item>
+   <layout class="QHBoxLayout" name="horizontalLayout_navigate_buttons">
+    <item>
+     <widget class="QPushButton" name="pushButton_paste">
+      <property name="text">
+       <string>Paste</string>
+      </property>
+      <property name="minimumSize">
+       <size>
+    <width>60</width>
+    <height>25</height>
+       </size>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QPushButton" name="pushButton_navigate">
+      <property name="text">
+       <string>Navigate</string>
+      </property>
+      <property name="minimumSize">
+       <size>
+    <width>0</width>
+    <height>30</height>
+       </size>
+      </property>
+     </widget>
+    </item>
+   </layout>
+  </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <spacer name="verticalSpacer">
+     <property name="orientation">
+      <enum>Qt::Vertical</enum>
+     </property>
+     <property name="sizeHint" stdset="0">
+      <size>
+       <width>20</width>
+       <height>40</height>
+      </size>
+     </property>
+    </spacer>
+   </item>
+     <item>
+      <layout class="QHBoxLayout" name="horizontalLayout_bottom">
+       <item>
+        <widget class="QCheckBox" name="checkBox_server_toggle">
+         <property name="text">
+           <string>HTTP Server: Enable</string>
+         </property>
+         <property name="checked">
+           <bool>false</bool>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QCheckBox" name="checkBox_external_control">
+         <property name="text">
+          <string>External Control</string>
+         </property>
+         <property name="checked">
+          <bool>false</bool>
+         </property>
+         <property name="toolTip">
+          <string>When enabled, map view can be updated by external URLs</string>
+         </property>
+        </widget>
+       </item>
+      </layout>
+     </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

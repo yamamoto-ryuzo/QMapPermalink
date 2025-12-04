@@ -26,7 +26,19 @@ class QMapPermalinkZipCreator:
     def __init__(self):
         """初期化処理"""
         self.script_dir = Path(__file__).parent
-        self.plugin_dir = self.script_dir / "qmap_permalink"
+        # Detect plugin directory automatically: prefer folder that contains metadata.txt
+        # This allows the plugin folder name to be either 'qmap_permalink' or 'geo_webview'
+        candidate_dirs = [p for p in self.script_dir.iterdir() if p.is_dir()]
+        detected = None
+        for d in candidate_dirs:
+            if (d / 'metadata.txt').exists():
+                detected = d
+                break
+        if detected is None:
+            # fallback to legacy name
+            self.plugin_dir = self.script_dir / "qmap_permalink"
+        else:
+            self.plugin_dir = detected
         self.metadata_file = self.plugin_dir / "metadata.txt"
         self.dist_dir = self.script_dir / "dist"
         
@@ -256,7 +268,9 @@ class QMapPermalinkZipCreator:
         self.dist_dir.mkdir(exist_ok=True)
         
         # ZIPファイル名
-        zip_filename = f"qmap_permalink_{version}.zip"
+        # name the zip file using the plugin folder name for clarity
+        zip_base = self.plugin_dir.name if self.plugin_dir is not None else 'qmap_permalink'
+        zip_filename = f"{zip_base}_{version}.zip"
         zip_path = self.dist_dir / zip_filename
         
         print(f"ZIPファイルを作成中: {zip_filename}")
@@ -271,7 +285,8 @@ class QMapPermalinkZipCreator:
                     print(f"  除外: {rel_path}")
                     continue
                 rel_path = file_path.relative_to(self.plugin_dir)
-                arcname = f"qmap_permalink/{rel_path}"
+                # place files inside the ZIP under a top-level folder named after the plugin dir
+                arcname = f"{self.plugin_dir.name}/{rel_path}"
                 zipf.write(file_path, arcname)
                 print(f"  追加: {rel_path}")
                     

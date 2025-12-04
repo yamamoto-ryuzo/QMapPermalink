@@ -1,17 +1,17 @@
 [general]
-name = qmap_permalink
+name = geo_webview
 qgisMinimumVersion = 3.00
 qgisMaximumVersion = 3.99
 description = Navigate QGIS map views through external permalink system; includes dynamic WMS/OpenLayers and MapLibre (WMTS/WFS with style injection) endpoints for remote navigation
 supports = WMS, WMTS, WFS, OpenLayers, MapLibre, Google Maps, Google Earth
-version = 3.8.2
+version = 3.8.8
 author = yamamoto-ryuzo
 email = ryu@yamakun.net
 supportsQt6 = True
 about = QMapPermalink enables creation and navigation of map view permalinks in QGIS through a dockable panel interface. Generate fixed links for specific map positions and complete map states including layer visibility, themes, and styles. Navigate directly from external documents (Excel, PDF) to precise map locations with full state restoration. The plugin also runs an embedded HTTP server that exposes dynamic WMS and OpenLayers endpoints ("/wms" and "/qgis-map"), and MapLibre integration (WMTS/WFS with QGIS-style injection via "/maplibre" and "/maplibre-style"). Version 3.5.0 adds external access diagnostics, Windows firewall integration with UAC elevation, dynamic host resolution for external access, flexible port configuration (80-65535), and enhanced MapLibre support with x/y/scale/crs/rotation parameters.
-tracker = https://github.com/yamamoto-ryuzo/QMapPermalink
-repository = https://github.com/yamamoto-ryuzo/QMapPermalink
-homepage = https://github.com/yamamoto-ryuzo/QMapPermalink
+tracker = https://github.com/yamamoto-ryuzo/geo_webview
+repository = https://github.com/yamamoto-ryuzo/geo_webview
+homepage = hhttps://github.com/yamamoto-ryuzo/geo_webview
 tags = permalink,navigation,map,view,link,external,document,excel,pdf,theme,layer,state,style,google,maps,earth,integration,wms,wmts,openlayers,maplibre,webmap,server,http,remote,gis,wms-server,openlayers-map
 category = Plugins
 icon = icon.png

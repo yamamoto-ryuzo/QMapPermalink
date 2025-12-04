@@ -127,7 +127,7 @@ class QMapPermalink:
 
         # プラグインの宣言
         self.actions = []
-        self.menu = self.tr(u'&QMap Permalink')
+        self.menu = self.tr(u'&geo_webview')
         
         # パネル（ドックウィジェット）
         self.panel = None
@@ -211,7 +211,7 @@ class QMapPermalink:
         Returns:
             翻訳されたメッセージ
         """
-        return QCoreApplication.translate('QMapPermalink', message)
+        return QCoreApplication.translate('geo_webview', message)
 
     def add_action(
         self,
