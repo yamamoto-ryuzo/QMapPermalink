@@ -9,6 +9,7 @@ author = yamamoto-ryuzo
 email = ryu@yamakun.net
 supportsQt6 = True
 about = geo_webview は QGIS を軽量な OGC サーバー（WMS/WMTS/WFS）として起動し、QGIS の地図表示状態を外部から復元するパーマリンク機能を提供します。ドッキング可能なパネルからサーバーを起動し、`/wms`、`/wmts`、`/wfs`、`/qgis-map`、`/maplibre`、`/maplibre-style` 等のエンドポイントを公開します。詳細な使用法・ユースケースは `README_JP.md` を参照してください。
+about[en] = geo_webview enables instant conversion of QGIS projects into lightweight OGC-compliant map services (WMS/WMTS/WFS) and provides permalink-based navigation of full map states (center, zoom, layer visibility, themes, styles). The plugin runs an embedded HTTP server exposing endpoints such as `/wms`, `/wmts`, `/wfs`, `/qgis-map`, `/maplibre` and `/maplibre-style`. See README.md / README_JP.md for usage details and deployment scenarios.
 tracker = https://github.com/yamamoto-ryuzo/geo_webview
 repository = https://github.com/yamamoto-ryuzo/geo_webview
 homepage = https://github.com/yamamoto-ryuzo/geo_webview
