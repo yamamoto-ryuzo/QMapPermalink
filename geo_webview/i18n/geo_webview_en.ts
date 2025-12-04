@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!DOCTYPE TS>
-<TS version="2.1" language="de_DE">
+<TS version="2.1" language="en_US">
 <context>
     <name></name>
     <message>
@@ -12,7 +12,7 @@
         <location filename="../panel.py" line="300"/>
         <location filename="../panel.py" line="322"/>
         <source>Generate Permalink</source>
-        <translation type="unfinished">Permalink Generieren</translation>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <location filename="../panel.py" line="302"/>
@@ -62,7 +62,7 @@
     <message>
         <location filename="../panel.py" line="328"/>
         <source>Navigate</source>
-        <translation type="unfinished">Navigieren</translation>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <location filename="../panel.py" line="332"/>
@@ -192,7 +192,7 @@
         <location filename="../plugin.py" line="2118"/>
         <location filename="../plugin.py" line="2125"/>
         <source>QMap Permalink</source>
-        <translation type="unfinished">QMap Permalink</translation>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <location filename="../plugin.py" line="2012"/>
@@ -231,60 +231,6 @@
         <location filename="../panel.py" line="111"/>
         <source>UI ファイルを読み込めませんでした。プラグインの再インストールを検討してください。</source>
         <translation type="unfinished"></translation>
-    </message>
-</context>
-<context>
-    <name>QMapPermalink</name>
-    <message>
-        <source>&amp;QMap Permalink</source>
-        <translation type="vanished">&amp;QMap Permalink</translation>
-    </message>
-    <message>
-        <source>QMap Permalink</source>
-        <translation type="vanished">QMap Permalink</translation>
-    </message>
-</context>
-<context>
-    <name>QMapPermalinkDialogBase</name>
-    <message>
-        <source>QMap Permalink</source>
-        <translation type="vanished">QMap Permalink</translation>
-    </message>
-    <message>
-        <source>Generate Permalink</source>
-        <translation type="vanished">Permalink Generieren</translation>
-    </message>
-    <message>
-        <source>Generate a permalink for the current map view (position, zoom level, CRS)</source>
-        <translation type="vanished">Erstellen Sie einen Permalink für die aktuelle Kartenansicht (Position, Zoomstufe, KBS)</translation>
-    </message>
-    <message>
-        <source>Permalink URL</source>
-        <translation type="vanished">Permalink URL</translation>
-    </message>
-    <message>
-        <source>Copy this URL to embed in external documents (Excel, PDF, etc.) or use it to navigate</source>
-        <translation type="vanished">Kopieren Sie diese URL zum Einbetten in externe Dokumente (Excel, PDF, etc.) oder zur Navigation</translation>
-    </message>
-    <message>
-        <source>Generated permalink will appear here...</source>
-        <translation type="vanished">Der generierte Permalink wird hier angezeigt...</translation>
-    </message>
-    <message>
-        <source>Copy to Clipboard</source>
-        <translation type="vanished">In Zwischenablage Kopieren</translation>
-    </message>
-    <message>
-        <source>Navigate to Permalink</source>
-        <translation type="vanished">Zu Permalink Navigieren</translation>
-    </message>
-    <message>
-        <source>Paste a permalink URL below and click Navigate to jump to that map view</source>
-        <translation type="vanished">Fügen Sie unten eine Permalink-URL ein und klicken Sie auf Navigieren, um zu dieser Kartenansicht zu springen</translation>
-    </message>
-    <message>
-        <source>Navigate</source>
-        <translation type="vanished">Navigieren</translation>
     </message>
 </context>
 <context>
@@ -353,7 +299,7 @@
         <location filename="../panel_base.ui" line="135"/>
         <location filename="../panel_base.ui" line="170"/>
         <source>Generate Permalink</source>
-        <translation type="unfinished">Permalink Generieren</translation>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <location filename="../panel_base.ui" line="141"/>
@@ -433,7 +379,7 @@
     <message>
         <location filename="../panel_base.ui" line="338"/>
         <source>Navigate</source>
-        <translation type="unfinished">Navigieren</translation>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <location filename="../panel_base.ui" line="371"/>

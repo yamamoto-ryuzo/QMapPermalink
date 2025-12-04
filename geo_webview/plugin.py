@@ -113,17 +113,40 @@ class GeoWebView:
         self.iface = iface
         self.plugin_dir = os.path.dirname(__file__)
         
-        # 翻訳の初期化
-        locale = QSettings().value('locale/userLocale')[0:2]
+        # 翻訳の初期化 - QGISの言語設定を自動検出
+        self.translator = None
+        locale = QSettings().value('locale/userLocale')
+        if locale:
+            # QGISのロケール設定から言語コードを取得（例: 'ja_JP' -> 'ja'）
+            locale_code = locale[0:2] if len(locale) >= 2 else 'en'
+        else:
+            # デフォルトは英語
+            locale_code = 'en'
+        
+        # 対応言語リスト
+        supported_languages = ['en', 'fr', 'de', 'es', 'it', 'pt', 'ja', 'zh', 'ru', 'hi']
+        
+        # 対応していない言語の場合は英語にフォールバック
+        if locale_code not in supported_languages:
+            locale_code = 'en'
+        
+        # 翻訳ファイルのパス
         locale_path = os.path.join(
             self.plugin_dir,
             'i18n',
-            'geo_webview_{}.qm'.format(locale))
+            'geo_webview_{}.qm'.format(locale_code))
 
+        # 翻訳ファイルが存在する場合はロード
         if os.path.exists(locale_path):
             self.translator = QTranslator()
-            self.translator.load(locale_path)
-            QCoreApplication.installTranslator(self.translator)
+            if self.translator.load(locale_path):
+                QCoreApplication.installTranslator(self.translator)
+                print(f"翻訳ファイルをロードしました: {locale_path}")
+            else:
+                print(f"警告: 翻訳ファイルのロードに失敗しました: {locale_path}")
+                self.translator = None
+        else:
+            print(f"情報: 翻訳ファイルが見つかりません（英語をデフォルト使用）: {locale_path}")
 
         # プラグインの宣言
         self.actions = []
