@@ -623,14 +623,14 @@ class GeoWebViewServerManager:
 
                     # Prefer QGIS-aware generator when running inside QGIS
                     try:
-                        # Attempt to use the plugin's qmap_maplibre which uses
+                        # Attempt to use the plugin's maplibre_generator which uses
                         # QGIS transformation APIs to handle arbitrary CRSs.
-                        from . import qmap_maplibre as qmap_maplibre
+                        from . import maplibre_generator
                         import webbrowser
                         import os
 
                         # /maplibre-style is handled at top-level routing to avoid nested path checks
-                        # Prevent qmap_maplibre.open_maplibre_from_permalink from
+                        # Prevent maplibre_generator.open_maplibre_from_permalink from
                         # actually opening the browser: monkey-patch webbrowser.open.
                         _orig_web_open = webbrowser.open
                         try:
@@ -686,10 +686,10 @@ class GeoWebViewServerManager:
                             # Try calling generator with provided permalink (if any) and pass typename
                             try:
                                 if permalink:
-                                    temp_path = qmap_maplibre.open_maplibre_from_permalink(permalink, wfs_typename)
+                                    temp_path = maplibre_generator.open_maplibre_from_permalink(permalink, wfs_typename)
                                 elif x is not None and y is not None:
                                     # Build synthetic permalink from x/y/scale/crs/rotation parameters
-                                    # Use x/y directly (not center_x/center_y) as qmap_maplibre expects
+                                    # Use x/y directly (not center_x/center_y) as maplibre_generator expects
                                     p = f"http://localhost/?x={x}&y={y}"
                                     if crs is not None:
                                         p += f"&crs={crs}"
@@ -697,16 +697,16 @@ class GeoWebViewServerManager:
                                         p += f"&scale={scale}"
                                     if rotation is not None:
                                         p += f"&rotation={rotation}"
-                                    temp_path = qmap_maplibre.open_maplibre_from_permalink(p, wfs_typename)
+                                    temp_path = maplibre_generator.open_maplibre_from_permalink(p, wfs_typename)
                                 elif lat is not None and lon is not None:
                                     # Build synthetic permalink from lat/lon/zoom parameters
                                     p = f"http://localhost/?lat={lat}&lon={lon}"
                                     if zoom is not None:
                                         p += f"&zoom={zoom}"
-                                    temp_path = qmap_maplibre.open_maplibre_from_permalink(p, wfs_typename)
+                                    temp_path = maplibre_generator.open_maplibre_from_permalink(p, wfs_typename)
                                 else:
                                     # Fallback: attempt to generate with empty permalink but pass typename
-                                    temp_path = qmap_maplibre.open_maplibre_from_permalink('', wfs_typename)
+                                    temp_path = maplibre_generator.open_maplibre_from_permalink('', wfs_typename)
                             except Exception as e:
                                 # If generator failed (e.g. couldn't parse permalink), attempt a safe fallback
                                 try:
@@ -714,7 +714,7 @@ class GeoWebViewServerManager:
                                 except Exception:
                                     pass
                                 try:
-                                    temp_path = qmap_maplibre.open_maplibre_from_permalink('', None)
+                                    temp_path = maplibre_generator.open_maplibre_from_permalink('', None)
                                 except Exception:
                                     # re-raise original to be handled by outer exception handler
                                     raise
