@@ -1,3 +1,245 @@
+# geo_webview — Specification
+
+[日本語版はこちら / Japanese: `SPEC_JP.md`](SPEC_JP.md)
+
+This specification formalizes the features described in the repository README and CHANGELOG, organized by capability. It targets implementers, operators and testers of the `geo_webview` plugin.
+
+Purpose and scope
+- Purpose: Define the expected behavior of the `geo_webview` plugin for implementation, operation and testing.
+- Scope: Permalink generation, embedded HTTP server (WMS/OpenLayers/MapLibre/WMTS/XYZ), external integrations (Google Maps/Earth), theme application, rotation (ANGLE) handling, External Control behavior, CRS policy, and security/operational considerations.
+
+1. Feature overview
+- Permalink generation: create HTTP permalinks for the current QGIS view (center coordinates, scale, rotation, theme, etc.) for copying or opening in browsers.
+- Embedded HTTP server: provide endpoints such as `/qgis-map`, `/wms`, `/maplibre`, `/wmts/{z}/{x}/{y}.png` to allow interactive browser viewing and static image retrieval.
+- Google integrations: generate and parse Google Maps (`@lat,lon,zoom`) and Google Earth URLs (`@lat,lon,altitudea,distanced,...`) and convert them into QGIS view updates.
+- Theme support: apply a virtual map theme (by `theme` parameter) when generating PNGs without altering project files.
+- External Control: accept requests (for example to `/qgis-map` or `/wms`) and, when permitted, navigate QGIS accordingly.
+- Rotation handling: accept `ANGLE` from the client; `ANGLE=0` follows a fast path, non-zero triggers extended rendering (render larger, inverse-rotate, crop, resample).
+
+2. API / Endpoints (high-level)
+- `GET /qgis-map` — interactive HTML for browsers (OpenLayers / MapLibre). Accepts query params like `x,y,scale,crs,rotation,theme`.
+- `GET /wms` — WMS 1.3.0 compatible: supports `GetCapabilities` and `GetMap`. Additional parameter: `ANGLE`.
+- `GET /wmts/{z}/{x}/{y}.png` — WMTS-like tile endpoint. Internally renders via WMS to produce PNG (performs tile coordinate -> bbox conversion).
+- `GET /maplibre` — returns MapLibre HTML, preferred to embed local WMTS tile templates when available.
+- POST/other endpoints — management/internal RPC extensions are possible in future; current API is primarily GET based.
+
+Common behavior:
+- The server attempts ports in the default range `8089-8099` to bind.
+- When exposing externally, bind host to `0.0.0.0` is supported, but operating behind a firewall/reverse-proxy is recommended for production.
+
+3. Permalink format and parameters
+Recommended fields
+- `x` : longitude (or X in project CRS)
+- `y` : latitude (or Y in project CRS)
+- `scale` : QGIS scale (e.g. `1000.0`)
+- `crs` : if omitted, interpreted as `EPSG:4326`. OpenLayers output is normalized to `EPSG:3857` for display.
+- `rotation` : rotation in degrees
+- `theme` : map theme name (applied when present)
+
+Example:
+```
+http://localhost:8089/qgis-map?x=139.01234&y=35.12345&scale=1000.0&rotation=0.00
+```
+
+Short form: values can be simplified (e.g. `x=139&y=35&scale=1000.0`) for presentation purposes.
+
+Conversion rules:
+- `scale` has priority when specified.
+- `zoom` is estimated for Google Maps compatibility, but `scale` takes precedence.
+
+4. Map display generation (OpenLayers / MapLibre)
+OpenLayers (`/qgis-map`)
+- The server generates HTML referencing the local `/wms` endpoint. The client uses `view.rotation` for rotated display.
+- A scale/coordinate display is embedded, and when possible the project's CRS and axis order metadata are included.
+
+MapLibre (`/maplibre`)
+- The initial HTML sets a relative style URL to `/maplibre-style` and loads a base WMTS raster source named `qmap` with a layer `qmap`.
+- Public WFS layers are injected client-side by `qmap_postload.js`, which first fetches `/wfs?SERVICE=WFS&REQUEST=GetCapabilities` then requests `/maplibre-style?typename=<QGIS layer.id()>` per layer to obtain QGIS-derived style layers.
+- On successful style injection, QGIS symbols are converted into MapLibre layers (fill/line/circle/symbol). Polygons with fill alpha=0 do not produce a fill layer — only a line layer is added.
+- Line width and point sizes are normalized from mm/pt/px into px (mm -> ×3.78, pt -> ×1.333...).
+- On failure (404, timeout), the client falls back to fetching GeoJSON via GetFeature and uses neutral fallback styling (Point: white circle with grey stroke; Line: thin grey line; Polygon: grey outline only). The fallback purpose is to indicate data presence, not style parity.
+- GeoJSON responses do not include style information (separation of data and style). Style injection is performed via the `/maplibre-style` endpoint to allow immediate reflection of QGIS style changes and more efficient caching.
+- Layer IDs follow a deterministic naming convention `<sourceId>_<type>_<index>` to avoid collisions. `layout.visibility` is explicitly set to `visible` where appropriate.
+- The base style uses relative URLs so varying server ports (8089–8099) are transparent to clients.
+- Pitch (tilt) is toggled in UI via a “Allow pitch / Disallow pitch” button; pitch is disabled by default (enforced `pitch=0`).
+- Hard-clamping `maxzoom` has been removed; high zoom requests depend on server rendering capability.
+
+Template notes:
+- f-string escaping issues (double braces) are normalized to single braces in the generator.
+- Style URLs avoid absolute paths and use relative URLs.
+
+5. WMS behavior
+WMS (`/wms`):
+- Returns `GetCapabilities` (WMS 1.3.0 behavior) and supports `GetMap` with required params: `CRS` (or `SRS`), `BBOX`, `WIDTH`, `HEIGHT`, `FORMAT`.
+- Errors are returned as OWS-style `ExceptionReport` XML to be compatible with typical OGC client expectations.
+- Accepts `ANGLE` parameter (default `0`).
+- Missing or unparsable `BBOX` returns an error (e.g. `MissingParameterValue`); no implicit fallbacks.
+
+ANGLE pipeline (summary)
+- `ANGLE=0`: fast path — set requested BBOX as map extent and render directly.
+- `ANGLE!=0`: extended path — compute an enclosing rotated bbox, render a larger image, inverse-rotate in image space, center-crop to requested bbox pixels, then resample to requested `WIDTH`/`HEIGHT`.
+- Rendering size is clamped (default ~4096 px) to avoid memory exhaustion.
+
+Labeling and QML expression evaluation (`is_layer_visible()` support)
+- Because server-side rendering operates in a different evaluation context than the QGIS GUI, the server implements a preprocessing pass to evaluate expressions like `is_layer_visible('Layer Name')` in QML.
+- The implementation replaces `is_layer_visible('...')` occurrences with `1` or `0` (true/false) based on requested `LAYERS` and canvas display state, allowing label/visibility logic to be reflected in WMS output.
+- This replacement is implemented with regex-based preprocessing in `geo_webview/wms_service.py` and supports a `LABELS` parameter to temporarily enable labels for rendering without persisting project changes.
+- Limitations: regex-based rewriting cannot cover all complex QML constructs. Future improvements could use layer IDs or a QML parser for robustness.
+
+6. WMTS (tile proxy) behavior
+WMTS-like tiles (`/wmts/{z}/{x}/{y}.png`):
+- Convert tile coordinates to a BBOX and call the internal WMS renderer to return PNG.
+- Lightweight caching is not implemented by default; adding on-disk/memory/CDN caching is recommended for production.
+
+GetCapabilities and TileMatrix
+- The server provides a minimal WMTS GetCapabilities response including layer Identifier/title, `ResourceURL` (resourceType="tile", format="image/png", with template), and `TileMatrixSet` entries.
+- Each `TileMatrix` includes `Identifier`, `ScaleDenominator`, `TopLeftCorner`, `TileWidth`/`TileHeight` (default `256`), and `MatrixWidth`/`MatrixHeight` (`2**z`).
+- For broader compatibility the server includes `ResourceURL` and `TileMatrix` entries; further elements (e.g. `OperationsMetadata`) can be added for full compliance.
+
+Implementation notes (recent fixes)
+- A WMTS-like handler is provided. The server can append short `identity` tokens (`?v=<identity_short>`) to `ResourceURL` and `ServiceMetadataURL` to help clients detect style/layer changes. `identity_short` is derived from a deterministic hash of displayed layer ids and style ids via `_get_identity_info()`.
+- The server always provides `/wmts/{z}/{x}/{y}.png` (XYZ path) in addition to templated ResourceURL so MapLibre and similar clients can reference tiles directly.
+- TMS compatibility is supported via `tms=1` (or `tms=true`), which flips `y` internally when requested.
+- Pay attention to large inline strings when generating capabilities; braces and indentation must be handled carefully.
+
+GetCapabilities validation
+- The repository includes `tools/validate_wmts_capabilities.py` for validating generated capabilities. Use `lxml` or `xmlschema` to validate against the standard XSD.
+
+7. XYZ tiles
+- `/xyz/{z}/{x}/{y}.png` is an alias for the WMTS implementation and uses the same identity/cache/tms logic.
+
+8. Parallelism and performance
+Design considerations
+- QGIS API objects are often not thread-safe; use worker processes (not threads) for rendering parallelism. Each worker should maintain its own `QgsApplication`/`QgsProject` instance to avoid reinitialization overhead.
+- Recommended default: `max_render_workers = max(1, cpu_count() - 1)` and tune based on memory and platform. Too many workers cause swapping.
+
+Patterns
+- I/O-bound work (external WMS/WFS): use `asyncio`/`aiohttp` or thread pools and connection pooling (`requests.Session` / `aiohttp.ClientSession`). Set timeouts and max concurrent connections.
+- CPU/rendering-bound work: use `multiprocessing.Process` or a process pool; render tasks are dispatched via queues while each worker reuses loaded project resources.
+- Hybrid: asynchronous HTTP server (e.g. `aiohttp`) to accept requests and dispatch render tasks to a process pool for high throughput.
+
+Caching
+- Tile cache: separate directories by `identity` with LRU/TTL. Keys should include `identity`, `tms` flag, format and size.
+- Use `Cache-Control` headers and `ETag`. Include `?v=` in GetCapabilities so clients can safely rely on cached tiles until identity changes.
+
+Rendering optimizations
+- Clamp `WIDTH * HEIGHT` to a sensible maximum (default `4096x4096`).
+- Use `256x256` tiles; use JPEG for photos/backgrounds and PNG for alpha.
+- Reuse map settings and style calculations within a process; avoid inter-process sharing of QGIS objects.
+
+Load control
+- Use priority queues, rate-limiting (per IP or API key), and return HTTP 503 when overloaded.
+
+Monitoring
+- Collect metrics (response time, render time, queue lengths, cache hit rate, memory usage).
+
+Defaults (current implementation)
+- WMS max image size: `4096 x 4096` (clamped in `qmap_wms_service.py`).
+- WMS render timeout: `30` seconds.
+- WMTS tile size: `256`.
+- WMTS cache dir: module-relative `.cache/wmts/`.
+- Configurable parameters exposed via env vars (examples: `QMAP_MAX_IO_WORKERS`, `QMAP_REQUEST_TIMEOUT_S`, `QMAP_MAX_IMAGE_DIMENSION`, `QMAP_TILE_SIZE`, `QMAP_CACHE_DIR`).
+
+9. WFS behavior
+Multilingual support
+- WFS and MapLibre clients fully support Japanese and other multilanguage layer and attribute names. Use `encodeURIComponent` on the client to generate safe IDs.
+- JSON/HTML outputs are UTF-8 encoded and use `ensure_ascii=False` to preserve non-ASCII characters.
+
+Overview
+- The WFS exposes vector layers registered in the project's `WFSLayers` section.
+- `/wfs-layers` lists the published layers; `GetCapabilities` uses the same logic to produce `FeatureTypeList`.
+
+Phase 1 performance improvements
+- Response caching (in-memory) for identical requests for 5 minutes. Cache key uses MD5 of layer id + bbox + srs + max_features + format.
+- Uses `QgsFeatureRequest.ExactIntersect` and iterator-based feature retrieval. Thread-safe locks guard cache access.
+
+MapLibre style injection flow
+1. Load base WMTS raster via `/maplibre-style`.
+2. Retrieve published WFS layers from GetCapabilities.
+3. For each layer, fetch `/maplibre-style?typename=<layer.id()>` to obtain converted style layers. On success, add converted layers; on failure fetch GeoJSON and show fallback.
+
+`/maplibre-style` endpoint
+- `GET /maplibre-style` : base WMTS raster only.
+- `GET /maplibre-style?typename=<QGIS layer.id()>` : WMTS raster + GeoJSON + injected style layers.
+- On 404 the endpoint returns `{ error, available_typenames }` JSON and the client falls back.
+
+GetCapabilities (WFS)
+- Uses `WFSLayers` entries; if empty, return an empty `FeatureTypeList`.
+- Responds with WFS 2.0.0 `WFS_Capabilities` XML.
+
+GetFeature
+- Required: `TYPENAME`. Optional: `OUTPUTFORMAT`, `BBOX`, `MAXFEATURES`, `SRSNAME`.
+- If `OUTPUTFORMAT` contains `gml` return GML; otherwise return GeoJSON. GeoJSON omits styling.
+
+DescribeFeatureType / GetStyles
+- `DescribeFeatureType` returns an XML attribute schema for the requested layer.
+- `GetStyles` generates SLD (1.1.0) derived from QGIS renderers for the requested layer. Complex rule-based renderers may be simplified.
+
+Errors
+- WFS errors are returned as OWS `ExceptionReport` XML. `/maplibre-style` 404 returns JSON with available typenames.
+
+10. Google Maps / Earth integration (generate & parse)
+Generation
+- Google Maps URL format: `https://www.google.co.jp/maps/@{lat},{lon},{zoom}z`. Zoom is estimated from scale and may be fractional.
+- Google Earth URL format: `https://earth.google.com/web/@{lat},{lon},{alt}a,{distance}d,{y}y,{heading}h,{tilt}t,{roll}r`. Altitude/distance are estimated proportionally from scale.
+
+Parsing precedence
+- Parse order (highest to lowest): Google Earth `@...a,...d,1y` `y` token → Google Maps `@...,...z` or `m` token → internal `x,y,scale` params → legacy custom schemes.
+
+Note: DPI and OS scaling cause minor differences; environment-specific corrections can be applied.
+
+11. External Control parsing and behavior
+- When `External Control` is enabled, received URLs are parsed and QGIS is navigated using `navigate_from_http`.
+- If a URL was received prior to panel startup, the panel may auto-apply navigation depending on settings.
+- Security: automatic navigation should be toggleable and logged (source IP and timestamp).
+
+12. Theme support
+- `theme` parameter applies an in-memory virtual theme for PNG generation without persisting changes.
+- Only existing named themes are supported; missing themes result in error or fallback to no-theme behavior.
+
+13. ANGLE pipeline and performance
+- Input: `BBOX`, `WIDTH`, `HEIGHT`, `ANGLE` (degrees). Output: north-up PNG matching client rotation expectations.
+- For `ANGLE!=0` the server renders an expanded bounding box and performs inverse rotation + center crop + resample.
+- Enforce pixel clamps to limit memory use.
+
+14. CRS policy
+- OpenLayers views are provided in `EPSG:3857`.
+- WMS accepts multiple CRS and renders in requested CRS; if clients require `EPSG:3857`, the server can transform prior to returning.
+- Default permalink CRS when omitted is `EPSG:4326`.
+
+15. Security and operations
+- Default design allows external access; production deployments must restrict access via firewall or reverse proxy.
+- `External Control` allows remote navigation; limit to trusted networks or require explicit approval flows.
+- Protect against large render requests by enforcing authentication, rate limits and size limits (particularly for `ANGLE!=0`).
+
+16. Test & QA
+Automated test candidates
+- Unit tests for `server_manager.py` (port selection & binding behavior), URL parsing, and tile-coordinate to BBOX conversions.
+
+Manual test steps
+1. Install plugin in QGIS and enable `External Control`.
+2. From another host, request `/qgis-map?x=...&y=...&scale=...` and confirm QGIS navigates.
+3. Request `/wms?SERVICE=WMS&REQUEST=GetMap&...&ANGLE=0` and `ANGLE=30` and confirm expected north-up PNG.
+4. In MapLibre UI toggle pitch and confirm the button works.
+5. Generate a Google Earth URL and validate resulting behavior.
+
+CI note: QGIS modules (`qgis.core`, `PyQt5`) will not be available in typical CI; mock them where needed.
+
+17. Implementation-file mapping
+- `plugin.py` — main plugin logic and utilities.
+- `panel.py` — panel UI and navigation controls.
+- `panel_base.ui` — Qt Designer UI file.
+- `server_manager.py` — embedded HTTP server start/stop and routing.
+- `qmap_webmap_generator.py` — OpenLayers/MapLibre HTML template generator.
+- `qmap_wmts_service.py` / `qmap_wms_service.py` — WMTS/WMS helper modules (tile conversion, bbox calculations).
+
+18. Changelog highlights
+- V2.x → V3.x changes summarize WMTS, MapLibre improvements, theme and rotation support, and WMTS identity-based cache behavior.
+
+Notes
+- After making server-side code changes, restart QGIS or the plugin process to reload module code; long-running Python processes do not auto-reload.
+
+This file mirrors the Japanese `SPEC_JP.md`. If you modify `SPEC_JP.md` again, regenerate this English file to keep both versions in sync.
 *** End Patch
   - GetCapabilities 応答を OWS 名前空間や `OperationsMetadata`、`ResourceURL`、`TileMatrixSet` / `TileMatrix`、および `TileMatrixSetLimits` を含む形で拡張し、より多くのクライアントとの互換性を高めました。
   - `ResourceURL` と `ServiceMetadataURL` にはサーバ側で算出した短い identity（`?v=<identity_short>`）を付与するオプションを導入し、クライアント側でタイルのキャッシュ更新を検知できるようにしています。identity は表示中のレイヤ ID とスタイル ID を組み合わせたハッシュに基づきます（実装関数名: `_get_identity_info()`）。
