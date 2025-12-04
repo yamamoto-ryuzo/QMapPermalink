@@ -319,16 +319,11 @@ python update_translations.py
 
 ## バージョン履歴
 
-- **v3.8.x**: プラグイン名変更、geo_suite 統合、翻訳システム実装
-- **v3.6.0**: MapLibre テーマ・ブックマーク機能
-- **v3.5.0**: 外部アクセス診断、柔軟なポート設定
-- **v3.4.0**: WFS キャッシュ機構、高速化
-- **v3.2.0**: Qt6 対応
-- **v3.0.0**: WFS 導入、MapLibre 正式対応
-- **v2.0.0**: WMTS/XYZ 導入
-- **v1.0.0**: OpenLayers/WMS 基本機能
+- **v3.x**: geo_suite統合、OGC準拠サーバー化、10言語対応
+- **v2.x**: WMTS/MapLibre対応
+- **v1.x**: 基本機能（WMS/OpenLayers）
 
-詳細は [`CHANGELOG.md`](./CHANGELOG.md) を参照してください。
+詳細: [`CHANGELOG.md`](./CHANGELOG.md)
 
 ## ライセンス
 
